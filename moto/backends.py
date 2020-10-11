@@ -49,7 +49,7 @@ BACKENDS = {
     "organizations": ("organizations", "organizations_backends"),
     "polly": ("polly", "polly_backends"),
     "ram": ("ram", "ram_backends"),
-    "rds": ("rds2", "rds2_backends"),
+    "rds": ("rds3", "rds3_backends"),
     "redshift": ("redshift", "redshift_backends"),
     "resource-groups": ("resourcegroups", "resourcegroups_backends"),
     "resourcegroupstaggingapi": (
