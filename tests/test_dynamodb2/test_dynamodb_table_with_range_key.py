@@ -275,7 +275,10 @@ def test_get_item_with_undeclared_table():
 def test_get_item_without_range_key():
     table = Table.create(
         "messages",
-        schema=[HashKey("test_hash"), RangeKey("test_range")],
+        schema=[
+            HashKey("test_hash", data_type=NUMBER),
+            RangeKey("test_range", data_type=NUMBER),
+        ],
         throughput={"read": 10, "write": 10},
     )
 
@@ -868,7 +871,10 @@ def test_lookup():
 
     table = Table.create(
         "messages",
-        schema=[HashKey("test_hash"), RangeKey("test_range")],
+        schema=[
+            HashKey("test_hash", data_type=NUMBER),
+            RangeKey("test_range", data_type=NUMBER),
+        ],
         throughput={"read": 10, "write": 10},
     )
 

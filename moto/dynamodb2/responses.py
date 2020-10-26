@@ -14,6 +14,7 @@ from .exceptions import (
     ItemSizeTooLarge,
     MockValidationException,
     TransactionCanceledException,
+    ValidationException,
 )
 from moto.dynamodb2.models import dynamodb_backends, dynamo_json_dump
 
@@ -298,7 +299,7 @@ class DynamoHandler(BaseResponse):
         except ItemSizeTooLarge:
             er = "com.amazonaws.dynamodb.v20111205#ValidationException"
             return self.error(er, ItemSizeTooLarge.item_size_too_large_msg)
-        except KeyError as ke:
+        except (KeyError, ValidationException) as ke:
             er = "com.amazonaws.dynamodb.v20111205#ValidationException"
             return self.error(er, ke.args[0])
         except ValueError as ve:

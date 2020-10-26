@@ -14,6 +14,7 @@ try:
     from boto.dynamodb2.fields import HashKey
     from boto.dynamodb2.table import Table
     from boto.dynamodb2.table import Item
+    from boto.dynamodb2.types import NUMBER
     from boto.dynamodb2.exceptions import ConditionalCheckFailedException, ItemNotFound
 except ImportError:
     pass
@@ -401,7 +402,7 @@ def test_get_missing_item():
 def test_get_special_item():
     table = Table.create(
         "messages",
-        schema=[HashKey("date-joined")],
+        schema=[HashKey("date-joined", data_type=NUMBER)],
         throughput={"read": 10, "write": 10},
     )
 

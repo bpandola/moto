@@ -21,12 +21,16 @@ from moto.dynamodb2.exceptions import (
     ConditionalCheckFailed,
     TransactionCanceledException,
     EmptyKeyAttributeException,
+    ValidationException,
 )
 from moto.dynamodb2.models.utilities import bytesize
 from moto.dynamodb2.models.dynamo_type import DynamoType
 from moto.dynamodb2.parsing.executors import UpdateExpressionExecutor
 from moto.dynamodb2.parsing.expressions import UpdateExpressionParser
 from moto.dynamodb2.parsing.validators import UpdateExpressionValidator
+
+from moto.dynamodb2.validation.validate import validate
+from moto.dynamodb2.validation.parser import item_parser
 
 
 class DynamoJsonEncoder(json.JSONEncoder):
@@ -584,20 +588,27 @@ class Table(CloudFormationModel):
         expression_attribute_values=None,
         overwrite=False,
     ):
-        if self.hash_key_attr not in item_attrs.keys():
-            raise KeyError(
-                "One or more parameter values were invalid: Missing the key "
-                + self.hash_key_attr
-                + " in the item"
-            )
+        schema = {
+            "key_schema": self.schema,
+            "attribute_definitions": self.attr,
+        }
+        errors = validate(schema, item_parser(item_attrs), rules=None, max_errors=1)
+        if errors:
+            raise ValidationException(errors[0])
+        # if self.hash_key_attr not in item_attrs.keys():
+        #     raise KeyError(
+        #         "One or more parameter values were invalid: Missing the key "
+        #         + self.hash_key_attr
+        #         + " in the item"
+        #     )
         hash_value = DynamoType(item_attrs.get(self.hash_key_attr))
         if self.has_range_key:
-            if self.range_key_attr not in item_attrs.keys():
-                raise KeyError(
-                    "One or more parameter values were invalid: Missing the key "
-                    + self.range_key_attr
-                    + " in the item"
-                )
+            # if self.range_key_attr not in item_attrs.keys():
+            #     raise KeyError(
+            #         "One or more parameter values were invalid: Missing the key "
+            #         + self.range_key_attr
+            #         + " in the item"
+            #     )
             range_value = DynamoType(item_attrs.get(self.range_key_attr))
         else:
             range_value = None

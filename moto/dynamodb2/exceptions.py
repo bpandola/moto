@@ -171,3 +171,10 @@ class EmptyKeyAttributeException(MockValidationException):
 
     def __init__(self):
         super(EmptyKeyAttributeException, self).__init__(self.empty_str_msg)
+
+
+class ValidationException(ValueError):
+    msg = "One or more parameter values were invalid: {}"
+
+    def __init__(self, error):
+        super(ValidationException, self).__init__(self.msg.format(error))
