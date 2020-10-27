@@ -595,20 +595,8 @@ class Table(CloudFormationModel):
         errors = validate(schema, item_parser(item_attrs), rules=None, max_errors=1)
         if errors:
             raise ValidationException(errors[0])
-        # if self.hash_key_attr not in item_attrs.keys():
-        #     raise KeyError(
-        #         "One or more parameter values were invalid: Missing the key "
-        #         + self.hash_key_attr
-        #         + " in the item"
-        #     )
         hash_value = DynamoType(item_attrs.get(self.hash_key_attr))
         if self.has_range_key:
-            # if self.range_key_attr not in item_attrs.keys():
-            #     raise KeyError(
-            #         "One or more parameter values were invalid: Missing the key "
-            #         + self.range_key_attr
-            #         + " in the item"
-            #     )
             range_value = DynamoType(item_attrs.get(self.range_key_attr))
         else:
             range_value = None
