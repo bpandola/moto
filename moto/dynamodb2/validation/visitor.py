@@ -1,20 +1,11 @@
+from collections import namedtuple
 from copy import copy
 from enum import Enum
-from typing import (
-    Any,
-    Callable,
-    Collection,
-    Dict,
-    List,
-    NamedTuple,
-    Optional,
-    Tuple,
-    Union,
-)
+
+import six
 
 from moto.core.utils import underscores_to_camelcase
 from . import ast
-
 from .ast import Node
 
 
@@ -29,7 +20,7 @@ class VisitorActionEnum(Enum):
     REMOVE = Ellipsis
 
 
-VisitorAction = Optional[VisitorActionEnum]
+# VisitorAction = Optional[VisitorActionEnum]
 
 # Note that in GraphQL.js these are defined differently:
 # BREAK = {}, SKIP = false, REMOVE = null, IDLE = undefined
@@ -40,7 +31,7 @@ REMOVE = VisitorActionEnum.REMOVE
 IDLE = None
 
 # Default map from visitor kinds to their traversable node attributes:
-QUERY_DOCUMENT_KEYS: Dict[str, Tuple[str, ...]] = {
+QUERY_DOCUMENT_KEYS = {
     "item": ("attributes",),
     "attribute": ("name", "value"),
     "map_attribute": ("attributes",),
@@ -123,7 +114,7 @@ QUERY_DOCUMENT_KEYS: Dict[str, Tuple[str, ...]] = {
 }
 
 
-class Visitor:
+class Visitor(object):
     """Visitor that walks through an AST.
 
     Visitors can define two generic methods "enter" and "leave". The former will be
@@ -167,15 +158,20 @@ class Visitor:
     # Provide special return values as attributes
     BREAK, SKIP, REMOVE, IDLE = BREAK, SKIP, REMOVE, IDLE
 
-    def __init_subclass__(cls) -> None:
+    def __init__(self):
+        super(Visitor, self).__init__()
+        if six.PY2:
+            self.__class__.__init_subclass__()
+
+    @classmethod
+    def __init_subclass__(cls):
         """Verify that all defined handlers are valid."""
-        super().__init_subclass__()
         for attr, val in cls.__dict__.items():
             if attr.startswith("_"):
                 continue
             attr_kind = attr.split("_", 1)
             if len(attr_kind) < 2:
-                kind: Optional[str] = None
+                kind = None
             else:
                 attr, kind = attr_kind
             if attr in ("enter", "leave"):
@@ -188,32 +184,24 @@ class Visitor:
                         or not isinstance(node_cls, type)
                         or not issubclass(node_cls, Node)
                     ):
-                        raise TypeError(f"Invalid AST node kind: {kind}.")
+                        raise TypeError("Invalid AST node kind: {}.".format(kind))
 
-    def get_visit_fn(self, kind: str, is_leaving: bool = False) -> Callable:
+    def get_visit_fn(self, kind, is_leaving=False):
         """Get the visit function for the given node kind and direction."""
         method = "leave" if is_leaving else "enter"
-        visit_fn = getattr(self, f"{method}_{kind}", None)
+        fn_name = "{method}_{kind}".format(method=method, kind=kind)
+        visit_fn = getattr(self, fn_name, None)
         if not visit_fn:
             visit_fn = getattr(self, method, None)
         return visit_fn
 
 
-class Stack(NamedTuple):
-    """A stack for the visit function."""
-
-    in_array: bool
-    idx: int
-    keys: Tuple[Node, ...]
-    edits: List[Tuple[Union[int, str], Node]]
-    prev: Any  # 'Stack' (python/mypy/issues/731)
+Stack = namedtuple("Stack", ["in_array", "idx", "keys", "edits", "prev"])
 
 
 def visit(
-    root: Node,
-    visitor: Visitor,
-    visitor_keys: Optional[Dict[str, Tuple[str, ...]]] = None,
-) -> Any:
+    root, visitor, visitor_keys=None,
+):
     """Visit each node in an AST.
 
     :func:`~.visit` will walk through an AST using a depth first traversal, calling the
@@ -233,21 +221,21 @@ def visit(
     dictionary visitor_keys mapping node kinds to node attributes.
     """
     if not isinstance(root, Node):
-        raise TypeError(f"Not an AST Node: .")
+        raise TypeError("Not an AST Node: .")
     if not isinstance(visitor, Visitor):
-        raise TypeError(f"Not an AST Visitor: .")
+        raise TypeError("Not an AST Visitor: .")
     if visitor_keys is None:
         visitor_keys = QUERY_DOCUMENT_KEYS
-    stack: Any = None
+    stack = None
     in_array = isinstance(root, list)
-    keys: Tuple[Node, ...] = (root,)
+    keys = (root,)
     idx = -1
-    edits: List[Any] = []
-    parent: Any = None
-    path: List[Any] = []
+    edits = []
+    parent = None
+    path = []
     path_append = path.append
     path_pop = path.pop
-    ancestors: List[Any] = []
+    ancestors = []
     ancestors_append = ancestors.append
     ancestors_pop = ancestors.pop
     new_root = root
@@ -258,7 +246,7 @@ def visit(
         is_edited = is_leaving and edits
         if is_leaving:
             key = path[-1] if ancestors else None
-            node: Any = parent
+            node = parent
             parent = ancestors_pop() if ancestors else None
             if is_edited:
                 if in_array:
@@ -360,12 +348,12 @@ class ParallelVisitor(Visitor):
     If a prior visitor edits a node, no following visitors will see that node.
     """
 
-    def __init__(self, visitors: Collection[Visitor]):
+    def __init__(self, visitors):
         """Create a new visitor from the given list of parallel visitors."""
         self.visitors = visitors
-        self.skipping: List[Any] = [None] * len(visitors)
+        self.skipping = [None] * len(visitors)
 
-    def enter(self, node: Node, *args: Any) -> Optional[VisitorAction]:
+    def enter(self, node, *args):
         skipping = self.skipping
         for i, visitor in enumerate(self.visitors):
             if not skipping[i]:
@@ -380,7 +368,7 @@ class ParallelVisitor(Visitor):
                         return result
         return None
 
-    def leave(self, node: Node, *args: Any) -> Optional[VisitorAction]:
+    def leave(self, node, *args):
         skipping = self.skipping
         for i, visitor in enumerate(self.visitors):
             if not skipping[i]:

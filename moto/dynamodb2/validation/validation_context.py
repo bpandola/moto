@@ -1,4 +1,4 @@
-class ASTValidationContext:
+class ASTValidationContext(object):
     """Utility class providing a context for validation of an AST.
 
     An instance of this class is passed as the context attribute to all Validators,
@@ -28,5 +28,5 @@ class ValidationContext(ASTValidationContext):
     def __init__(
         self, schema, ast, on_error,
     ):
-        super().__init__(ast, on_error)
+        super(ValidationContext, self).__init__(ast, on_error)
         self.schema = schema

@@ -1,7 +1,6 @@
-from .visitor import ParallelVisitor, visit
-from .validation_context import ValidationContext
 from .rules import item_rules
-from ..exceptions import ValidationException
+from .validation_context import ValidationContext
+from .visitor import ParallelVisitor, visit
 
 
 class ValidationAbortedError(RuntimeError):

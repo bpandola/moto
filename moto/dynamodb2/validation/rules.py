@@ -1,11 +1,12 @@
-from .visitor import SKIP, Visitor
 from .ast import ItemNode
+from .visitor import Visitor
 
 
 class ASTValidationRule(Visitor):
     """Visitor for validation of an AST."""
 
     def __init__(self, context):
+        super(ASTValidationRule, self).__init__()
         self.context = context
 
     def report_error(self, error):
@@ -16,7 +17,7 @@ class ValidationRule(ASTValidationRule):
     """Visitor for validation using a GraphQL schema."""
 
     def __init__(self, context):
-        super().__init__(context)
+        super(ValidationRule, self).__init__(context)
 
 
 class ValuesOfCorrectTypeRule(ValidationRule):
@@ -33,53 +34,17 @@ class ValuesOfCorrectTypeRule(ValidationRule):
             self.report_error("The parameter cannot be converted to a numeric value")
 
 
-class ItemRule(ValidationRule):
-    """Unique operation names
-
-    A GraphQL document is only valid if all defined operations have unique names.
-    """
-
-    def __init__(self, context):
-        super().__init__(context)
-        # self.known_operation_names: Dict[str, NameNode] = {}
-
-    def enter_item(self, node, *_args):
-        # operation_name = node.name
-        # if operation_name:
-        #     known_operation_names = self.known_operation_names
-        #     if operation_name.value in known_operation_names:
-        #         self.report_error(
-        #             GraphQLError(
-        #                 "There can be only one operation"
-        #                 f" named '{operation_name.value}'.",
-        #                 [known_operation_names[operation_name.value], operation_name],
-        #             )
-        #         )
-        #     else:
-        #         known_operation_names[operation_name.value] = operation_name
-        return None
-
-    def enter_attribute(self, node, *_args):
-        return None
-
-    def enter_attribute_name(self, node, *_args):
-        return None
-
-    # @staticmethod
-    # def enter_fragment_definition(*_args: Any) -> VisitorAction:
-    #     return SKIP
-
-
 class KeysMustBePresent(ASTValidationRule):
     """All of the table's primary key attributes must be specified"""
 
     def __init__(self, context):
-        super().__init__(context)
+        super(KeysMustBePresent, self).__init__(context)
         self.attr_names = []
         self.key_names = [i["AttributeName"] for i in context.schema["key_schema"]]
 
-    # TODO: Can probably put this in a base class...
-    def is_item_attribute(self, ancestors):
+    # TODO: Can probably put this in a base class... or even outside the class.
+    @staticmethod
+    def is_item_attribute(ancestors):
         return len(ancestors) == 2 and isinstance(ancestors[0], ItemNode)
 
     def leave_item(self, *_args):
@@ -98,7 +63,7 @@ class KeysMustBeOfCorrectType(ASTValidationRule):
     """
 
     def __init__(self, context):
-        super().__init__(context)
+        super(KeysMustBeOfCorrectType, self).__init__(context)
         self.attr_definitions_stack = []
         self.attr_types = {}
         self.key_names = [
@@ -134,8 +99,8 @@ class KeysMustBeOfCorrectType(ASTValidationRule):
     ) = enter_string_attribute = enter_binary_attribute = record_type
 
 
+# Order matters here.  They run in parallel, but failures get reported in order.
 item_rules = [
-    ItemRule,
     ValuesOfCorrectTypeRule,
     KeysMustBePresent,
     KeysMustBeOfCorrectType,

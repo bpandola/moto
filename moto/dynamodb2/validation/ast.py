@@ -1,30 +1,35 @@
 from copy import deepcopy
+
+import six
+
 from moto.core.utils import camelcase_to_underscores
 
+
 # Base AST Node
-
-
-class Node:
+class Node(object):
     """AST nodes"""
 
     # allow custom attributes and weak references (not used internally)
-    __slots__ = "__dict__", "__weakref__"
+    # BP: I'm dropping this because it's breaking Python2...
+    # Ref: https://github.com/graphql-python/graphql-core/pull/82/files
+    __slots__ = ()  # "__dict__", "__weakref__"
 
-    kind: str = "ast"  # the kind of the node as a snake_case string
+    kind = "ast"  # the kind of the node as a snake_case string
     keys = []  # the names of the attributes of this node
 
     def __init__(self, **kwargs):
         """Initialize the node with the given keyword arguments."""
+        super(Node, self).__init__()
+        if six.PY2:
+            self.__class__.__init_subclass__()
         for key in self.keys:
             value = kwargs.get(key)
-            # if isinstance(value, list) and not isinstance(value, FrozenList):
-            #     value = FrozenList(value)
             setattr(self, key, value)
 
     def __repr__(self):
         """Get a simple representation of the node."""
-        name, loc = self.__class__.__name__, getattr(self, "loc", None)
-        return f"{name} at {loc}" if loc else name
+        name = self.__class__.__name__
+        return "{name}".format(name=name)
 
     def __eq__(self, other):
         """Test whether two nodes are equal (recursively)."""
@@ -48,8 +53,9 @@ class Node:
             **{key: deepcopy(getattr(self, key), memo) for key in self.keys}
         )
 
-    def __init_subclass__(cls) -> None:
-        super().__init_subclass__()
+    # Python 3 only.
+    @classmethod
+    def __init_subclass__(cls):
         name = cls.__name__
         if name.endswith("Node"):
             name = name[:-4]
