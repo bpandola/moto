@@ -284,7 +284,7 @@ def test_update_item_with_empty_string_in_key_exception():
             UpdateExpression="set forum_name=:NewName",
             ExpressionAttributeValues={":NewName": {"S": ""}},
         )
-
+    # TODO: This error message is wrong.
     ex.value.response["Error"]["Code"].should.equal("ValidationException")
     ex.value.response["ResponseMetadata"]["HTTPStatusCode"].should.equal(400)
     ex.value.response["Error"]["Message"].should.equal(
@@ -326,6 +326,9 @@ def test_update_item_with_empty_string_no_exception():
         UpdateExpression="set Body=:Body",
         ExpressionAttributeValues={":Body": {"S": ""}},
     )
+
+    resp = conn.get_item(TableName=name, Key={"forum_name": {"S": "LOLCat Forum"}})
+    resp["Item"]["Body"].should.equal({"S": ""})
 
 
 @requires_boto_gte("2.9")
@@ -2936,7 +2939,7 @@ def test_condition_expression__attr_doesnt_exist():
     )
 
     client.put_item(
-        TableName="test", Item={"forum_name": {"S": "foo"}, "ttl": {"N": "bar"}}
+        TableName="test", Item={"forum_name": {"S": "foo"}, "ttl": {"N": "0.0"}}
     )
 
     def update_if_attr_doesnt_exist():

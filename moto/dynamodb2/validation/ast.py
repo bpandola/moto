@@ -75,6 +75,12 @@ class ItemNode(Node):
 class AttributeNode(Node):
     __slots__ = ("name", "value")
 
+    def __repr__(self):
+        desc = "{name}: {value}".format(
+            name=self.name.value, value=self.value.__repr__()
+        )
+        return desc
+
 
 class NumberAttributeNode(Node):
     __slots__ = ("name", "value")
@@ -95,8 +101,15 @@ class MapAttributeNode(Node):
     )
 
 
+class StringSetAttributeNode(Node):
+    __slots__ = ("name", "values")
+
+
 class AttributeValueNode(Node):
     __slots__ = ("type", "data")
+
+    def __repr__(self):
+        return self.data
 
 
 class AttributeNameNode(Node):
@@ -104,7 +117,7 @@ class AttributeNameNode(Node):
 
 
 class ValueNode(Node):
-    __slots__ = ("value",)
+    __slots__ = ()
 
 
 class NumberValueNode(ValueNode):

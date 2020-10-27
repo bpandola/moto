@@ -37,6 +37,7 @@ QUERY_DOCUMENT_KEYS = {
     "map_attribute": ("attributes",),
     "number_attribute": ("name", "value"),
     "string_attribute": ("name", "value"),
+    "attribute_value": ("data",),
     "number_value": (),
     "name": (),
     "document": ("definitions",),
@@ -350,6 +351,7 @@ class ParallelVisitor(Visitor):
 
     def __init__(self, visitors):
         """Create a new visitor from the given list of parallel visitors."""
+        super(ParallelVisitor, self).__init__()
         self.visitors = visitors
         self.skipping = [None] * len(visitors)
 

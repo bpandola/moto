@@ -299,6 +299,7 @@ class DynamoHandler(BaseResponse):
         except ItemSizeTooLarge:
             er = "com.amazonaws.dynamodb.v20111205#ValidationException"
             return self.error(er, ItemSizeTooLarge.item_size_too_large_msg)
+        # TODO: Get rid of the KeyError, should be obsoleted by our ValidationException
         except (KeyError, ValidationException) as ke:
             er = "com.amazonaws.dynamodb.v20111205#ValidationException"
             return self.error(er, ke.args[0])

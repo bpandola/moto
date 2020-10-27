@@ -9,6 +9,7 @@ from .ast import (
     StringValueNode,
     StringSetValueNode,
     NumberValueNode,
+    StringAttributeNode,
 )
 
 # This is obviously horrible...but it works.   Might want to model it after
@@ -31,6 +32,8 @@ def item_parser(item):
                     attribute = MapAttributeNode(name=name_node, attributes=parse(data))
                 elif type_ == "N":
                     attribute = NumberAttributeNode(name=name_node, value=parse(v))
+                elif type_ == "S":
+                    attribute = StringAttributeNode(name=name_node, value=parse(v))
                 else:
                     attribute = AttributeNode(name=name_node, value=parse(v))
                 attributes.append(attribute)
@@ -45,13 +48,7 @@ def item_parser(item):
                 )
             elif type_ == "SS":
                 parsed = AttributeValueNode(
-                    type="SS",
-                    data=StringSetValueNode(
-                        values=[
-                            AttributeValueNode(type="S", data=StringValueNode(value=i))
-                            for i in data
-                        ]
-                    ),
+                    type="SS", data=StringSetValueNode(values=[str(i) for i in data]),
                 )
             elif type_ == "M":
                 attributes = parse(data)
