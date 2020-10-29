@@ -68,6 +68,9 @@ class KeysMustBePresent(ValidationRule):
             if key not in item_attribute_names:
                 self.report_error(KEY_MISSING.format(key=key))
 
+    def attribute_value(self, node, key, parent, path, ancestors):
+        print(path)
+
 
 class KeysMustBeOfCorrectType(ValidationRule):
     """All of the table's primary key attributes data types
@@ -109,11 +112,16 @@ class KeysMustBeNonEmpty(ValidationRule):
                 if getattr(attr.value.data, "value", None) == "":
                     self.report_error(KEY_EMPTY_STRING.format(key=attr.name.value))
 
+class PathTest(ValidationRule):
 
+    def enter_attribute_value(self, node, key, parent, path, ancestors):
+        test = 'fuck'
+        print(path)
 # Order matters here.  They run in parallel, but failures get reported in order.
 item_rules = [
-    ValuesOfCorrectTypeRule,
-    KeysMustBePresent,
-    KeysMustBeOfCorrectType,
-    KeysMustBeNonEmpty,
+    # ValuesOfCorrectTypeRule,
+    # KeysMustBePresent,
+    # KeysMustBeOfCorrectType,
+    # KeysMustBeNonEmpty,
+    PathTest,
 ]
