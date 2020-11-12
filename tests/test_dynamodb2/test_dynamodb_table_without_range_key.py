@@ -156,9 +156,9 @@ def test_item_put_without_table():
     conn.put_item.when.called_with(
         table_name="undeclared-table",
         item={
-            "forum_name": "LOLCat Forum",
-            "Body": "http://url_to_lolcat.gif",
-            "SentBy": "User A",
+            "forum_name": {"S": "LOLCat Forum"},
+            "Body": {"S": "http://url_to_lolcat.gif"},
+            "SentBy": {"S": "User A"},
         },
     ).should.throw(JSONResponseError)
 

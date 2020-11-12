@@ -16,7 +16,7 @@ from .exceptions import (
     TransactionCanceledException,
 )
 from moto.dynamodb2.models import dynamodb_backends, dynamo_json_dump
-
+from moto.dynamodb2.validate import validate_parameters
 
 TRANSACTION_MAX_ITEMS = 25
 
@@ -85,6 +85,11 @@ class DynamoHandler(BaseResponse):
         self.body = json.loads(self.body or "{}")
         endpoint = self.get_endpoint_name(self.headers)
         if endpoint:
+            errors = validate_parameters(self.body, endpoint)
+            if errors:
+                return self.error(
+                    "com.amazonaws.dynamodb.v20111205#ValidationException", errors
+                )
             endpoint = camelcase_to_underscores(endpoint)
             response = getattr(self, endpoint)()
             if isinstance(response, six.string_types):
