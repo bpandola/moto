@@ -13,6 +13,13 @@ Validation Errors
 
 """
 
+# TODO: Run pytest with coverage and look at all the responses/model code that isn't covered
+# due to our validation catching it early.
+
+# TODO: Maybe some sort of check for mutual_exclusive parameters?  Would probably need
+# to have some way to munge additional stuff into the model for that...
+# https://github.com/spulec/moto/issues/2731
+
 import botocore.session
 from botocore.compat import six
 from botocore.validate import ParamValidator, type_check, ValidationErrors
