@@ -218,10 +218,7 @@ class BaseResponse(_TemplateEnvironmentMixin, ActionAuthenticatorMixin):
 
     @classmethod
     def dispatch(cls, *args, **kwargs):
-        from moto.motocore.awsrequest import convert_to_request_dict
-
-        return convert_to_request_dict(*args)
-        # return cls()._dispatch(*args, **kwargs)
+        return cls()._dispatch(*args, **kwargs)
 
     def setup_class(
         self, request: Any, full_url: str, headers: Any, use_raw_body: bool = False
