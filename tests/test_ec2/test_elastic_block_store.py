@@ -1,6 +1,7 @@
 from __future__ import unicode_literals
 
 import boto
+import boto.ec2
 import boto3
 
 import pytest
