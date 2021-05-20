@@ -184,6 +184,10 @@ class FakeAlarm(BaseModel):
             datetime.now(tz=tzutc())
         )
 
+    @property
+    def metrics(self):
+        return self.metric_data_queries
+
 
 def are_dimensions_same(metric_dimensions, dimensions):
     if len(metric_dimensions) != len(dimensions):
@@ -524,8 +528,9 @@ class CloudWatchBackend(BaseBackend):
                 {
                     "id": query["id"],
                     "label": label,
-                    "vals": result_vals,
+                    "values": result_vals,
                     "timestamps": timestamps,
+                    "status_code": "Complete",
                 }
             )
         return results
