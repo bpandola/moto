@@ -166,6 +166,7 @@ class DBSnapshotBackend(BaseRDSBackend):
             next_marker = None
             if len(db_instance_snapshots) > start + page_size:
                 next_marker = db_instance_snapshots_resp[-1].db_snapshot_identifier
+            return (db_instance_snapshots_resp, next_marker)
         all_db_snapshots = self.db_snapshots.values()
         if marker:
             start = all_db_snapshots.index(marker) + 1
