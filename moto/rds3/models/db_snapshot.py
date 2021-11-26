@@ -151,23 +151,16 @@ class DBSnapshotBackend(BaseRDSBackend):
         if db_snapshot_identifier:
             return [self.get_db_snapshot(db_snapshot_identifier)]
         snapshot_types = ['automated', 'manual'] if snapshot_type is None else [snapshot_type]
+        db_instance_snapshots = []
         if db_instance_identifier:
-            db_instance_snapshots = []
             for snapshot in self.db_snapshots.values():
                 if snapshot.db_instance_identifier == db_instance_identifier:
                     if snapshot.snapshot_type in snapshot_types:
                         db_instance_snapshots.append(snapshot)
-            if marker:
-                start = db_instance_snapshots.index(marker) + 1
-            else:
-                start = 0
-            page_size = max_records if max_records else 100
-            db_instance_snapshots_resp = db_instance_snapshots[start : start + page_size]
-            next_marker = None
-            if len(db_instance_snapshots) > start + page_size:
-                next_marker = db_instance_snapshots_resp[-1].db_snapshot_identifier
-            return (db_instance_snapshots_resp, next_marker)
-        all_db_snapshots = self.db_snapshots.values()
+        if len(db_instance_snapshots) > 0:
+            all_db_snapshots = db_instance_snapshots
+        else:
+            all_db_snapshots = self.db_snapshots.values()
         if marker:
             start = all_db_snapshots.index(marker) + 1
         else:
