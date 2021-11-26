@@ -157,7 +157,7 @@ class DBSnapshotBackend(BaseRDSBackend):
                 if snapshot.db_instance_identifier == db_instance_identifier:
                     if snapshot.snapshot_type in snapshot_types:
                         db_instance_snapshots.append(snapshot)
-        if len(db_instance_snapshots) > 0:
+        if db_instance_identifier:
             all_db_snapshots = db_instance_snapshots
         else:
             all_db_snapshots = self.db_snapshots.values()
