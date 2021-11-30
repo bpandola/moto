@@ -147,27 +147,15 @@ class DBSnapshotBackend(BaseRDSBackend):
         snapshot.delete_events()
         return self.db_snapshots.pop(db_snapshot_identifier)
 
-    def describe_db_snapshots(self, db_instance_identifier=None, db_snapshot_identifier=None, snapshot_type=None, marker=None, max_records=None):
+    def describe_db_snapshots(self, db_instance_identifier=None, db_snapshot_identifier=None, snapshot_type=None, **kwargs):
         if db_snapshot_identifier:
             return [self.get_db_snapshot(db_snapshot_identifier)]
         snapshot_types = ['automated', 'manual'] if snapshot_type is None else [snapshot_type]
-        db_instance_snapshots = []
         if db_instance_identifier:
+            db_instance_snapshots = []
             for snapshot in self.db_snapshots.values():
                 if snapshot.db_instance_identifier == db_instance_identifier:
                     if snapshot.snapshot_type in snapshot_types:
                         db_instance_snapshots.append(snapshot)
-        if db_instance_identifier:
-            all_db_snapshots = db_instance_snapshots
-        else:
-            all_db_snapshots = self.db_snapshots.values()
-        if marker:
-            start = all_db_snapshots.index(marker) + 1
-        else:
-            start = 0
-        page_size = max_records if max_records else 100
-        db_snapshots_resp = all_db_snapshots[start : start + page_size]
-        next_marker = None
-        if len(all_db_snapshots) > start + page_size:
-            next_marker = db_snapshots_resp[-1].db_snapshot_identifier
-        return (db_snapshots_resp, next_marker)
+            return db_instance_snapshots
+        return self.db_snapshots.values()
