@@ -358,6 +358,13 @@ class BaseResponse(_TemplateEnvironmentMixin, ActionAuthenticatorMixin):
         return get_account_id_from(self.get_access_key())
 
     def _dispatch(self, request, full_url, headers):
+        from moto.motocore.awsrequest import convert_to_request_dict2
+        from moto.motocore.parser2 import create_parser
+        from boto3 import client
+        request_dict = convert_to_request_dict2(request, full_url, headers)
+        service = client(self.service_name)._service_model
+        parser = create_parser(service.metadata['protocol'])
+        parsed = parser.parse(request_dict, service)
         self.setup_class(request, full_url, headers)
         return self.call_action()
 

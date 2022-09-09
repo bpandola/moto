@@ -4,7 +4,7 @@ import six
 from botocore.awsrequest import HeadersDict
 from botocore.session import get_session
 from botocore.utils import get_encoding_from_headers
-from six.moves.urllib.parse import parse_qsl, urlparse
+from urllib.parse import parse_qs, urlparse
 from werkzeug.http import parse_options_header
 
 from moto.core.utils import get_random_message_id
@@ -12,6 +12,22 @@ from moto.motocore.client import get_custom_client
 from moto.motocore.regions import EndpointResolver
 
 DEFAULT_ENCODING = "utf-8"
+
+
+def convert_to_request_dict2(request, full_url, headers):
+    parsed = urlparse(full_url)
+    request_dict = {
+        "hostname": parsed.hostname,
+        "url_path": parsed.path,  # getattr(request, 'path', '/'),
+        "query_string": parsed.query,  # getattr(request, 'query_string', ''),
+        "method": getattr(request, "method", "GET"),
+        "headers": getattr(request, "headers", headers),
+        "body": getattr(request, "body", b""),
+        "url": getattr(request, "url", full_url),
+    }
+    normalize_request_dict(request_dict)
+    #request_dict["context"] = aws_context_from_request(request_dict)
+    return request_dict
 
 
 def convert_to_request_dict(request, full_url, headers):
@@ -261,9 +277,18 @@ def normalize_request_dict(request_dict, context=None):
         the scheme, the hostname, and optionally any path components.
     """
 
+    # def convert_params_to_dict(data, enc):
+    #     parsed = parse_qsl(data, keep_blank_values=True, encoding=enc)
+    #     return {i[0]: i[1] for i in parsed}
+
     def convert_params_to_dict(data, enc):
-        parsed = parse_qsl(data, keep_blank_values=True, encoding=enc)
-        return {i[0]: i[1] for i in parsed}
+
+        if isinstance(data, bytes):
+            data = data.decode(encoding)
+        parsed = parse_qs(data, keep_blank_values=True, encoding=encoding)
+        # If multiple of same, we return array; otherwise scalar.
+        parsed = {k: v if len(v) > 1 else v[0] for k, v in parsed.items()}
+        return parsed
 
     r = request_dict
     r["headers"] = HeadersDict(request_dict["headers"])
@@ -272,8 +297,8 @@ def normalize_request_dict(request_dict, context=None):
     if isinstance(r["query_string"], six.binary_type):
         r["query_string"] = r["query_string"].decode(encoding)
     r["query_string"] = convert_params_to_dict(r["query_string"], encoding)
-    if isinstance(r["body"], six.binary_type):
-        r["body"] = r["body"].decode(encoding)
+    #if isinstance(r["body"], six.binary_type):
+     #   r["body"] = r["body"].decode(encoding)
     content_type, options = parse_options_header(r["headers"].get("Content-Type"))
     charset = options.get("charset", DEFAULT_ENCODING)
     if content_type == "application/x-www-form-urlencoded":

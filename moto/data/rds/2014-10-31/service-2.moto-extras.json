@@ -46,7 +46,14 @@
           "senderFault": true
         },
         "exception": true
+      },
+      "DBInstanceAlreadyExistsFault":{
+       "error":{
+         "message": "DB instance already exists"
+
       }
+
+    }
     }
   }
 }
