@@ -364,7 +364,7 @@ class BaseResponse(_TemplateEnvironmentMixin, ActionAuthenticatorMixin):
         request_dict = convert_to_request_dict2(request, full_url, headers)
         service = client(self.service_name)._service_model
         parser = create_parser(service.metadata['protocol'])
-        parsed = parser.parse(request_dict, service)
+        self.parsed = parser.parse(request_dict, service)
         self.setup_class(request, full_url, headers)
         return self.call_action()
 
