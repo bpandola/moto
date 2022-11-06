@@ -3,6 +3,7 @@ import os
 import pathlib
 
 from functools import lru_cache
+from typing import Optional
 
 
 TEST_SERVER_MODE = os.environ.get("TEST_SERVER_MODE", "0").lower() == "true"
@@ -68,37 +69,37 @@ def allow_unknown_region():
     return os.environ.get("MOTO_ALLOW_NONEXISTENT_REGION", "false").lower() == "true"
 
 
-def moto_server_port():
+def moto_server_port() -> str:
     return os.environ.get("MOTO_PORT") or "5000"
 
 
 @lru_cache()
-def moto_server_host():
+def moto_server_host() -> str:
     if is_docker():
         return get_docker_host()
     else:
         return "http://host.docker.internal"
 
 
-def moto_lambda_image():
+def moto_lambda_image() -> str:
     return os.environ.get("MOTO_DOCKER_LAMBDA_IMAGE", "lambci/lambda")
 
 
-def moto_network_name():
+def moto_network_name() -> str:
     return os.environ.get("MOTO_DOCKER_NETWORK_NAME")
 
 
-def moto_network_mode():
+def moto_network_mode() -> str:
     return os.environ.get("MOTO_DOCKER_NETWORK_MODE")
 
 
-def test_server_mode_endpoint():
+def test_server_mode_endpoint() -> str:
     return os.environ.get(
         "TEST_SERVER_MODE_ENDPOINT", f"http://localhost:{moto_server_port()}"
     )
 
 
-def is_docker():
+def is_docker() -> bool:
     path = pathlib.Path("/proc/self/cgroup")
     return (
         os.path.exists("/.dockerenv")
@@ -107,7 +108,7 @@ def is_docker():
     )
 
 
-def get_docker_host():
+def get_docker_host() -> str:
     try:
         cmd = "curl -s --unix-socket /run/docker.sock http://docker/containers/$HOSTNAME/json"
         container_info = os.popen(cmd).read()
@@ -130,5 +131,5 @@ def get_docker_host():
         return "http://host.docker.internal"
 
 
-def get_cognito_idp_user_pool_id_strategy():
+def get_cognito_idp_user_pool_id_strategy() -> Optional[str]:
     return os.environ.get("MOTO_COGNITO_IDP_USER_POOL_ID_STRATEGY")

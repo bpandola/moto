@@ -22,18 +22,18 @@
 
 ## amp
 <details>
-<summary>61% implemented</summary>
+<summary>80% implemented</summary>
 
 - [ ] create_alert_manager_definition
-- [ ] create_logging_configuration
+- [X] create_logging_configuration
 - [X] create_rule_groups_namespace
 - [X] create_workspace
 - [ ] delete_alert_manager_definition
-- [ ] delete_logging_configuration
+- [X] delete_logging_configuration
 - [X] delete_rule_groups_namespace
 - [X] delete_workspace
 - [ ] describe_alert_manager_definition
-- [ ] describe_logging_configuration
+- [X] describe_logging_configuration
 - [X] describe_rule_groups_namespace
 - [X] describe_workspace
 - [X] list_rule_groups_namespaces
@@ -43,7 +43,7 @@
 - [X] put_rule_groups_namespace
 - [X] tag_resource
 - [X] untag_resource
-- [ ] update_logging_configuration
+- [X] update_logging_configuration
 - [X] update_workspace_alias
 </details>
 
@@ -494,7 +494,7 @@
 
 ## ce
 <details>
-<summary>11% implemented</summary>
+<summary>20% implemented</summary>
 
 - [ ] create_anomaly_monitor
 - [ ] create_anomaly_subscription
@@ -523,10 +523,10 @@
 - [ ] get_usage_forecast
 - [ ] list_cost_allocation_tags
 - [ ] list_cost_category_definitions
-- [ ] list_tags_for_resource
+- [X] list_tags_for_resource
 - [ ] provide_anomaly_feedback
-- [ ] tag_resource
-- [ ] untag_resource
+- [X] tag_resource
+- [X] untag_resource
 - [ ] update_anomaly_monitor
 - [ ] update_anomaly_subscription
 - [ ] update_cost_allocation_tags_status
@@ -535,7 +535,7 @@
 
 ## cloudformation
 <details>
-<summary>30% implemented</summary>
+<summary>31% implemented</summary>
 
 - [ ] activate_type
 - [ ] batch_describe_type_configurations
@@ -599,7 +599,7 @@
 - [ ] stop_stack_set_operation
 - [ ] test_type
 - [X] update_stack
-- [ ] update_stack_instances
+- [X] update_stack_instances
 - [X] update_stack_set
 - [ ] update_termination_protection
 - [X] validate_template
@@ -607,7 +607,7 @@
 
 ## cloudfront
 <details>
-<summary>8% implemented</summary>
+<summary>9% implemented</summary>
 
 - [ ] associate_alias
 - [ ] create_cache_policy
@@ -681,7 +681,7 @@
 - [ ] list_field_level_encryption_configs
 - [ ] list_field_level_encryption_profiles
 - [ ] list_functions
-- [ ] list_invalidations
+- [X] list_invalidations
 - [ ] list_key_groups
 - [ ] list_origin_access_controls
 - [ ] list_origin_request_policies
@@ -1112,13 +1112,14 @@
 
 ## comprehend
 <details>
-<summary>11% implemented</summary>
+<summary>10% implemented</summary>
 
 - [ ] batch_detect_dominant_language
 - [ ] batch_detect_entities
 - [ ] batch_detect_key_phrases
 - [ ] batch_detect_sentiment
 - [ ] batch_detect_syntax
+- [ ] batch_detect_targeted_sentiment
 - [ ] classify_document
 - [ ] contains_pii_entities
 - [ ] create_document_classifier
@@ -1147,6 +1148,7 @@
 - [ ] detect_pii_entities
 - [ ] detect_sentiment
 - [ ] detect_syntax
+- [ ] detect_targeted_sentiment
 - [ ] import_model
 - [ ] list_document_classification_jobs
 - [ ] list_document_classifier_summaries
@@ -1507,7 +1509,7 @@
 
 ## ds
 <details>
-<summary>18% implemented</summary>
+<summary>17% implemented</summary>
 
 - [ ] accept_shared_directory
 - [ ] add_ip_routes
@@ -1542,6 +1544,7 @@
 - [ ] describe_shared_directories
 - [ ] describe_snapshots
 - [ ] describe_trusts
+- [ ] describe_update_directory
 - [ ] disable_client_authentication
 - [ ] disable_ldaps
 - [ ] disable_radius
@@ -1569,6 +1572,7 @@
 - [ ] start_schema_extension
 - [ ] unshare_directory
 - [ ] update_conditional_forwarder
+- [ ] update_directory_setup
 - [ ] update_number_of_domain_controllers
 - [ ] update_radius
 - [ ] update_settings
@@ -1661,6 +1665,7 @@
 <details>
 <summary>35% implemented</summary>
 
+- [ ] accept_address_transfer
 - [ ] accept_reserved_instances_exchange_quote
 - [ ] accept_transit_gateway_multicast_domain_associations
 - [X] accept_transit_gateway_peering_attachment
@@ -1861,6 +1866,7 @@
 - [ ] deregister_transit_gateway_multicast_group_members
 - [ ] deregister_transit_gateway_multicast_group_sources
 - [ ] describe_account_attributes
+- [ ] describe_address_transfers
 - [X] describe_addresses
 - [ ] describe_addresses_attribute
 - [ ] describe_aggregate_id_format
@@ -2000,6 +2006,7 @@
 - [X] detach_network_interface
 - [X] detach_volume
 - [X] detach_vpn_gateway
+- [ ] disable_address_transfer
 - [X] disable_ebs_encryption_by_default
 - [ ] disable_fast_launch
 - [ ] disable_fast_snapshot_restores
@@ -2022,6 +2029,7 @@
 - [X] disassociate_transit_gateway_route_table
 - [ ] disassociate_trunk_interface
 - [X] disassociate_vpc_cidr_block
+- [ ] enable_address_transfer
 - [X] enable_ebs_encryption_by_default
 - [ ] enable_fast_launch
 - [ ] enable_fast_snapshot_restores
@@ -2697,12 +2705,13 @@
 
 ## emr-serverless
 <details>
-<summary>50% implemented</summary>
+<summary>46% implemented</summary>
 
 - [ ] cancel_job_run
 - [X] create_application
 - [X] delete_application
 - [X] get_application
+- [ ] get_dashboard_for_job_run
 - [ ] get_job_run
 - [X] list_applications
 - [ ] list_job_runs
@@ -2952,7 +2961,7 @@
 
 ## glue
 <details>
-<summary>20% implemented</summary>
+<summary>19% implemented</summary>
 
 - [X] batch_create_partition
 - [ ] batch_delete_connection
@@ -3130,10 +3139,12 @@
 - [X] update_database
 - [ ] update_dev_endpoint
 - [ ] update_job
+- [ ] update_job_from_source_control
 - [ ] update_ml_transform
 - [ ] update_partition
 - [ ] update_registry
 - [ ] update_schema
+- [ ] update_source_control_from_job
 - [ ] update_table
 - [ ] update_trigger
 - [ ] update_user_defined_function
@@ -3932,7 +3943,7 @@
 
 ## logs
 <details>
-<summary>59% implemented</summary>
+<summary>55% implemented</summary>
 
 - [ ] associate_kms_key
 - [ ] cancel_export_task
@@ -3962,6 +3973,7 @@
 - [ ] get_log_group_fields
 - [ ] get_log_record
 - [ ] get_query_results
+- [ ] list_tags_for_resource
 - [X] list_tags_log_group
 - [ ] put_destination
 - [ ] put_destination_policy
@@ -3974,24 +3986,30 @@
 - [X] start_query
 - [ ] stop_query
 - [X] tag_log_group
+- [ ] tag_resource
 - [ ] test_metric_filter
 - [X] untag_log_group
+- [ ] untag_resource
 </details>
 
 ## managedblockchain
 <details>
-<summary>86% implemented</summary>
+<summary>74% implemented</summary>
 
+- [ ] create_accessor
 - [X] create_member
 - [X] create_network
 - [X] create_node
 - [X] create_proposal
+- [ ] delete_accessor
 - [X] delete_member
 - [X] delete_node
+- [ ] get_accessor
 - [X] get_member
 - [X] get_network
 - [X] get_node
 - [X] get_proposal
+- [ ] list_accessors
 - [X] list_invitations
 - [X] list_members
 - [X] list_networks
@@ -4009,7 +4027,7 @@
 
 ## mediaconnect
 <details>
-<summary>46% implemented</summary>
+<summary>60% implemented</summary>
 
 - [ ] add_flow_media_streams
 - [X] add_flow_outputs
@@ -4020,7 +4038,7 @@
 - [X] describe_flow
 - [ ] describe_offering
 - [ ] describe_reservation
-- [x] grant_flow_entitlements
+- [X] grant_flow_entitlements
 - [ ] list_entitlements
 - [X] list_flows
 - [ ] list_offerings
@@ -4031,15 +4049,15 @@
 - [X] remove_flow_output
 - [ ] remove_flow_source
 - [X] remove_flow_vpc_interface
-- [x] revoke_flow_entitlement
+- [X] revoke_flow_entitlement
 - [X] start_flow
 - [X] stop_flow
 - [X] tag_resource
 - [ ] untag_resource
 - [ ] update_flow
-- [x] update_flow_entitlement
+- [X] update_flow_entitlement
 - [ ] update_flow_media_stream
-- [x] update_flow_output
+- [X] update_flow_output
 - [X] update_flow_source
 </details>
 
@@ -5382,6 +5400,7 @@
 - [ ] get_bucket_lifecycle_configuration
 - [ ] get_bucket_policy
 - [ ] get_bucket_tagging
+- [ ] get_bucket_versioning
 - [ ] get_job_tagging
 - [ ] get_multi_region_access_point
 - [ ] get_multi_region_access_point_policy
@@ -5401,6 +5420,7 @@
 - [ ] put_bucket_lifecycle_configuration
 - [ ] put_bucket_policy
 - [ ] put_bucket_tagging
+- [ ] put_bucket_versioning
 - [ ] put_job_tagging
 - [ ] put_multi_region_access_point_policy
 - [X] put_public_access_block
@@ -5592,6 +5612,7 @@
 - [ ] list_hyper_parameter_tuning_jobs
 - [ ] list_image_versions
 - [ ] list_images
+- [ ] list_inference_recommendations_job_steps
 - [ ] list_inference_recommendations_jobs
 - [ ] list_labeling_jobs
 - [ ] list_labeling_jobs_for_workteam
@@ -6432,6 +6453,7 @@
 - connect
 - connect-contact-lens
 - connectcampaigns
+- connectcases
 - connectparticipant
 - controltower
 - cur
@@ -6477,6 +6499,7 @@
 - iotevents
 - iotevents-data
 - iotfleethub
+- iotfleetwise
 - iotsecuretunneling
 - iotsitewise
 - iotthingsgraph
@@ -6519,6 +6542,7 @@
 - mgn
 - migration-hub-refactor-spaces
 - migrationhub-config
+- migrationhuborchestrator
 - migrationhubstrategy
 - mobile
 - mturk

@@ -12,7 +12,7 @@ from urllib.parse import urlparse
 from uuid import uuid4
 
 
-def camelcase_to_underscores(argument):
+def camelcase_to_underscores(argument: Optional[str]) -> str:
     """Converts a camelcase param like theNewAttribute to the equivalent
     python underscore variable like the_new_attribute"""
     result = ""
@@ -147,21 +147,23 @@ class convert_flask_to_responses_response(object):
         return status, headers, response
 
 
-def iso_8601_datetime_with_milliseconds(value):
+def iso_8601_datetime_with_milliseconds(value: datetime) -> str:
     return value.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
 
 
 # Even Python does not support nanoseconds, other languages like Go do (needed for Terraform)
-def iso_8601_datetime_with_nanoseconds(value):
+def iso_8601_datetime_with_nanoseconds(value: datetime.datetime) -> str:
     return value.strftime("%Y-%m-%dT%H:%M:%S.%f000Z")
 
 
-def iso_8601_datetime_without_milliseconds(value):
-    return None if value is None else value.strftime("%Y-%m-%dT%H:%M:%SZ")
+def iso_8601_datetime_without_milliseconds(value: datetime.datetime) -> Optional[str]:
+    return value.strftime("%Y-%m-%dT%H:%M:%SZ") if value else None
 
 
-def iso_8601_datetime_without_milliseconds_s3(value):
-    return None if value is None else value.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+def iso_8601_datetime_without_milliseconds_s3(
+    value: datetime.datetime,
+) -> Optional[str]:
+    return value.strftime("%Y-%m-%dT%H:%M:%S.000Z") if value else None
 
 
 RFC1123 = "%a, %d %b %Y %H:%M:%S GMT"
@@ -175,14 +177,14 @@ def str_to_rfc_1123_datetime(value):
     return datetime.datetime.strptime(value, RFC1123)
 
 
-def unix_time(dt: datetime.datetime = None) -> datetime.datetime:
+def unix_time(dt: datetime.datetime = None) -> int:
     dt = dt or datetime.datetime.utcnow()
     epoch = datetime.datetime.utcfromtimestamp(0)
     delta = dt - epoch
     return (delta.days * 86400) + (delta.seconds + (delta.microseconds / 1e6))
 
 
-def unix_time_millis(dt=None):
+def unix_time_millis(dt: datetime = None) -> int:
     return unix_time(dt) * 1000.0
 
 

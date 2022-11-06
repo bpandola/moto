@@ -10,7 +10,7 @@ from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 
 from jinja2 import Template
-from typing import Mapping
+from typing import List, Mapping
 from urllib import parse
 from moto.core.exceptions import RESTError
 from moto.core import DEFAULT_ACCOUNT_ID, BaseBackend, BaseModel, CloudFormationModel
@@ -1727,9 +1727,11 @@ class IAMBackend(BaseBackend):
         arns = dict((p.arn, p) for p in self.managed_policies.values())
         try:
             policy = arns[policy_arn]
-            policy.detach_from(self.get_role(role_name))
+            if policy.arn not in self.get_role(role_name).managed_policies.keys():
+                raise KeyError
         except KeyError:
             raise IAMNotFoundException("Policy {0} was not found.".format(policy_arn))
+        policy.detach_from(self.get_role(role_name))
 
     def attach_group_policy(self, policy_arn, group_name):
         arns = dict((p.arn, p) for p in self.managed_policies.values())
@@ -1745,6 +1747,8 @@ class IAMBackend(BaseBackend):
         arns = dict((p.arn, p) for p in self.managed_policies.values())
         try:
             policy = arns[policy_arn]
+            if policy.arn not in self.get_group(group_name).managed_policies.keys():
+                raise KeyError
         except KeyError:
             raise IAMNotFoundException("Policy {0} was not found.".format(policy_arn))
         policy.detach_from(self.get_group(group_name))
@@ -1761,6 +1765,8 @@ class IAMBackend(BaseBackend):
         arns = dict((p.arn, p) for p in self.managed_policies.values())
         try:
             policy = arns[policy_arn]
+            if policy.arn not in self.get_user(user_name).managed_policies.keys():
+                raise KeyError
         except KeyError:
             raise IAMNotFoundException("Policy {0} was not found.".format(policy_arn))
         policy.detach_from(self.get_user(user_name))
@@ -1911,7 +1917,7 @@ class IAMBackend(BaseBackend):
                 return role
         raise IAMNotFoundException("Role {0} not found".format(role_name))
 
-    def get_role_by_arn(self, arn):
+    def get_role_by_arn(self, arn: str) -> Role:
         for role in self.get_roles():
             if role.arn == arn:
                 return role
@@ -2182,7 +2188,7 @@ class IAMBackend(BaseBackend):
 
         raise IAMNotFoundException("Instance profile {0} not found".format(profile_arn))
 
-    def get_instance_profiles(self):
+    def get_instance_profiles(self) -> List[InstanceProfile]:
         return self.instance_profiles.values()
 
     def get_instance_profiles_for_role(self, role_name):

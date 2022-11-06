@@ -305,7 +305,12 @@ class FakeKey(BaseModel, ManagedState):
     # https://docs.python.org/3/library/pickle.html#handling-stateful-objects
     def __getstate__(self):
         state = self.__dict__.copy()
-        state["value"] = self.value
+        try:
+            state["value"] = self.value
+        except ValueError:
+            # Buffer is already closed, so we can't reach the data
+            # Only happens if the key was deleted
+            state["value"] = ""
         del state["_value_buffer"]
         del state["lock"]
         return state
@@ -1455,12 +1460,10 @@ class S3Backend(BaseBackend, CloudWatchMetricProvider):
     def reset(self):
         # For every key and multipart, Moto opens a TemporaryFile to write the value of those keys
         # Ensure that these TemporaryFile-objects are closed, and leave no filehandles open
-        for bucket in self.buckets.values():
-            for key in bucket.keys.values():
-                if isinstance(key, FakeKey):
-                    key.dispose()
-            for mp in bucket.multiparts.values():
-                mp.dispose()
+        for mp in FakeMultipart.instances:
+            mp.dispose()
+        for key in FakeKey.instances:
+            key.dispose()
         super().reset()
 
     @property
@@ -1916,6 +1919,9 @@ class S3Backend(BaseBackend, CloudWatchMetricProvider):
         bucket.set_cors(cors_rules)
 
     def put_bucket_logging(self, bucket_name, logging_config):
+        """
+        The logging functionality itself is not yet implemented - we only store the configuration for now.
+        """
         bucket = self.get_bucket(bucket_name)
         bucket.set_logging(logging_config, self)
 

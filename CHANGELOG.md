@@ -1,6 +1,44 @@
 Moto Changelog
 ==============
 
+4.0.9
+-----
+Docker Digest for 4.0.9: _sha256:0c7a87255814035794733764d497fcb659ae0d6c843fae41040bb1a29c0726ab_
+
+    Miscellaneous:
+        * CloudTrail: describe_trails() now returns the correct (MultiRegion) trails
+        * CloudWatch:tag_resource() now allows tagting new Alarms that didn't have tags yet
+        * EC2: create_instances() now supports the `IamInstanceProfile`-parameter
+        * EC2: describe_route_tables() now supports the `route.vpc-peering-connection-id`-filter
+        * EC2: modify_vpc_attribute() now supports the enableNetworkAddressUsageMetrics-attribute
+        * S3: delete_objects() now works against the JS SDK v3.197.0
+
+
+4.0.8
+-----
+Docker Digest for 4.0.8: _sha256:41883fb0f38572f3194dcbef6731eafdc6d8d7d4e319257d2ba2468c401c9881_
+
+    General:
+        * Unpins the werkzeug-dependency - Moto now works with werkzeug==2.2.2
+        * Fixes the Docker-build to run on M1 Macbooks.
+
+    New Services:
+        * ServiceQuotas:
+            * get_service_quota()
+            * list_aws_default_service_quotas()
+
+    New Methods:
+        * CloudFront: list_invalidations()
+        * RDS: modify_db_cluster()
+
+    Miscellaneous:
+        * Lambda:delete_function() - fixed an issue where the wrong Function would be deleted when providing a qualifier
+        * ECR:put_image() now removes any existing images that have the provided tag
+        * IAM:detach_user/group/role_policy() now throws the correct error message when the policy is not attached in the first place 
+        * S3:list_object_versions(): Fix delimiter to take prefix into account 
+        * S3: Now closes file handles as early as possible when deleting files/multipart uploads
+        * Sagamaker:describe_training_job() now throws the correct exception when trying to explain a non-existing job
+
 
 4.0.7
 -----
