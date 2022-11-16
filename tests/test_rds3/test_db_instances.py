@@ -143,6 +143,15 @@ def test_restore_db_instance_to_point_in_time():
     details_target["DBInstanceClass"].should.equal(details_source["DBInstanceClass"])
 
 
+@mock_rds
+def test_modify_with_no_modifications_raises_error():
+    client = boto3.client("rds", region_name="us-west-2")
+    identifier, _ = create_db_instance(client, MaxAllocatedStorage=25)
+    client.modify_db_instance.when.called_with(
+        DBInstanceIdentifier=identifier, MaxAllocatedStorage=25
+    ).should.throw(ClientError, "No modifications were requested")
+
+
 # @mock_rds
 # def test_invalid_parameter():
 #     client = boto3.client('rds', region_name='us-west-2')
