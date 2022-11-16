@@ -80,7 +80,7 @@ class DBCluster(TaggableRDSResource, EventMixin, BaseRDSModel):
     @property
     def endpoint(self):
         return "{}.cluster-xxxxxxxx.{}.rds.amazonaws.com".format(
-            self.resource_id, self.backend.region
+            self.resource_id, self.backend.region_name
         )
 
     @property
