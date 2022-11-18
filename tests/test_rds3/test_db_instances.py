@@ -3,7 +3,6 @@ import time
 import uuid
 
 import boto3
-import pytest
 import pytz
 from botocore.exceptions import ClientError
 from sure import this
@@ -142,7 +141,6 @@ def test_restore_db_instance_to_point_in_time():
     details_target["DBInstanceClass"].should.equal(details_source["DBInstanceClass"])
 
 
-@pytest.mark.xfail
 @mock_rds
 def test_modify_with_no_modifications_raises_error():
     client = boto3.client("rds", region_name="us-west-2")

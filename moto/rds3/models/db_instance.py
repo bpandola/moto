@@ -245,25 +245,32 @@ class DBInstance(TaggableRDSResource, EventMixin, BaseRDSModel):
 
     def update(self, db_kwargs):
         # TODO: This is all horrible.  Must fix.
-        if "max_allocated_storage" in db_kwargs:
-            self.max_allocated_storage = db_kwargs.get("max_allocated_storage")
-        # TODO: This is all horrible.  Must fix.
-        if db_kwargs.get("db_parameter_group_name"):
-            db_parameter_group_name = db_kwargs.pop("db_parameter_group_name")
-            self._db_parameter_groups = [
-                {"name": db_parameter_group_name, "status": "pending-reboot"}
-            ]
-        # TODO: This is all horrible.  Must fix.
-        if db_kwargs.get("option_group_name"):
-            option_group_name = db_kwargs.pop("option_group_name")
-            self._option_groups = [{"name": option_group_name, "status": "in-sync"}]
+        was_updated = False
         # Hack: get instance id before tags, because tags depend on resource_id for arn...
         if "db_instance_identifier" in db_kwargs:
             self.db_instance_identifier = db_kwargs.pop("db_instance_identifier")
-        self.add_tags(db_kwargs.pop("tags", []))
-        for key, value in db_kwargs.items():
-            if value:
-                setattr(self, key, value)
+        for attr, value_new in db_kwargs.items():
+            if value_new is None:
+                continue
+            value_current = getattr(self, attr, None)
+            if value_new == value_current:
+                continue
+            if attr == "tags":
+                self.add_tags(value_new)
+                was_updated = True
+            elif attr == "db_parameter_group_name":
+                self._db_parameter_groups = [
+                    {"name": value_new, "status": "pending-reboot"}
+                ]
+                was_updated = True
+            elif attr == "option_group_name":
+                self._option_groups = [{"name": value_new, "status": "in-sync"}]
+                was_updated = True
+            else:
+                setattr(self, attr, value_new)
+                was_updated = True
+        if not was_updated:
+            raise InvalidParameterCombination("No modifications were requested")
 
     def reboot(self):
         for param_group in self._db_parameter_groups:
@@ -448,6 +455,10 @@ class DBInstanceBackend:
     ):
         source_db_instance = self.find_db_from_id(source_db_instance_identifier)
         db_args = dict(**source_db_instance.__dict__)
+        # AWS now pulls MaxAllocatedStorage from SourceDBInstance
+        db_args["max_allocated_storage"] = getattr(
+            source_db_instance, "max_allocated_storage", None
+        )
         if source_db_instance.region != self.region_name or multi_az:
             db_args.pop("availability_zone", None)
         # Use our backend and update with any user-provided parameters.
