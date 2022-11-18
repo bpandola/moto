@@ -455,6 +455,10 @@ class DBInstanceBackend:
     ):
         source_db_instance = self.find_db_from_id(source_db_instance_identifier)
         db_args = dict(**source_db_instance.__dict__)
+        # AWS now pulls MaxAllocatedStorage from SourceDBInstance
+        db_args["max_allocated_storage"] = getattr(
+            source_db_instance, "max_allocated_storage", None
+        )
         if source_db_instance.region != self.region_name or multi_az:
             db_args.pop("availability_zone", None)
         # Use our backend and update with any user-provided parameters.
