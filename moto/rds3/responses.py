@@ -8,6 +8,13 @@ from .serialize import create_serializer
 
 MAX_RECORDS = 100
 
+# Do this once...
+# Need to find a better place to put this, or cache it somehow.
+client = boto3.client("rds", region_name="us-east-1")
+api_to_method_mapping = {
+    v: k for k, v in client.meta.method_to_api_mapping.items()
+}
+
 
 class RDSResponse(BaseResponse):
     @property
@@ -30,13 +37,14 @@ class RDSResponse(BaseResponse):
         return utils.parse_query_parameters(self._get_action(), self.querystring)
 
     def call_action(self):
-        client = boto3.client("rds", region_name="us-east-1")
+        # Moved this section up to globals just for a bit of speed boost...
+        # client = boto3.client("rds", region_name="us-east-1")
         # Use the boto ability to add methods/attrs to the client class to put this on there
         # https://boto3.amazonaws.com/v1/documentation/api/latest/guide/events.html
         # Eh... will we have access to the meta attribute at that point?
-        api_to_method_mapping = {
-            v: k for k, v in client.meta.method_to_api_mapping.items()
-        }
+        # api_to_method_mapping = {
+        #     v: k for k, v in client.meta.method_to_api_mapping.items()
+        # }
         action = self._get_action()
         operation_model = client.meta.service_model.operation_model(action)
         action_method = api_to_method_mapping[action]
