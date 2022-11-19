@@ -48,14 +48,14 @@ class RDS3Backend(
             if backend not in [RDS3Backend, BaseBackend, object]:
                 backend.__init__(self)
         # Create RDS Alias
-        rds_key = self.kms.create_key(
-            policy="",
-            key_usage="ENCRYPT_DECRYPT",
-            key_spec=None,
-            description="Default master key that protects my RDS database volumes when no other key is defined",
-            tags=None,
-        )
-        self.kms.add_alias(rds_key.id, "alias/aws/rds")
+        # rds_key = self.kms.create_key(
+        #     policy="",
+        #     key_usage="ENCRYPT_DECRYPT",
+        #     key_spec=None,
+        #     description="Default master key that protects my RDS database volumes when no other key is defined",
+        #     tags=None,
+        # )
+        # self.kms.add_alias(rds_key.id, "alias/aws/rds")
 
     @property
     def ec2(self):
