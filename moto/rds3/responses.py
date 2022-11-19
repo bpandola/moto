@@ -11,9 +11,7 @@ MAX_RECORDS = 100
 # Do this once...
 # Need to find a better place to put this, or cache it somehow.
 client = boto3.client("rds", region_name="us-east-1")
-api_to_method_mapping = {
-    v: k for k, v in client.meta.method_to_api_mapping.items()
-}
+api_to_method_mapping = {v: k for k, v in client.meta.method_to_api_mapping.items()}
 
 
 class RDSResponse(BaseResponse):
