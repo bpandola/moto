@@ -269,11 +269,16 @@ class DBInstance(TaggableRDSResource, EventMixin, BaseRDSModel):
             elif attr == "preferred_maintenance_window":
                 from ...rds.utils import valid_preferred_maintenance_window
 
+                preferred_backup_window = db_kwargs.get(
+                    "preferred_backup_window", self.preferred_backup_window
+                )
                 msg = valid_preferred_maintenance_window(
-                    value_new, self.preferred_backup_window
+                    value_new, preferred_backup_window
                 )
                 if msg:
                     raise InvalidParameterValue(msg)
+                self.preferred_maintenance_window = value_new
+                was_updated = True
             else:
                 setattr(self, attr, value_new)
                 was_updated = True
