@@ -41,10 +41,16 @@ def test_create_key_and_certificate():
     cert = client.create_keys_and_certificate(setAsActive=True)
     cert.should.have.key("certificateArn").which.should_not.be.none
     cert.should.have.key("certificateId").which.should_not.be.none
-    cert.should.have.key("certificatePem").which.should_not.be.none
+    cert.should.have.key("certificatePem").which.should.match(
+        r"^-----BEGIN CERTIFICATE-----"
+    )
     cert.should.have.key("keyPair")
-    cert["keyPair"].should.have.key("PublicKey").which.should_not.be.none
-    cert["keyPair"].should.have.key("PrivateKey").which.should_not.be.none
+    cert["keyPair"].should.have.key("PublicKey").which.should.match(
+        r"^-----BEGIN PUBLIC KEY-----"
+    )
+    cert["keyPair"].should.have.key("PrivateKey").which.should.match(
+        r"^-----BEGIN RSA PRIVATE KEY-----"
+    )
 
 
 @mock_iot
@@ -206,7 +212,7 @@ def test_delete_certificate_validation():
     with pytest.raises(ClientError) as e:
         client.delete_certificate(certificateId=cert_id)
     e.value.response["Error"]["Message"].should.contain(
-        "Things must be detached before deletion (arn: %s)" % cert_arn
+        f"Things must be detached before deletion (arn: {cert_arn})"
     )
     res = client.list_certificates()
     res.should.have.key("certificates").which.should.have.length_of(1)
@@ -215,7 +221,7 @@ def test_delete_certificate_validation():
     with pytest.raises(ClientError) as e:
         client.delete_certificate(certificateId=cert_id)
     e.value.response["Error"]["Message"].should.contain(
-        "Certificate policies must be detached before deletion (arn: %s)" % cert_arn
+        f"Certificate policies must be detached before deletion (arn: {cert_arn})"
     )
     res = client.list_certificates()
     res.should.have.key("certificates").which.should.have.length_of(1)

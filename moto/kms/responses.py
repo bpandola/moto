@@ -5,8 +5,9 @@ import re
 import warnings
 
 from moto.core.responses import BaseResponse
-from moto.kms.utils import RESERVED_ALIASES
-from .models import kms_backends
+from moto.kms.utils import RESERVED_ALIASES, RESERVED_ALIASE_TARGET_KEY_IDS
+from .models import kms_backends, KmsBackend
+from .policy_validator import validate_policy
 from .exceptions import (
     NotFoundException,
     ValidationException,
@@ -30,7 +31,7 @@ class KmsResponse(BaseResponse):
         return params
 
     @property
-    def kms_backend(self):
+    def kms_backend(self) -> KmsBackend:
         return kms_backends[self.current_account][self.region]
 
     def _display_arn(self, key_id):
@@ -61,14 +62,12 @@ class KmsResponse(BaseResponse):
         )
 
         if not is_arn and not is_raw_key_id:
-            raise NotFoundException("Invalid keyId {key_id}".format(key_id=key_id))
+            raise NotFoundException(f"Invalid keyId {key_id}")
 
         cmk_id = self.kms_backend.get_key_id(key_id)
 
         if cmk_id not in self.kms_backend.keys:
-            raise NotFoundException(
-                "Key '{key_id}' does not exist".format(key_id=self._display_arn(key_id))
-            )
+            raise NotFoundException(f"Key '{self._display_arn(key_id)}' does not exist")
 
     def _validate_alias(self, key_id):
         """Determine whether an alias exists.
@@ -76,9 +75,7 @@ class KmsResponse(BaseResponse):
         - alias name
         - alias ARN
         """
-        error = NotFoundException(
-            "Alias {key_id} is not found.".format(key_id=self._display_arn(key_id))
-        )
+        error = NotFoundException(f"Alias {self._display_arn(key_id)} is not found.")
 
         is_arn = key_id.startswith("arn:") and ":alias/" in key_id
         is_name = key_id.startswith("alias/")
@@ -107,6 +104,13 @@ class KmsResponse(BaseResponse):
             return
 
         self._validate_cmk_id(key_id)
+
+    def _validate_key_policy(self, key_id, action):
+        """
+        Validate whether the specified action is allowed, given the key policy
+        """
+        key = self.kms_backend.describe_key(self.kms_backend.get_key_id(key_id))
+        validate_policy(key, action)
 
     def create_key(self):
         """https://docs.aws.amazon.com/kms/latest/APIReference/API_CreateKey.html"""
@@ -174,6 +178,7 @@ class KmsResponse(BaseResponse):
         key_id = self.parameters.get("KeyId")
 
         self._validate_key_id(key_id)
+        self._validate_key_policy(key_id, "kms:DescribeKey")
 
         key = self.kms_backend.describe_key(self.kms_backend.get_key_id(key_id))
 
@@ -211,16 +216,14 @@ class KmsResponse(BaseResponse):
 
         if ":" in alias_name:
             raise ValidationException(
-                "{alias_name} contains invalid characters for an alias".format(
-                    alias_name=alias_name
-                )
+                f"{alias_name} contains invalid characters for an alias"
             )
 
         if not re.match(r"^[a-zA-Z0-9:/_-]+$", alias_name):
             raise ValidationException(
-                "1 validation error detected: Value '{alias_name}' at 'aliasName' "
+                f"1 validation error detected: Value '{alias_name}' at 'aliasName' "
                 "failed to satisfy constraint: Member must satisfy regular "
-                "expression pattern: ^[a-zA-Z0-9:/_-]+$".format(alias_name=alias_name)
+                "expression pattern: ^[a-zA-Z0-9:/_-]+$"
             )
 
         if self.kms_backend.alias_exists(target_key_id):
@@ -232,12 +235,7 @@ class KmsResponse(BaseResponse):
 
         if self.kms_backend.alias_exists(alias_name):
             raise AlreadyExistsException(
-                "An alias with the name arn:aws:kms:{region}:{account_id}:{alias_name} "
-                "already exists".format(
-                    region=self.region,
-                    account_id=self.current_account,
-                    alias_name=alias_name,
-                )
+                f"An alias with the name arn:aws:kms:{self.region}:{self.current_account}:{alias_name} already exists"
             )
 
         self._validate_cmk_id(target_key_id)
@@ -275,14 +273,16 @@ class KmsResponse(BaseResponse):
                         "TargetKeyId": target_key_id,
                     }
                 )
-        for reserved_alias in RESERVED_ALIASES:
+        for reserved_alias, target_key_id in RESERVED_ALIASE_TARGET_KEY_IDS.items():
             exsisting = [
                 a for a in response_aliases if a["AliasName"] == reserved_alias
             ]
             if not exsisting:
+                arn = f"arn:aws:kms:{region}:{self.current_account}:{reserved_alias}"
                 response_aliases.append(
                     {
-                        "AliasArn": f"arn:aws:kms:{region}:{self.current_account}:{reserved_alias}",
+                        "TargetKeyId": target_key_id,
+                        "AliasArn": arn,
                         "AliasName": reserved_alias,
                     }
                 )

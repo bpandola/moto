@@ -212,13 +212,13 @@ class Parameter(CloudFormationModel):
             self.value = value
 
     def encrypt(self, value):
-        return "kms:{}:".format(self.keyid) + value
+        return f"kms:{self.keyid}:" + value
 
     def decrypt(self, value):
         if self.type != "SecureString":
             return value
 
-        prefix = "kms:{}:".format(self.keyid or "default")
+        prefix = f"kms:{self.keyid or 'default'}:"
         if value.startswith(prefix):
             return value[len(prefix) :]
 
@@ -851,6 +851,14 @@ def _document_filter_match(account_id, filters, ssm_doc):
     return True
 
 
+def _valid_parameter_type(type_):
+    """
+    Parameter Type field only allows `SecureString`, `StringList` and `String` (not `str`) values
+
+    """
+    return type_ in ("SecureString", "StringList", "String")
+
+
 def _valid_parameter_data_type(data_type):
     """
     Parameter DataType field allows only `text` and `aws:ec2:image` values
@@ -1342,9 +1350,7 @@ class SimpleSystemManagerBackend(BaseBackend):
             if not re.match(r"^tag:.+|Name|Type|KeyId|Path|Label|Tier$", key):
                 self._errors.append(
                     self._format_error(
-                        key="parameterFilters.{index}.member.key".format(
-                            index=(index + 1)
-                        ),
+                        key=f"parameterFilters.{index + 1}.member.key",
                         value=key,
                         constraint="Member must satisfy regular expression pattern: tag:.+|Name|Type|KeyId|Path|Label|Tier",
                     )
@@ -1353,9 +1359,7 @@ class SimpleSystemManagerBackend(BaseBackend):
             if len(key) > 132:
                 self._errors.append(
                     self._format_error(
-                        key="parameterFilters.{index}.member.key".format(
-                            index=(index + 1)
-                        ),
+                        key=f"parameterFilters.{index + 1}.member.key",
                         value=key,
                         constraint="Member must have length less than or equal to 132",
                     )
@@ -1364,9 +1368,7 @@ class SimpleSystemManagerBackend(BaseBackend):
             if len(option) > 10:
                 self._errors.append(
                     self._format_error(
-                        key="parameterFilters.{index}.member.option".format(
-                            index=(index + 1)
-                        ),
+                        key=f"parameterFilters.{index + 1}.member.option",
                         value="over 10 chars",
                         constraint="Member must have length less than or equal to 10",
                     )
@@ -1375,9 +1377,7 @@ class SimpleSystemManagerBackend(BaseBackend):
             if len(values) > 50:
                 self._errors.append(
                     self._format_error(
-                        key="parameterFilters.{index}.member.values".format(
-                            index=(index + 1)
-                        ),
+                        key=f"parameterFilters.{index + 1}.member.values",
                         value=values,
                         constraint="Member must have length less than or equal to 50",
                     )
@@ -1386,9 +1386,7 @@ class SimpleSystemManagerBackend(BaseBackend):
             if any(len(value) > 1024 for value in values):
                 self._errors.append(
                     self._format_error(
-                        key="parameterFilters.{index}.member.values".format(
-                            index=(index + 1)
-                        ),
+                        key=f"parameterFilters.{index + 1}.member.values",
                         value=values,
                         constraint="[Member must have length less than or equal to 1024, Member must have length greater than or equal to 1]",
                     )
@@ -1413,9 +1411,7 @@ class SimpleSystemManagerBackend(BaseBackend):
 
             if by_path and key in ["Name", "Path", "Tier"]:
                 raise InvalidFilterKey(
-                    "The following filter key is not valid: {key}. Valid filter keys include: [Type, KeyId].".format(
-                        key=key
-                    )
+                    f"The following filter key is not valid: {key}. Valid filter keys include: [Type, KeyId]."
                 )
 
             if not values:
@@ -1431,9 +1427,7 @@ class SimpleSystemManagerBackend(BaseBackend):
             if key == "Path":
                 if option not in ["Recursive", "OneLevel"]:
                     raise InvalidFilterOption(
-                        "The following filter option is not valid: {option}. Valid options include: [Recursive, OneLevel].".format(
-                            option=option
-                        )
+                        f"The following filter option is not valid: {option}. Valid options include: [Recursive, OneLevel]."
                     )
                 if any(value.lower().startswith(("/aws", "/ssm")) for value in values):
                     raise ValidationException(
@@ -1463,18 +1457,14 @@ class SimpleSystemManagerBackend(BaseBackend):
                 for value in values:
                     if value not in ["Standard", "Advanced", "Intelligent-Tiering"]:
                         raise InvalidFilterOption(
-                            "The following filter value is not valid: {value}. Valid values include: [Standard, Advanced, Intelligent-Tiering].".format(
-                                value=value
-                            )
+                            f"The following filter value is not valid: {value}. Valid values include: [Standard, Advanced, Intelligent-Tiering]."
                         )
 
             if key == "Type":
                 for value in values:
                     if value not in ["String", "StringList", "SecureString"]:
                         raise InvalidFilterOption(
-                            "The following filter value is not valid: {value}. Valid values include: [String, StringList, SecureString].".format(
-                                value=value
-                            )
+                            f"The following filter value is not valid: {value}. Valid values include: [String, StringList, SecureString]."
                         )
 
             allowed_options = ["Equals", "BeginsWith"]
@@ -1482,17 +1472,13 @@ class SimpleSystemManagerBackend(BaseBackend):
                 allowed_options += ["Contains"]
             if key != "Path" and option not in allowed_options:
                 raise InvalidFilterOption(
-                    "The following filter option is not valid: {option}. Valid options include: [BeginsWith, Equals].".format(
-                        option=option
-                    )
+                    f"The following filter option is not valid: {option}. Valid options include: [BeginsWith, Equals]."
                 )
 
             filter_keys.append(key)
 
     def _format_error(self, key, value, constraint):
-        return 'Value "{value}" at "{key}" failed to satisfy constraint: {constraint}'.format(
-            constraint=constraint, key=key, value=value
-        )
+        return f'Value "{value}" at "{key}" failed to satisfy constraint: {constraint}'
 
     def _raise_errors(self):
         if self._errors:
@@ -1502,9 +1488,7 @@ class SimpleSystemManagerBackend(BaseBackend):
             self._errors = []  # reset collected errors
 
             raise ValidationException(
-                "{count} validation error{plural} detected: {errors}".format(
-                    count=count, plural=plural, errors=errors
-                )
+                f"{count} validation error{plural} detected: {errors}"
             )
 
     def get_all_parameters(self):
@@ -1517,12 +1501,10 @@ class SimpleSystemManagerBackend(BaseBackend):
         result = {}
 
         if len(names) > 10:
+            all_names = ", ".join(names)
             raise ValidationException(
                 "1 validation error detected: "
-                "Value '[{}]' at 'names' failed to satisfy constraint: "
-                "Member must have length less than or equal to 10.".format(
-                    ", ".join(names)
-                )
+                f"Value '[{all_names}]' at 'names' failed to satisfy constraint: Member must have length less than or equal to 10."
             )
 
         for name in set(names):
@@ -1577,10 +1559,8 @@ class SimpleSystemManagerBackend(BaseBackend):
         if max_results > PARAMETER_HISTORY_MAX_RESULTS:
             raise ValidationException(
                 "1 validation error detected: "
-                "Value '{}' at 'maxResults' failed to satisfy constraint: "
-                "Member must have value less than or equal to {}.".format(
-                    max_results, PARAMETER_HISTORY_MAX_RESULTS
-                )
+                f"Value '{max_results}' at 'maxResults' failed to satisfy constraint: "
+                f"Member must have value less than or equal to {PARAMETER_HISTORY_MAX_RESULTS}."
             )
 
         if name in self._parameters:
@@ -1634,22 +1614,26 @@ class SimpleSystemManagerBackend(BaseBackend):
                 else:
                     continue
             elif key.startswith("tag:"):
-                what = key[4:] or None
-                for tag in parameter.tags:
-                    if tag["Key"] == what and tag["Value"] in values:
-                        return True
-                return False
+                what = [tag["Value"] for tag in parameter.tags if tag["Key"] == key[4:]]
 
             if what is None:
                 return False
-            elif option == "BeginsWith" and not any(
-                what.startswith(value) for value in values
-            ):
-                return False
+            # 'what' can be a list (of multiple tag-values, for instance)
+            is_list = isinstance(what, list)
+            if option == "BeginsWith":
+                if is_list and not any(
+                    any(w.startswith(val) for w in what) for val in values
+                ):
+                    return False
+                elif not is_list and not any(what.startswith(val) for val in values):
+                    return False
             elif option == "Contains" and not any(value in what for value in values):
                 return False
-            elif option == "Equals" and not any(what == value for value in values):
-                return False
+            elif option == "Equals":
+                if is_list and not any(val in what for val in values):
+                    return False
+                elif not is_list and not any(what == val for val in values):
+                    return False
             elif option == "OneLevel":
                 if any(value == "/" and len(what.split("/")) == 2 for value in values):
                     continue
@@ -1710,7 +1694,7 @@ class SimpleSystemManagerBackend(BaseBackend):
     def label_parameter_version(self, name, version, labels):
         previous_parameter_versions = self._parameters[name]
         if not previous_parameter_versions:
-            raise ParameterNotFound("Parameter %s not found." % name)
+            raise ParameterNotFound(f"Parameter {name} not found.")
         found_parameter = None
         labels_needing_removal = []
         if not version:
@@ -1727,8 +1711,7 @@ class SimpleSystemManagerBackend(BaseBackend):
                         labels_needing_removal.append(label)
         if not found_parameter:
             raise ParameterVersionNotFound(
-                "Systems Manager could not find version %s of %s. "
-                "Verify the version and try again." % (version, name)
+                f"Systems Manager could not find version {version} of {name}. Verify the version and try again."
             )
         labels_to_append = []
         invalid_labels = []
@@ -1772,10 +1755,10 @@ class SimpleSystemManagerBackend(BaseBackend):
         oldest_parameter = parameter_versions[0]
         if oldest_parameter.labels:
             raise ParameterMaxVersionLimitExceeded(
-                "You attempted to create a new version of %s by calling the PutParameter API "
-                "with the overwrite flag. Version %d, the oldest version, can't be deleted "
+                f"You attempted to create a new version of {name} by calling the PutParameter API "
+                f"with the overwrite flag. Version {oldest_parameter.version}, the oldest version, can't be deleted "
                 "because it has a label associated with it. Move the label to another version "
-                "of the parameter, and try again." % (name, oldest_parameter.version)
+                "of the parameter, and try again."
             )
 
     def put_parameter(
@@ -1807,7 +1790,7 @@ class SimpleSystemManagerBackend(BaseBackend):
             is_path = name.count("/") > 1
             if name.lower().startswith("/aws") and is_path:
                 raise AccessDeniedException(
-                    "No access to reserved parameter name: {name}.".format(name=name)
+                    f"No access to reserved parameter name: {name}."
                 )
             if not is_path:
                 invalid_prefix_error = 'Parameter name: can\'t be prefixed with "aws" or "ssm" (case-insensitive).'
@@ -1818,6 +1801,11 @@ class SimpleSystemManagerBackend(BaseBackend):
                     "formed as a mix of letters, numbers and the following 3 symbols .-_"
                 )
             raise ValidationException(invalid_prefix_error)
+
+        if not _valid_parameter_type(parameter_type):
+            raise ValidationException(
+                f"1 validation error detected: Value '{parameter_type}' at 'type' failed to satisfy constraint: Member must satisfy enum value set: [SecureString, StringList, String]",
+            )
 
         if not _valid_parameter_data_type(data_type):
             # The check of the existence of an AMI ID in the account for a parameter of DataType `aws:ec2:image`

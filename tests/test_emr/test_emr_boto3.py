@@ -1,11 +1,10 @@
 # -*- coding: utf-8 -*-
 import time
 from copy import deepcopy
-from datetime import datetime
+from datetime import datetime, timezone
 
 import boto3
 import json
-import pytz
 import sure  # noqa # pylint: disable=unused-import
 from botocore.exceptions import ClientError
 import pytest
@@ -173,7 +172,7 @@ def test_describe_cluster():
     status["State"].should.equal("TERMINATED")
     # cluster['Status']['StateChangeReason']
     status["Timeline"]["CreationDateTime"].should.be.a("datetime.datetime")
-    # status['Timeline']['EndDateTime'].should.equal(datetime(2014, 1, 24, 2, 19, 46, tzinfo=pytz.utc))
+    # status['Timeline']['EndDateTime'].should.equal(datetime(2014, 1, 24, 2, 19, 46, tzinfo=timezone.utc))
     status["Timeline"]["ReadyDateTime"].should.be.a("datetime.datetime")
 
     dict((t["Key"], t["Value"]) for t in cl["Tags"]).should.equal(
@@ -183,9 +182,7 @@ def test_describe_cluster():
     cl["TerminationProtected"].should.equal(False)
     cl["VisibleToAllUsers"].should.equal(True)
     cl["ClusterArn"].should.equal(
-        "arn:aws:elasticmapreduce:{0}:{1}:cluster/{2}".format(
-            region_name, ACCOUNT_ID, cluster_id
-        )
+        f"arn:aws:elasticmapreduce:{region_name}:{ACCOUNT_ID}:cluster/{cluster_id}"
     )
 
 
@@ -217,7 +214,7 @@ def test_describe_job_flows():
     # need sleep since it appears the timestamp is always rounded to
     # the nearest second internally
     time.sleep(1)
-    timestamp = datetime.now(pytz.utc)
+    timestamp = datetime.now(timezone.utc)
     time.sleep(1)
 
     for idx in range(4, 6):
@@ -340,7 +337,7 @@ def test_list_clusters():
     # need sleep since it appears the timestamp is always rounded to
     # the nearest second internally
     time.sleep(1)
-    timestamp = datetime.now(pytz.utc)
+    timestamp = datetime.now(timezone.utc)
     time.sleep(1)
 
     for idx in range(40, 70):
@@ -396,7 +393,7 @@ def test_run_job_flow():
     args = deepcopy(run_job_flow_args)
     resp = client.run_job_flow(**args)
     resp["ClusterArn"].startswith(
-        "arn:aws:elasticmapreduce:{0}:{1}:cluster/".format(region_name, ACCOUNT_ID)
+        f"arn:aws:elasticmapreduce:{region_name}:{ACCOUNT_ID}:cluster/"
     )
     job_flow_id = resp["JobFlowId"]
     resp = client.describe_job_flows(JobFlowIds=[job_flow_id])["JobFlows"][0]
@@ -584,9 +581,7 @@ def test_put_remove_auto_scaling_policy():
     del resp["AutoScalingPolicy"]["Status"]
     resp["AutoScalingPolicy"].should.equal(auto_scaling_policy_with_cluster_id)
     resp["ClusterArn"].should.equal(
-        "arn:aws:elasticmapreduce:{0}:{1}:cluster/{2}".format(
-            region_name, ACCOUNT_ID, cluster_id
-        )
+        f"arn:aws:elasticmapreduce:{region_name}:{ACCOUNT_ID}:cluster/{cluster_id}"
     )
 
     core_instance_group = [

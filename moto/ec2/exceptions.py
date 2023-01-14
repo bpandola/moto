@@ -333,13 +333,6 @@ class VolumeInUseError(EC2ClientError):
         )
 
 
-class InvalidDomainError(EC2ClientError):
-    def __init__(self, domain):
-        super().__init__(
-            "InvalidParameterValue", f"Invalid value '{domain}' for domain."
-        )
-
-
 class InvalidAddressError(EC2ClientError):
     def __init__(self, ip):
         super().__init__("InvalidAddress.NotFound", f"Address '{ip}' not found.")
@@ -527,7 +520,7 @@ class MotoNotImplementedError(NotImplementedError):
         super().__init__(
             f"{blurb} has not been implemented in Moto yet."
             " Feel free to open an issue at"
-            " https://github.com/spulec/moto/issues"
+            " https://github.com/getmoto/moto/issues"
         )
 
 

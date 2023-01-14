@@ -8,12 +8,12 @@ from moto import mock_secretsmanager, mock_lambda, settings
 from moto.core import DEFAULT_ACCOUNT_ID as ACCOUNT_ID
 from botocore.exceptions import ClientError, ParamValidationError
 import string
-import pytz
 from freezegun import freeze_time
-from datetime import timedelta, datetime
+from datetime import datetime, timedelta, timezone
 import sure  # noqa # pylint: disable=unused-import
 from uuid import uuid4
 import pytest
+from unittest import SkipTest
 
 DEFAULT_SECRET_NAME = "test-secret"
 
@@ -65,9 +65,7 @@ def test_get_secret_value_by_arn():
     secret_value = "test_get_secret_value_by_arn"
     result = conn.create_secret(Name=name, SecretString=secret_value)
     arn = result["ARN"]
-    arn.should.match(
-        "^arn:aws:secretsmanager:us-west-2:{}:secret:{}".format(ACCOUNT_ID, name)
-    )
+    arn.should.match(f"^arn:aws:secretsmanager:us-west-2:{ACCOUNT_ID}:secret:{name}")
 
     result = conn.get_secret_value(SecretId=arn)
     assert result["SecretString"] == secret_value
@@ -261,13 +259,13 @@ def test_delete_secret():
 
     assert deleted_secret["ARN"]
     assert deleted_secret["Name"] == "test-secret"
-    assert deleted_secret["DeletionDate"] > datetime.fromtimestamp(1, pytz.utc)
+    assert deleted_secret["DeletionDate"] > datetime.fromtimestamp(1, timezone.utc)
 
     secret_details = conn.describe_secret(SecretId="test-secret")
 
     assert secret_details["ARN"]
     assert secret_details["Name"] == "test-secret"
-    assert secret_details["DeletedDate"] > datetime.fromtimestamp(1, pytz.utc)
+    assert secret_details["DeletedDate"] > datetime.fromtimestamp(1, timezone.utc)
 
 
 @mock_secretsmanager
@@ -280,13 +278,13 @@ def test_delete_secret_by_arn():
 
     assert deleted_secret["ARN"] == secret["ARN"]
     assert deleted_secret["Name"] == "test-secret"
-    assert deleted_secret["DeletionDate"] > datetime.fromtimestamp(1, pytz.utc)
+    assert deleted_secret["DeletionDate"] > datetime.fromtimestamp(1, timezone.utc)
 
     secret_details = conn.describe_secret(SecretId="test-secret")
 
     assert secret_details["ARN"] == secret["ARN"]
     assert secret_details["Name"] == "test-secret"
-    assert secret_details["DeletedDate"] > datetime.fromtimestamp(1, pytz.utc)
+    assert secret_details["DeletedDate"] > datetime.fromtimestamp(1, timezone.utc)
 
 
 @mock_secretsmanager
@@ -298,7 +296,7 @@ def test_delete_secret_force():
     result = conn.delete_secret(SecretId="test-secret", ForceDeleteWithoutRecovery=True)
 
     assert result["ARN"]
-    assert result["DeletionDate"] > datetime.fromtimestamp(1, pytz.utc)
+    assert result["DeletionDate"] > datetime.fromtimestamp(1, timezone.utc)
     assert result["Name"] == "test-secret"
 
     with pytest.raises(ClientError):
@@ -327,7 +325,7 @@ def test_delete_secret_force_with_arn():
     )
 
     assert result["ARN"]
-    assert result["DeletionDate"] > datetime.fromtimestamp(1, pytz.utc)
+    assert result["DeletionDate"] > datetime.fromtimestamp(1, timezone.utc)
     assert result["Name"] == "test-secret"
 
     with pytest.raises(ClientError):
@@ -535,13 +533,17 @@ def test_describe_secret():
     assert secret_description_2["Name"] == ("test-secret-2")
     assert secret_description_2["ARN"] != ""  # Test arn not empty
     assert secret_description["CreatedDate"] <= datetime.now(tz=tzlocal())
-    assert secret_description["CreatedDate"] > datetime.fromtimestamp(1, pytz.utc)
+    assert secret_description["CreatedDate"] > datetime.fromtimestamp(1, timezone.utc)
     assert secret_description_2["CreatedDate"] <= datetime.now(tz=tzlocal())
-    assert secret_description_2["CreatedDate"] > datetime.fromtimestamp(1, pytz.utc)
+    assert secret_description_2["CreatedDate"] > datetime.fromtimestamp(1, timezone.utc)
     assert secret_description["LastChangedDate"] <= datetime.now(tz=tzlocal())
-    assert secret_description["LastChangedDate"] > datetime.fromtimestamp(1, pytz.utc)
+    assert secret_description["LastChangedDate"] > datetime.fromtimestamp(
+        1, timezone.utc
+    )
     assert secret_description_2["LastChangedDate"] <= datetime.now(tz=tzlocal())
-    assert secret_description_2["LastChangedDate"] > datetime.fromtimestamp(1, pytz.utc)
+    assert secret_description_2["LastChangedDate"] > datetime.fromtimestamp(
+        1, timezone.utc
+    )
 
 
 @mock_secretsmanager
@@ -598,7 +600,9 @@ def test_restore_secret():
     conn.delete_secret(SecretId="test-secret")
 
     described_secret_before = conn.describe_secret(SecretId="test-secret")
-    assert described_secret_before["DeletedDate"] > datetime.fromtimestamp(1, pytz.utc)
+    assert described_secret_before["DeletedDate"] > datetime.fromtimestamp(
+        1, timezone.utc
+    )
 
     restored_secret = conn.restore_secret(SecretId="test-secret")
     assert restored_secret["ARN"]
@@ -628,6 +632,75 @@ def test_restore_secret_that_does_not_exist():
 
 
 @mock_secretsmanager
+def test_cancel_rotate_secret_with_invalid_secret_id():
+    conn = boto3.client("secretsmanager", region_name="us-east-1")
+    with pytest.raises(ClientError):
+        conn.cancel_rotate_secret(SecretId="invalid_id")
+
+
+@mock_secretsmanager
+def test_cancel_rotate_secret_after_delete():
+    conn = boto3.client("secretsmanager", region_name="us-east-1")
+    conn.create_secret(
+        Name=DEFAULT_SECRET_NAME, SecretString="foosecret", Description="foodescription"
+    )
+    conn.delete_secret(
+        SecretId=DEFAULT_SECRET_NAME,
+        RecoveryWindowInDays=7,
+        ForceDeleteWithoutRecovery=False,
+    )
+    with pytest.raises(ClientError):
+        conn.cancel_rotate_secret(SecretId=DEFAULT_SECRET_NAME)
+
+
+@mock_secretsmanager
+def test_cancel_rotate_secret_before_enable():
+    conn = boto3.client("secretsmanager", region_name="us-east-1")
+    conn.create_secret(
+        Name=DEFAULT_SECRET_NAME, SecretString="foosecret", Description="foodescription"
+    )
+    with pytest.raises(ClientError):
+        conn.cancel_rotate_secret(SecretId=DEFAULT_SECRET_NAME)
+
+
+@mock_secretsmanager
+def test_cancel_rotate_secret():
+    if not settings.TEST_SERVER_MODE:
+        raise SkipTest("rotation requires a server to be running")
+    from tests.test_awslambda.utilities import get_role_name
+
+    lambda_conn = boto3.client(
+        "lambda", region_name="us-east-1", endpoint_url="http://localhost:5000"
+    )
+    func = lambda_conn.create_function(
+        FunctionName="testFunction",
+        Runtime="python3.8",
+        Role=get_role_name(),
+        Handler="lambda_function.lambda_handler",
+        Code={"ZipFile": get_rotation_zip_file()},
+        Description="Secret rotator",
+        Timeout=3,
+        MemorySize=128,
+        Publish=True,
+    )
+    secrets_conn = boto3.client("secretsmanager", region_name="us-east-1")
+    secrets_conn.create_secret(
+        Name=DEFAULT_SECRET_NAME, SecretString="foosecret", Description="foodescription"
+    )
+    secrets_conn.rotate_secret(
+        SecretId=DEFAULT_SECRET_NAME,
+        RotationLambdaARN=func["FunctionArn"],
+        RotationRules=dict(AutomaticallyAfterDays=30),
+    )
+    secrets_conn.cancel_rotate_secret(SecretId=DEFAULT_SECRET_NAME)
+    cancelled_rotation = secrets_conn.describe_secret(SecretId=DEFAULT_SECRET_NAME)
+
+    assert not cancelled_rotation["RotationEnabled"]
+    # The function config should be preserved
+    assert cancelled_rotation["RotationLambdaARN"]
+
+
+@mock_secretsmanager
 def test_rotate_secret():
     conn = boto3.client("secretsmanager", region_name="us-west-2")
     conn.create_secret(
@@ -643,6 +716,22 @@ def test_rotate_secret():
 
     describe_secret = conn.describe_secret(SecretId=DEFAULT_SECRET_NAME)
 
+    assert describe_secret["Description"] == "foodescription"
+
+
+@mock_secretsmanager
+def test_rotate_secret_without_secretstring():
+    conn = boto3.client("secretsmanager", region_name="us-west-2")
+    conn.create_secret(Name=DEFAULT_SECRET_NAME, Description="foodescription")
+
+    rotated_secret = conn.rotate_secret(SecretId=DEFAULT_SECRET_NAME)
+
+    assert rotated_secret
+    assert rotated_secret["ARN"] == rotated_secret["ARN"]
+    assert rotated_secret["Name"] == DEFAULT_SECRET_NAME
+    assert rotated_secret["VersionId"] == rotated_secret["VersionId"]
+
+    describe_secret = conn.describe_secret(SecretId=DEFAULT_SECRET_NAME)
     assert describe_secret["Description"] == "foodescription"
 
 

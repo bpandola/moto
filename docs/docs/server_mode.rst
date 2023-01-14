@@ -86,9 +86,8 @@ See the following example:
             [b["Name"] for b in buckets].should.equal(["test"])
 
 This example shows it is possible to create state using the TreadedMotoServer, and access that state using the usual decorators.  :raw-html:`<br />`
-0Note that the decorators will destroy any resources on start, so make sure to not accidentally destroy any resources created by the ThreadedMotoServer that should be kept.
+Note that the decorators will destroy any resources on start, so make sure to not accidentally destroy any resources created by the ThreadedMotoServer that should be kept.
 
-.. note:: The ThreadedMotoServer is considered in beta for now, and the exact interface and behaviour may still change.   :raw-html:`<br />` Please let us know if you'd like to see any changes.
 
 Run using Docker
 ----------------------
@@ -132,7 +131,7 @@ In Scala:
 
 In Terraform:
 
-.. code-block::
+.. code-block:: bash
 
     provider "aws" {
         region                      = "us-east-1"
@@ -233,8 +232,8 @@ For the above services, this is required because the hostname is in the form of 
 As a result, you need to add that entry to your host file for your tests to function properly.
 
 
-.. _Java: https://github.com/spulec/moto/blob/master/other_langs/sqsSample.java
-.. _Ruby: https://github.com/spulec/moto/blob/master/other_langs/test.rb
-.. _Javascript: https://github.com/spulec/moto/blob/master/other_langs/test.js
+.. _Java: https://github.com/getmoto/moto/blob/master/other_langs/sqsSample.java
+.. _Ruby: https://github.com/getmoto/moto/blob/master/other_langs/test.rb
+.. _Javascript: https://github.com/getmoto/moto/blob/master/other_langs/test.js
 .. _Homebrew: https://brew.sh
 .. _Terraform Docs: https://registry.terraform.io/providers/hashicorp/aws/latest/docs/guides/custom-service-endpoints

@@ -33,6 +33,10 @@ def test_attach_policy(iot_client, policy):
     res.should.have.key("policies").which.should.have.length_of(1)
     res["policies"][0]["policyName"].should.equal("my-policy")
 
+    res = iot_client.list_attached_policies(target=cert_arn)
+    res.should.have.key("policies").which.should.have.length_of(1)
+    res["policies"][0]["policyName"].should.equal("my-policy")
+
 
 @mock_cognitoidentity
 def test_attach_policy_to_identity(region_name, iot_client, policy):
@@ -208,7 +212,7 @@ def test_policy_versions(iot_client):
         )
     err = exc.value.response["Error"]
     err["Message"].should.equal(
-        "The policy %s already has the maximum number of versions (5)" % policy_name
+        f"The policy {policy_name} already has the maximum number of versions (5)"
     )
 
     iot_client.delete_policy_version(policyName=policy_name, policyVersionId="1")

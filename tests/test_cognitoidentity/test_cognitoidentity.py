@@ -1,11 +1,15 @@
 import boto3
+from unittest import mock
 import sure  # noqa # pylint: disable=unused-import
 from botocore.exceptions import ClientError
+from datetime import datetime
 import pytest
+import os
 
-from moto import mock_cognitoidentity
+from moto import mock_cognitoidentity, settings
 from moto.cognitoidentity.utils import get_random_identity_id
 from moto.core import DEFAULT_ACCOUNT_ID as ACCOUNT_ID
+from unittest import SkipTest
 from uuid import UUID
 
 
@@ -44,9 +48,7 @@ def test_create_identity_pool():
         AllowUnauthenticatedIdentities=False,
         SupportedLoginProviders={"graph.facebook.com": "123456789012345"},
         DeveloperProviderName="devname",
-        OpenIdConnectProviderARNs=[
-            "arn:aws:rds:eu-west-2:{}:db:mysql-db".format(ACCOUNT_ID)
-        ],
+        OpenIdConnectProviderARNs=[f"arn:aws:rds:eu-west-2:{ACCOUNT_ID}:db:mysql-db"],
         CognitoIdentityProviders=[
             {
                 "ProviderName": "testprovider",
@@ -54,7 +56,7 @@ def test_create_identity_pool():
                 "ServerSideTokenCheck": True,
             }
         ],
-        SamlProviderARNs=["arn:aws:rds:eu-west-2:{}:db:mysql-db".format(ACCOUNT_ID)],
+        SamlProviderARNs=[f"arn:aws:rds:eu-west-2:{ACCOUNT_ID}:db:mysql-db"],
     )
     assert result["IdentityPoolId"] != ""
 
@@ -68,9 +70,7 @@ def test_describe_identity_pool():
         AllowUnauthenticatedIdentities=False,
         SupportedLoginProviders={"graph.facebook.com": "123456789012345"},
         DeveloperProviderName="devname",
-        OpenIdConnectProviderARNs=[
-            "arn:aws:rds:eu-west-2:{}:db:mysql-db".format(ACCOUNT_ID)
-        ],
+        OpenIdConnectProviderARNs=[f"arn:aws:rds:eu-west-2:{ACCOUNT_ID}:db:mysql-db"],
         CognitoIdentityProviders=[
             {
                 "ProviderName": "testprovider",
@@ -78,7 +78,7 @@ def test_describe_identity_pool():
                 "ServerSideTokenCheck": True,
             }
         ],
-        SamlProviderARNs=["arn:aws:rds:eu-west-2:{}:db:mysql-db".format(ACCOUNT_ID)],
+        SamlProviderARNs=[f"arn:aws:rds:eu-west-2:{ACCOUNT_ID}:db:mysql-db"],
     )
 
     result = conn.describe_identity_pool(IdentityPoolId=res["IdentityPoolId"])
@@ -154,7 +154,6 @@ def test_get_random_identity_id():
 
 @mock_cognitoidentity
 def test_get_id():
-    # These two do NOT work in server mode. They just don't return the data from the model.
     conn = boto3.client("cognito-identity", "us-west-2")
     identity_pool_data = conn.create_identity_pool(
         IdentityPoolName="test_identity_pool", AllowUnauthenticatedIdentities=True
@@ -164,26 +163,34 @@ def test_get_id():
         IdentityPoolId=identity_pool_data["IdentityPoolId"],
         Logins={"someurl": "12345"},
     )
-    assert (
-        result.get("IdentityId", "").startswith("us-west-2")
-        or result.get("ResponseMetadata").get("HTTPStatusCode") == 200
+    assert result.get("IdentityId").startswith("us-west-2")
+
+
+@mock_cognitoidentity
+@mock.patch.dict(os.environ, {"AWS_DEFAULT_REGION": "any-region"})
+@mock.patch.dict(os.environ, {"MOTO_ALLOW_NONEXISTENT_REGION": "trUe"})
+def test_get_id__unknown_region():
+    if settings.TEST_SERVER_MODE:
+        raise SkipTest("Cannot set environemnt variables in ServerMode")
+    conn = boto3.client("cognito-identity")
+    identity_pool_data = conn.create_identity_pool(
+        IdentityPoolName="test_identity_pool", AllowUnauthenticatedIdentities=True
     )
+    result = conn.get_id(
+        AccountId="someaccount",
+        IdentityPoolId=identity_pool_data["IdentityPoolId"],
+        Logins={"someurl": "12345"},
+    )
+    assert result.get("IdentityId").startswith("any-region")
 
 
 @mock_cognitoidentity
 def test_get_credentials_for_identity():
-    # These two do NOT work in server mode. They just don't return the data from the model.
     conn = boto3.client("cognito-identity", "us-west-2")
     result = conn.get_credentials_for_identity(IdentityId="12345")
 
-    assert (
-        result.get("Expiration", 0) > 0
-        or result.get("ResponseMetadata").get("HTTPStatusCode") == 200
-    )
-    assert (
-        result.get("IdentityId") == "12345"
-        or result.get("ResponseMetadata").get("HTTPStatusCode") == 200
-    )
+    result["Credentials"].get("Expiration").should.be.a(datetime)
+    result.get("IdentityId").should.equal("12345")
 
 
 @mock_cognitoidentity

@@ -47,6 +47,7 @@ from .vpn_connections import VPNConnectionBackend
 from .vpcs import VPCBackend
 from .vpc_peering_connections import VPCPeeringConnectionBackend
 from .vpc_service_configuration import VPCServiceConfigurationBackend
+from .windows import WindowsBackend
 from ..utils import (
     EC2_RESOURCE_TO_PREFIX,
     is_valid_resource_id,
@@ -122,14 +123,15 @@ class EC2Backend(
     IamInstanceProfileAssociationBackend,
     CarrierGatewayBackend,
     FleetsBackend,
+    WindowsBackend,
 ):
     """
-    Implementation of the AWS EC2 endpoint.
+    moto includes a limited set of AMIs in `moto/ec2/resources/amis.json`.
+    Additionally, the default AMI's specified by SSM will be provided.
 
-    moto includes a limited set of AMIs in `moto/ec2/resources/amis.json`.  If you require specific
-    AMIs to be available during your tests, you can provide your own AMI definitions by setting the
-    environment variable `MOTO_AMIS_PATH` to point to a JSON file containing definitions of the
-    required AMIs.
+    If you require specific AMIs to be available during your tests, you can provide your own AMI definitions by setting the
+    environment variable `MOTO_AMIS_PATH` to point to a JSON file containing definitions of the required AMIs.
+    No other AMI's will be loaded if this environment variable is set.
 
     To create such a file, refer to `scripts/get_amis.py`
 

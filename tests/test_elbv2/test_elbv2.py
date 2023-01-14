@@ -304,7 +304,7 @@ def test_create_listeners_without_port():
 @mock_ec2
 @mock_elbv2
 def test_create_rule_forward_config_as_second_arg():
-    # https://github.com/spulec/moto/issues/4123
+    # https://github.com/getmoto/moto/issues/4123
     # Necessary because there was some convoluted way of parsing arguments
     # Actions with type=forward had to be the first action specified
     response, vpc, _, _, _, elbv2 = create_load_balancer()
@@ -399,7 +399,7 @@ def test_describe_paginated_balancers():
 
     for i in range(51):
         conn.create_load_balancer(
-            Name="my-lb%d" % i,
+            Name=f"my-lb{i}",
             Subnets=[subnet1.id, subnet2.id],
             SecurityGroups=[security_group.id],
             Scheme="internal",
@@ -1685,9 +1685,7 @@ def test_cognito_action_listener_rule():
     action = {
         "Type": "authenticate-cognito",
         "AuthenticateCognitoConfig": {
-            "UserPoolArn": "arn:aws:cognito-idp:us-east-1:{}:userpool/us-east-1_ABCD1234".format(
-                ACCOUNT_ID
-            ),
+            "UserPoolArn": f"arn:aws:cognito-idp:us-east-1:{ACCOUNT_ID}:userpool/us-east-1_ABCD1234",
             "UserPoolClientId": "abcd1234abcd",
             "UserPoolDomain": "testpool",
             "AuthenticationRequestExtraParams": {"param": "test"},

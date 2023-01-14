@@ -108,7 +108,7 @@ def test_submit_job():
     job_id = resp["jobId"]
 
     # Test that describe_jobs() returns 'createdAt'
-    # github.com/spulec/moto/issues/4364
+    # github.com/getmoto/moto/issues/4364
     resp = batch_client.describe_jobs(jobs=[job_id])
     created_at = resp["jobs"][0]["createdAt"]
     created_at.should.be.greater_than(start_time_milliseconds)
@@ -127,7 +127,7 @@ def test_submit_job():
     [event["message"] for event in resp["events"]].should.equal(["hello"])
 
     # Test that describe_jobs() returns timestamps in milliseconds
-    # github.com/spulec/moto/issues/4364
+    # github.com/getmoto/moto/issues/4364
     job = batch_client.describe_jobs(jobs=[job_id])["jobs"][0]
     created_at = job["createdAt"]
     started_at = job["startedAt"]
@@ -234,6 +234,7 @@ def test_terminate_job():
     resp["jobs"][0]["jobName"].should.equal("test1")
     resp["jobs"][0]["status"].should.equal("FAILED")
     resp["jobs"][0]["statusReason"].should.equal("test_terminate")
+    resp["jobs"][0]["container"].should.have.key("logStreamName")
 
     ls_name = f"{job_def_name}/default/{job_id}"
 
@@ -308,6 +309,7 @@ def test_cancel_pending_job():
     resp = batch_client.describe_jobs(jobs=[job_id])
     resp["jobs"][0]["jobName"].should.equal("test_job_name")
     resp["jobs"][0]["statusReason"].should.equal("test_cancel")
+    resp["jobs"][0]["container"].shouldnt.have.key("logStreamName")
 
 
 @mock_logs
@@ -341,6 +343,7 @@ def test_cancel_running_job():
     resp = batch_client.describe_jobs(jobs=[job_id])
     resp["jobs"][0]["jobName"].should.equal("test_job_name")
     resp["jobs"][0].shouldnt.have.key("statusReason")
+    resp["jobs"][0]["container"].should.have.key("logStreamName")
 
 
 @mock_batch
@@ -385,9 +388,7 @@ def _wait_for_job_statuses(client, job_id, statuses, seconds_to_wait=30):
         time.sleep(0.1)
     else:
         raise RuntimeError(
-            "Time out waiting for job status {status}!\n Last status: {last_status}".format(
-                status=statuses, last_status=last_job_status
-            )
+            f"Time out waiting for job status {statuses}!\n Last status: {last_job_status}"
         )
 
 
@@ -401,7 +402,7 @@ def test_failed_job():
     _, _, _, iam_arn = _setup(ec2_client, iam_client)
 
     job_def_name = "exit-1"
-    commands = ["exit", "1"]
+    commands = ["kill"]
     job_def_arn, queue_arn = prepare_job(batch_client, commands, iam_arn, job_def_name)
 
     resp = batch_client.submit_job(
@@ -415,6 +416,7 @@ def test_failed_job():
         resp = batch_client.describe_jobs(jobs=[job_id])
 
         if resp["jobs"][0]["status"] == "FAILED":
+            resp["jobs"][0]["container"].should.have.key("logStreamName")
             break
         if resp["jobs"][0]["status"] == "SUCCEEDED":
             raise RuntimeError("Batch job succeeded even though it had exit code 1")
@@ -554,7 +556,7 @@ def test_failed_dependencies():
             "image": "busybox:latest",
             "vcpus": 1,
             "memory": 128,
-            "command": ["exit", "1"],
+            "command": ["kill"],
         },
     )
     job_def_arn_failure = resp["jobDefinitionArn"]
@@ -594,6 +596,13 @@ def test_failed_dependencies():
         assert resp["jobs"][1]["status"] != "SUCCEEDED", "Job 3 cannot succeed"
 
         if resp["jobs"][1]["status"] == "FAILED":
+            assert resp["jobs"][0]["container"].should.have.key(
+                "logStreamName"
+            ), "Job 2 should have logStreamName because it FAILED but was in RUNNING state"
+            assert resp["jobs"][1]["container"].shouldnt.have.key(
+                "logStreamName"
+            ), "Job 3 shouldn't have logStreamName because it was never in RUNNING state"
+
             break
 
         time.sleep(0.5)
@@ -886,3 +895,33 @@ def test_submit_job_with_timeout_set_at_definition():
 
     # This should fail, as the job-duration is longer than the attemptDurationSeconds
     _wait_for_job_status(batch_client, job_id, "FAILED")
+
+
+@mock_batch
+def test_submit_job_invalid_name():
+    """
+    Test verifies that a `ClientException` is raised if `jobName` isn't valid
+    """
+    _, _, _, _, batch_client = _get_clients()
+    with pytest.raises(botocore.exceptions.ClientError) as exc:
+        batch_client.submit_job(
+            jobName="containsinvalidcharacter.",
+            jobQueue="arn",
+            jobDefinition="job_def_name",
+        )
+    assert exc.match("ClientException")
+
+    with pytest.raises(botocore.exceptions.ClientError) as exc:
+        batch_client.submit_job(
+            jobName="-startswithinvalidcharacter",
+            jobQueue="arn",
+            jobDefinition="job_def_name",
+        )
+    assert exc.match("ClientException")
+
+    with pytest.raises(botocore.exceptions.ClientError) as exc:
+        too_long_job_name = "a" * 129
+        batch_client.submit_job(
+            jobName=too_long_job_name, jobQueue="arn", jobDefinition="job_def_name"
+        )
+    assert exc.match("ClientException")

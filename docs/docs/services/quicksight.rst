@@ -46,6 +46,7 @@ quicksight
 - [ ] create_theme
 - [ ] create_theme_alias
 - [ ] delete_account_customization
+- [ ] delete_account_subscription
 - [ ] delete_analysis
 - [ ] delete_dashboard
 - [ ] delete_data_set
@@ -66,8 +67,10 @@ quicksight
 - [ ] describe_account_settings
 - [ ] describe_account_subscription
 - [ ] describe_analysis
+- [ ] describe_analysis_definition
 - [ ] describe_analysis_permissions
 - [ ] describe_dashboard
+- [ ] describe_dashboard_definition
 - [ ] describe_dashboard_permissions
 - [ ] describe_data_set
 - [ ] describe_data_set_permissions
@@ -84,6 +87,7 @@ quicksight
 - [ ] describe_namespace
 - [ ] describe_template
 - [ ] describe_template_alias
+- [ ] describe_template_definition
 - [ ] describe_template_permissions
 - [ ] describe_theme
 - [ ] describe_theme_alias
@@ -136,6 +140,8 @@ quicksight
 - [ ] restore_analysis
 - [ ] search_analyses
 - [ ] search_dashboards
+- [ ] search_data_sets
+- [ ] search_data_sources
 - [ ] search_folders
 - [ ] search_groups
 - [ ] tag_resource

@@ -53,7 +53,12 @@ from .exceptions import (
 )
 from .models import s3_backends
 from .models import get_canned_acl, FakeGrantee, FakeGrant, FakeAcl, FakeKey
-from .utils import bucket_name_from_url, metadata_from_headers, parse_region_from_url
+from .utils import (
+    bucket_name_from_url,
+    metadata_from_headers,
+    parse_region_from_url,
+    compute_checksum,
+)
 from xml.dom import minidom
 
 
@@ -261,7 +266,7 @@ class S3Response(BaseResponse):
             return status_code, headers, response_content
 
     def _bucket_response(self, request, full_url):
-        querystring = self._get_querystring(full_url)
+        querystring = self._get_querystring(request, full_url)
         method = request.method
         region_name = parse_region_from_url(full_url, use_default_region=False)
         if region_name is None:
@@ -293,13 +298,21 @@ class S3Response(BaseResponse):
             return self._response_options(bucket_name)
         else:
             raise NotImplementedError(
-                "Method {0} has not been implemented in the S3 backend yet".format(
-                    method
-                )
+                f"Method {method} has not been implemented in the S3 backend yet"
             )
 
     @staticmethod
-    def _get_querystring(full_url):
+    def _get_querystring(request, full_url):
+        # Flask's Request has the querystring already parsed
+        # In ServerMode, we can use this, instead of manually parsing this
+        if hasattr(request, "args"):
+            query_dict = dict()
+            for key, val in dict(request.args).items():
+                # The parse_qs-method returns List[str, List[Any]]
+                # Ensure that we confirm to the same response-type here
+                query_dict[key] = val if isinstance(val, list) else [val]
+            return query_dict
+
         parsed_url = urlparse(full_url)
         # full_url can be one of two formats, depending on the version of werkzeug used:
         # http://foobaz.localhost:5000/?prefix=bar%2Bbaz
@@ -404,9 +417,7 @@ class S3Response(BaseResponse):
             for unsup in ("delimiter", "max-uploads"):
                 if unsup in querystring:
                     raise NotImplementedError(
-                        "Listing multipart uploads with {} has not been implemented yet.".format(
-                            unsup
-                        )
+                        f"Listing multipart uploads with {unsup} has not been implemented yet."
                     )
             multiparts = list(self.backend.get_all_multiparts(bucket_name).values())
             if "prefix" in querystring:
@@ -1068,9 +1079,7 @@ class S3Response(BaseResponse):
             raise InvalidRange(
                 actual_size=str(length), range_requested=request.headers.get("range")
             )
-        response_headers["content-range"] = "bytes {0}-{1}/{2}".format(
-            begin, end, length
-        )
+        response_headers["content-range"] = f"bytes {begin}-{end}/{length}"
         content = response_content[begin : end + 1]
         response_headers["content-length"] = len(content)
         return 206, response_headers, content
@@ -1211,9 +1220,7 @@ class S3Response(BaseResponse):
             return self._response_options(bucket_name)
         else:
             raise NotImplementedError(
-                "Method {0} has not been implemented in the S3 backend yet".format(
-                    method
-                )
+                f"Method {method} has not been implemented in the S3 backend yet"
             )
 
     def _key_response_get(self, bucket_name, query, key_name, headers):
@@ -1287,14 +1294,14 @@ class S3Response(BaseResponse):
             if_unmodified_since = str_to_rfc_1123_datetime(if_unmodified_since)
             if key.last_modified.replace(microsecond=0) > if_unmodified_since:
                 raise PreconditionFailed("If-Unmodified-Since")
-        if if_match and key.etag not in [if_match, '"{0}"'.format(if_match)]:
+        if if_match and key.etag not in [if_match, f'"{if_match}"']:
             raise PreconditionFailed("If-Match")
 
         if if_modified_since:
             if_modified_since = str_to_rfc_1123_datetime(if_modified_since)
             if key.last_modified.replace(microsecond=0) <= if_modified_since:
                 return 304, response_headers, "Not Modified"
-        if if_none_match and key.etag == if_none_match:
+        if if_none_match and key.etag in [if_none_match, f'"{if_none_match}"']:
             return 304, response_headers, "Not Modified"
 
         if "acl" in query:
@@ -1384,6 +1391,12 @@ class S3Response(BaseResponse):
             checksum_value = search.group(1) if search else None
 
         if checksum_value:
+            # TODO: AWS computes the provided value and verifies it's the same
+            # Afterwards, it should be returned in every subsequent call
+            response_headers.update({checksum_header: checksum_value})
+        elif checksum_algorithm:
+            # If the value is not provided, we compute it and only return it as part of this request
+            checksum_value = compute_checksum(body, algorithm=checksum_algorithm)
             response_headers.update({checksum_header: checksum_value})
 
         # Extract the actual data from the body second
@@ -1543,6 +1556,8 @@ class S3Response(BaseResponse):
         new_key.website_redirect_location = request.headers.get(
             "x-amz-website-redirect-location"
         )
+        if checksum_algorithm:
+            new_key.checksum_algorithm = checksum_algorithm
         self.backend.set_key_tags(new_key, tagging)
 
         response_headers.update(new_key.response_dict)
@@ -1882,17 +1897,17 @@ class S3Response(BaseResponse):
             # 1st verify that the proper notification configuration has been passed in (with an ARN that is close
             # to being correct -- nothing too complex in the ARN logic):
             the_notification = parsed_xml["NotificationConfiguration"].get(
-                "{}Configuration".format(name)
+                f"{name}Configuration"
             )
             if the_notification:
                 found_notifications += 1
                 if not isinstance(the_notification, list):
                     the_notification = parsed_xml["NotificationConfiguration"][
-                        "{}Configuration".format(name)
+                        f"{name}Configuration"
                     ] = [the_notification]
 
                 for n in the_notification:
-                    if not n[name].startswith("arn:aws:{}:".format(arn_string)):
+                    if not n[name].startswith(f"arn:aws:{arn_string}:"):
                         raise InvalidNotificationARN()
 
                     # 2nd, verify that the Events list is correct:
@@ -1956,7 +1971,7 @@ class S3Response(BaseResponse):
         response_headers = {}
         if response_meta is not None:
             for k in response_meta:
-                response_headers["x-amz-{}".format(k)] = response_meta[k]
+                response_headers[f"x-amz-{k}"] = response_meta[k]
         return 204, response_headers, ""
 
     def _complete_multipart_body(self, body):
@@ -2178,6 +2193,9 @@ S3_BUCKET_GET_RESPONSE_V2 = """<?xml version="1.0" encoding="UTF-8"?>
         <ID>75aa57f09aa0c8caeab4f8c24e99d10f8e7faeebf76c078efc7c6caea54ba06a</ID>
         <DisplayName>webfile</DisplayName>
       </Owner>
+      {% endif %}
+      {% if key.checksum_algorithm %}
+      <ChecksumAlgorithm>{{ key.checksum_algorithm }}</ChecksumAlgorithm>
       {% endif %}
     </Contents>
   {% endfor %}

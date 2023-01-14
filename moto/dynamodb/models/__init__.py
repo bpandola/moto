@@ -54,7 +54,7 @@ def dynamo_json_dump(dynamo_object):
     return json.dumps(dynamo_object, cls=DynamoJsonEncoder)
 
 
-# https://github.com/spulec/moto/issues/1874
+# https://github.com/getmoto/moto/issues/1874
 # Ensure that the total size of an item does not exceed 400kb
 class LimitedSizeDict(dict):
     def __init__(self, *args, **kwargs):
@@ -1351,8 +1351,6 @@ class DynamoDBBackend(BaseBackend):
                     gsi_to_create, table.table_key_attrs
                 )
 
-        # in python 3.6, dict.values() returns a dict_values object, but we expect it to be a list in other
-        # parts of the codebase
         table.global_indexes = list(gsis_by_name.values())
         return table
 
@@ -1588,6 +1586,7 @@ class DynamoDBBackend(BaseBackend):
                 table=table,
             )
             validated_ast = validator.validate()
+            validated_ast.normalize()
             try:
                 UpdateExpressionExecutor(
                     validated_ast, item, expression_attribute_names
@@ -1648,7 +1647,7 @@ class DynamoDBBackend(BaseBackend):
         return table.ttl
 
     def transact_write_items(self, transact_items):
-        if len(transact_items) > 25:
+        if len(transact_items) > 100:
             raise TooManyTransactionsException()
         # Create a backup in case any of the transactions fail
         original_table_state = copy.deepcopy(self.tables)
@@ -1701,6 +1700,17 @@ class DynamoDBBackend(BaseBackend):
                     expression_attribute_values = item.get(
                         "ExpressionAttributeValues", None
                     )
+
+                    return_values_on_condition_check_failure = item.get(
+                        "ReturnValuesOnConditionCheckFailure", None
+                    )
+                    current = self.get_item(table_name, attrs)
+                    if (
+                        return_values_on_condition_check_failure == "ALL_OLD"
+                        and current
+                    ):
+                        item["Item"] = current.to_json()["Attributes"]
+
                     self.put_item(
                         table_name,
                         attrs,

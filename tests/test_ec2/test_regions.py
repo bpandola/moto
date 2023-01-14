@@ -63,10 +63,10 @@ def test_add_servers_to_multiple_regions_boto3():
 def test_create_autoscaling_group_boto3():
     regions = [("us-east-1", "c"), ("ap-northeast-1", "a")]
     for region, zone in regions:
-        a_zone = "{}{}".format(region, zone)
-        asg_name = "{}_tester_group_{}".format(region, str(uuid4())[0:6])
-        lb_name = "{}_lb_{}".format(region, str(uuid4())[0:6])
-        config_name = "{}_tester_{}".format(region, str(uuid4())[0:6])
+        a_zone = f"{region}{zone}"
+        asg_name = f"{region}_tester_group_{str(uuid4())[0:6]}"
+        lb_name = f"{region}_lb_{str(uuid4())[0:6]}"
+        config_name = f"{region}_tester_{str(uuid4())[0:6]}"
 
         elb_client = boto3.client("elb", region_name=region)
         elb_client.create_load_balancer(
@@ -145,7 +145,7 @@ def test_describe_regions_dryrun():
 def test_describe_zones_and_get_instance_types(region_name):
     """
     Verify that instance types exist in all exposed Availability Zones
-    https://github.com/spulec/moto/issues/5494
+    https://github.com/getmoto/moto/issues/5494
     """
     client = boto3.client("ec2", region_name=region_name)
     zones = client.describe_availability_zones()["AvailabilityZones"]

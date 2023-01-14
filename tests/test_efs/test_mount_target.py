@@ -1,5 +1,4 @@
 import re
-import sys
 from ipaddress import IPv4Network
 
 import pytest
@@ -8,31 +7,6 @@ from botocore.exceptions import ClientError
 from moto.core import DEFAULT_ACCOUNT_ID as ACCOUNT_ID
 from tests.test_efs.junk_drawer import has_status_code
 from . import fixture_ec2, fixture_efs  # noqa # pylint: disable=unused-import
-
-
-# Handle the fact that `subnet_of` is not a feature before 3.7.
-# Source for alternative version: https://github.com/python/cpython/blob/v3.7.0/Lib/ipaddress.py#L976
-# Discovered via: https://stackoverflow.com/questions/35115138/how-do-i-check-if-a-network-is-contained-in-another-network-in-python
-if sys.version_info.major >= 3 and sys.version_info.minor >= 7:
-
-    def is_subnet_of(a, b):
-        return a.subnet_of(b)
-
-else:
-
-    def is_subnet_of(a, b):
-        try:
-            # Always false if one is v4 and the other is v6.
-            if a._version != b._version:
-                raise TypeError(f"{a} and {b} are not of the same version")
-            return (
-                b.network_address <= a.network_address
-                and b.broadcast_address >= a.broadcast_address
-            )
-        except AttributeError:
-            raise TypeError(
-                f"Unable to test subnet containment " f"between {a} and {b}"
-            )
 
 
 @pytest.fixture(scope="function", name="file_system")
@@ -69,8 +43,8 @@ def test_create_mount_target_minimal_correct_use(efs, file_system, subnet):
     assert create_mt_resp["AvailabilityZoneName"] == subnet["AvailabilityZone"]
     assert create_mt_resp["VpcId"] == subnet["VpcId"]
     assert create_mt_resp["SubnetId"] == subnet_id
-    assert is_subnet_of(
-        IPv4Network(create_mt_resp["IpAddress"]), IPv4Network(subnet["CidrBlock"])
+    assert IPv4Network(create_mt_resp["IpAddress"]).subnet_of(
+        IPv4Network(subnet["CidrBlock"])
     )
     assert create_mt_resp["FileSystemId"] == file_system_id
     assert create_mt_resp["OwnerId"] == ACCOUNT_ID
@@ -91,9 +65,9 @@ def test_create_mount_target_aws_sample_2(efs, ec2, file_system, subnet):
         ip_addr = ip_addr_obj.exploded
         break
     else:
-        assert False, "Could not generate an IP address from CIDR block: {}".format(
-            subnet["CidrBlock"]
-        )
+        assert (
+            False
+        ), f"Could not generate an IP address from CIDR block: {subnet['CidrBlock']}"
     desc_sg_resp = ec2.describe_security_groups()
     security_group = desc_sg_resp["SecurityGroups"][0]
     security_group_id = security_group["GroupId"]
@@ -216,8 +190,8 @@ def test_create_mount_target_too_many_security_groups(efs, ec2, file_system, sub
     for i in range(6):
         sg_info = ec2.create_security_group(
             VpcId=subnet["VpcId"],
-            GroupName="sg-{}".format(i),
-            Description="SG-{} protects us from the Goa'uld.".format(i),
+            GroupName=f"sg-{i}",
+            Description=f"SG-{i} protects us from the Goa'uld.",
         )
         sg_id_list.append(sg_info["GroupId"])
     with pytest.raises(ClientError) as exc_info:

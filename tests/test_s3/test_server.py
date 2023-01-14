@@ -1,6 +1,8 @@
 import io
 from urllib.parse import urlparse, parse_qs
 import sure  # noqa # pylint: disable=unused-import
+import pytest
+import xmltodict
 
 from flask.testing import FlaskClient
 import moto.server as server
@@ -32,7 +34,8 @@ def test_s3_server_get():
     res.data.should.contain(b"ListAllMyBucketsResult")
 
 
-def test_s3_server_bucket_create():
+@pytest.mark.parametrize("key_name", ["bar_baz", "bar+baz", "baz bar"])
+def test_s3_server_bucket_create(key_name):
     test_client = authenticated_client()
 
     res = test_client.put("/", "http://foobaz.localhost:5000/")
@@ -45,22 +48,25 @@ def test_s3_server_bucket_create():
     res.status_code.should.equal(200)
     res.data.should.contain(b"ListBucketResult")
 
-    for key_name in ("bar_baz", "bar+baz"):
-        res = test_client.put(
-            f"/{key_name}", "http://foobaz.localhost:5000/", data="test value"
-        )
-        res.status_code.should.equal(200)
-        assert "ETag" in dict(res.headers)
+    res = test_client.put(
+        f"/{key_name}", "http://foobaz.localhost:5000/", data="test value"
+    )
+    res.status_code.should.equal(200)
+    assert "ETag" in dict(res.headers)
 
-        res = test_client.get(
-            "/", "http://foobaz.localhost:5000/", query_string={"prefix": key_name}
-        )
-        res.status_code.should.equal(200)
-        res.data.should.contain(b"Contents")
+    res = test_client.get(
+        "/", "http://foobaz.localhost:5000/", query_string={"prefix": key_name}
+    )
+    res.status_code.should.equal(200)
+    content = xmltodict.parse(res.data)["ListBucketResult"]["Contents"]
+    # If we receive a dict, we only received one result
+    # If content is of type list, our call returned multiple results - which is not correct
+    content.should.be.a(dict)
+    content["Key"].should.equal(key_name)
 
-        res = test_client.get(f"/{key_name}", "http://foobaz.localhost:5000/")
-        res.status_code.should.equal(200)
-        res.data.should.equal(b"test value")
+    res = test_client.get(f"/{key_name}", "http://foobaz.localhost:5000/")
+    res.status_code.should.equal(200)
+    res.data.should.equal(b"test value")
 
 
 def test_s3_server_ignore_subdomain_for_bucketnames():
@@ -119,7 +125,7 @@ def test_s3_server_post_to_bucket_redirect():
             "success_action_redirect": redirect_base,
         },
     )
-    real_key = "asdf/the-key/{}".format(filename)
+    real_key = f"asdf/the-key/{filename}"
     res.status_code.should.equal(303)
     redirect = res.headers["location"]
     assert redirect.startswith(redirect_base)
@@ -129,7 +135,7 @@ def test_s3_server_post_to_bucket_redirect():
     assert args["key"][0] == real_key
     assert args["bucket"][0] == "tester"
 
-    res = test_client.get("/{}".format(real_key), "http://tester.localhost:5000/")
+    res = test_client.get(f"/{real_key}", "http://tester.localhost:5000/")
     res.status_code.should.equal(200)
     res.data.should.equal(filecontent.encode("utf8"))
 
@@ -196,7 +202,7 @@ def test_s3_server_post_cors():
 
 def test_s3_server_post_cors_exposed_header():
     """Test that we can override default CORS headers with custom bucket rules"""
-    # github.com/spulec/moto/issues/4220
+    # github.com/getmoto/moto/issues/4220
 
     cors_config_payload = """<CORSConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
   <CORSRule>

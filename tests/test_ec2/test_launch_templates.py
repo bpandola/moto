@@ -85,6 +85,22 @@ def test_describe_launch_template_versions():
     templ = resp["LaunchTemplateVersions"][0]["LaunchTemplateData"]
     templ.should.equal(template_data)
 
+    # test using $Latest version
+    resp = cli.describe_launch_template_versions(
+        LaunchTemplateName=template_name, Versions=["$Latest"]
+    )
+
+    templ = resp["LaunchTemplateVersions"][0]["LaunchTemplateData"]
+    templ.should.equal(template_data)
+
+    # test using $Default version
+    resp = cli.describe_launch_template_versions(
+        LaunchTemplateName=template_name, Versions=["$Default"]
+    )
+
+    templ = resp["LaunchTemplateVersions"][0]["LaunchTemplateData"]
+    templ.should.equal(template_data)
+
 
 @mock_ec2
 def test_describe_launch_template_versions_by_name_when_absent():
@@ -482,9 +498,21 @@ def test_delete_launch_template__by_name():
 
     cli.delete_launch_template(LaunchTemplateName=template_name)
 
-    cli.describe_launch_templates(LaunchTemplateNames=[template_name])[
-        "LaunchTemplates"
-    ].should.have.length_of(0)
+    with pytest.raises(ClientError) as exc:
+        cli.describe_launch_templates(LaunchTemplateNames=[template_name])[
+            "LaunchTemplates"
+        ]
+    err = exc.value.response["Error"]
+    err.should.have.key("Code").equals("InvalidLaunchTemplateName.NotFoundException")
+    err.should.have.key("Message").equals(
+        "At least one of the launch templates specified in the request does not exist."
+    )
+
+    # Ensure deleted template name can be reused
+    cli.create_launch_template(
+        LaunchTemplateName=template_name,
+        LaunchTemplateData={"ImageId": "ami-abc123"},
+    )
 
 
 @mock_ec2
@@ -492,6 +520,15 @@ def test_delete_launch_template__by_id():
     cli = boto3.client("ec2", region_name="us-east-1")
 
     template_name = str(uuid4())
+
+    with pytest.raises(ClientError) as exc:
+        cli.delete_launch_template()
+    err = exc.value.response["Error"]
+    err.should.have.key("Code").equals("MissingParameter")
+    err.should.have.key("Message").equals(
+        "The request must contain the parameter launch template ID or launch template name"
+    )
+
     template_id = cli.create_launch_template(
         LaunchTemplateName=template_name, LaunchTemplateData={"ImageId": "ami-abc123"}
     )["LaunchTemplate"]["LaunchTemplateId"]
@@ -502,9 +539,21 @@ def test_delete_launch_template__by_id():
 
     cli.delete_launch_template(LaunchTemplateId=template_id)
 
-    cli.describe_launch_templates(LaunchTemplateNames=[template_name])[
-        "LaunchTemplates"
-    ].should.have.length_of(0)
+    with pytest.raises(ClientError) as exc:
+        cli.describe_launch_templates(LaunchTemplateNames=[template_name])[
+            "LaunchTemplates"
+        ]
+    err = exc.value.response["Error"]
+    err.should.have.key("Code").equals("InvalidLaunchTemplateName.NotFoundException")
+    err.should.have.key("Message").equals(
+        "At least one of the launch templates specified in the request does not exist."
+    )
+
+    # Ensure deleted template name can be reused
+    cli.create_launch_template(
+        LaunchTemplateName=template_name,
+        LaunchTemplateData={"ImageId": "ami-abc123"},
+    )
 
 
 def retrieve_all_templates(client, filters=[]):  # pylint: disable=W0102

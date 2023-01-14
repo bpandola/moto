@@ -35,7 +35,13 @@ from .exceptions import (
     SubscriptionNotFoundError,
     SubscriptionAlreadyExistError,
 )
-from .utils import FilterDef, apply_filter, merge_filters, validate_filters
+from .utils import (
+    FilterDef,
+    apply_filter,
+    merge_filters,
+    validate_filters,
+    valid_preferred_maintenance_window,
+)
 
 
 class Cluster:
@@ -446,9 +452,15 @@ class Database(CloudFormationModel):
             self.db_subnet_group = None
         self.security_groups = kwargs.get("security_groups", [])
         self.vpc_security_group_ids = kwargs.get("vpc_security_group_ids", [])
-        self.preferred_maintenance_window = kwargs.get(
-            "preferred_maintenance_window", "wed:06:38-wed:07:08"
+        self.preferred_maintenance_window = kwargs.get("preferred_maintenance_window")
+        self.preferred_backup_window = kwargs.get("preferred_backup_window")
+        msg = valid_preferred_maintenance_window(
+            self.preferred_maintenance_window,
+            self.preferred_backup_window,
         )
+        if msg:
+            raise RDSClientError("InvalidParameterValue", msg)
+
         self.db_parameter_group_name = kwargs.get("db_parameter_group_name")
         if (
             self.db_parameter_group_name
@@ -458,9 +470,6 @@ class Database(CloudFormationModel):
         ):
             raise DBParameterGroupNotFoundError(self.db_parameter_group_name)
 
-        self.preferred_backup_window = kwargs.get(
-            "preferred_backup_window", "13:14-13:44"
-        )
         self.license_model = kwargs.get("license_model", "general-public-license")
         self.option_group_name = kwargs.get("option_group_name", None)
         self.option_group_supplied = self.option_group_name is not None
@@ -504,7 +513,7 @@ class Database(CloudFormationModel):
                 db_family,
                 db_parameter_group_name,
             ) = self.default_db_parameter_group_details()
-            description = "Default parameter group for {0}".format(db_family)
+            description = f"Default parameter group for {db_family}"
             return [
                 DBParameterGroup(
                     account_id=self.account_id,
@@ -523,16 +532,16 @@ class Database(CloudFormationModel):
             return [backend.db_parameter_groups[self.db_parameter_group_name]]
 
     def is_default_parameter_group(self, param_group_name):
-        return param_group_name.startswith("default.%s" % self.engine.lower())
+        return param_group_name.startswith(f"default.{self.engine.lower()}")
 
     def default_db_parameter_group_details(self):
         if not self.engine_version:
             return (None, None)
 
         minor_engine_version = ".".join(str(self.engine_version).rsplit(".")[:-1])
-        db_family = "{0}{1}".format(self.engine.lower(), minor_engine_version)
+        db_family = f"{self.engine.lower()}{minor_engine_version}"
 
-        return db_family, "default.{0}".format(db_family)
+        return db_family, f"default.{db_family}"
 
     def to_xml(self):
         template = Template(
@@ -554,8 +563,8 @@ class Database(CloudFormationModel):
               <DBInstanceIdentifier>{{ database.db_instance_identifier }}</DBInstanceIdentifier>
               <DbiResourceId>{{ database.dbi_resource_id }}</DbiResourceId>
               <InstanceCreateTime>{{ database.instance_create_time }}</InstanceCreateTime>
-              <PreferredBackupWindow>03:50-04:20</PreferredBackupWindow>
-              <PreferredMaintenanceWindow>wed:06:38-wed:07:08</PreferredMaintenanceWindow>
+              <PreferredBackupWindow>{{ database.preferred_backup_window }}</PreferredBackupWindow>
+              <PreferredMaintenanceWindow>{{ database.preferred_maintenance_window }}</PreferredMaintenanceWindow>
               <ReadReplicaDBInstanceIdentifiers>
                 {% for replica_id in database.replicas %}
                     <ReadReplicaDBInstanceIdentifier>{{ replica_id }}</ReadReplicaDBInstanceIdentifier>
@@ -662,9 +671,7 @@ class Database(CloudFormationModel):
 
     @property
     def address(self):
-        return "{0}.aaaaaaaaaa.{1}.rds.amazonaws.com".format(
-            self.db_instance_identifier, self.region_name
-        )
+        return f"{self.db_instance_identifier}.aaaaaaaaaa.{self.region_name}.rds.amazonaws.com"
 
     def add_replica(self, replica):
         if self.region_name != replica.region_name:
@@ -773,6 +780,12 @@ class Database(CloudFormationModel):
             "db_instance_class": properties.get("DBInstanceClass"),
             "db_instance_identifier": resource_name,
             "db_name": properties.get("DBName"),
+            "preferred_backup_window": properties.get(
+                "PreferredBackupWindow", "13:14-13:44"
+            ),
+            "preferred_maintenance_window": properties.get(
+                "PreferredMaintenanceWindow", "wed:06:38-wed:07:08"
+            ).lower(),
             "db_subnet_group_name": db_subnet_group_name,
             "engine": properties.get("Engine"),
             "engine_version": properties.get("EngineVersion"),
@@ -1387,6 +1400,15 @@ class RDSBackend(BaseBackend):
 
         return self.database_snapshots.pop(db_snapshot_identifier)
 
+    def promote_read_replica(self, db_kwargs):
+        database_id = db_kwargs["db_instance_identifier"]
+        database = self.databases.get(database_id)
+        if database.is_replica:
+            database.is_replica = False
+            database.update(db_kwargs)
+
+        return database
+
     def create_db_instance_read_replica(self, db_kwargs):
         database_id = db_kwargs["db_instance_identifier"]
         source_database_id = db_kwargs["source_db_identifier"]
@@ -1441,6 +1463,13 @@ class RDSBackend(BaseBackend):
                 "db_instance_identifier"
             ] = db_kwargs.pop("new_db_instance_identifier")
             self.databases[db_instance_identifier] = database
+        preferred_backup_window = db_kwargs.get("preferred_backup_window")
+        preferred_maintenance_window = db_kwargs.get("preferred_maintenance_window")
+        msg = valid_preferred_maintenance_window(
+            preferred_maintenance_window, preferred_backup_window
+        )
+        if msg:
+            raise RDSClientError("InvalidParameterValue", msg)
         database.update(db_kwargs)
         return database
 
@@ -1587,24 +1616,34 @@ class RDSBackend(BaseBackend):
 
     def create_option_group(self, option_group_kwargs):
         option_group_id = option_group_kwargs["name"]
+        # This list was verified against the AWS Console on 14 Dec 2022
+        # Having an automated way (using the CLI) would be nice, but AFAICS that's not possible
+        #
+        # Some options that are allowed in the CLI, but that do now show up in the Console:
+        # - Mysql 5.5
+        # - All postgres-versions
+        # - oracle-se and oracle-se1 - I could not deduct the available versions
+        #   `Cannot find major version 19 for oracle-se`
+        #   (The engines do exist, otherwise the error would be `Invalid DB engine`
         valid_option_group_engines = {
-            "mariadb": ["10.0", "10.1", "10.2", "10.3"],
+            "mariadb": ["10.0", "10.1", "10.2", "10.3", "10.4", "10.5", "10.6"],
             "mysql": ["5.5", "5.6", "5.7", "8.0"],
-            "oracle-se2": ["11.2", "12.1", "12.2"],
-            "oracle-se1": ["11.2", "12.1", "12.2"],
-            "oracle-se": ["11.2", "12.1", "12.2"],
-            "oracle-ee": ["11.2", "12.1", "12.2"],
-            "sqlserver-se": ["10.50", "11.00"],
-            "sqlserver-ee": ["10.50", "11.00"],
-            "sqlserver-ex": ["10.50", "11.00"],
-            "sqlserver-web": ["10.50", "11.00"],
+            "oracle-ee": ["19"],
+            "oracle-ee-cdb": ["19", "21"],
+            "oracle-se": [],
+            "oracle-se1": [],
+            "oracle-se2": ["19"],
+            "oracle-se2-cdb": ["19", "21"],
+            "postgres": ["10", "11", "12", "13"],
+            "sqlserver-ee": ["11.00", "12.00", "13.00", "14.00", "15.00"],
+            "sqlserver-ex": ["11.00", "12.00", "13.00", "14.00", "15.00"],
+            "sqlserver-se": ["11.00", "12.00", "13.00", "14.00", "15.00"],
+            "sqlserver-web": ["11.00", "12.00", "13.00", "14.00", "15.00"],
         }
-        if option_group_kwargs["name"] in self.option_groups:
+        if option_group_id in self.option_groups:
             raise RDSClientError(
                 "OptionGroupAlreadyExistsFault",
-                "An option group named {0} already exists.".format(
-                    option_group_kwargs["name"]
-                ),
+                f"An option group named {option_group_id} already exists.",
             )
         if (
             "description" not in option_group_kwargs
@@ -1624,11 +1663,20 @@ class RDSBackend(BaseBackend):
         ):
             raise RDSClientError(
                 "InvalidParameterCombination",
-                "Cannot find major version {0} for {1}".format(
-                    option_group_kwargs["major_engine_version"],
-                    option_group_kwargs["engine_name"],
-                ),
+                f"Cannot find major version {option_group_kwargs['major_engine_version']} for {option_group_kwargs['engine_name']}",
             )
+        # AWS also creates default option groups, if they do not yet exist, when creating an option group in the CLI
+        # Maybe we should do the same
+        # {
+        #     "OptionGroupName": "default:postgres-10",
+        #     "OptionGroupDescription": "Default option group for postgres 10",
+        #     "EngineName": "postgres",
+        #     "MajorEngineVersion": "10",
+        #     "Options": [],
+        #     "AllowsVpcAndNonVpcInstanceMemberships": true,
+        #     "OptionGroupArn": "arn:aws:rds:us-east-1:{account}:og:default:postgres-10"
+        # }
+        # The CLI does not allow deletion of default groups
         option_group = OptionGroup(**option_group_kwargs)
         self.option_groups[option_group_id] = option_group
         return option_group
@@ -1710,7 +1758,7 @@ class RDSBackend(BaseBackend):
 
         if engine_name not in default_option_group_options:
             raise RDSClientError(
-                "InvalidParameterValue", "Invalid DB engine: {0}".format(engine_name)
+                "InvalidParameterValue", f"Invalid DB engine: {engine_name}"
             )
         if (
             major_engine_version
@@ -1718,9 +1766,7 @@ class RDSBackend(BaseBackend):
         ):
             raise RDSClientError(
                 "InvalidParameterCombination",
-                "Cannot find major version {0} for {1}".format(
-                    major_engine_version, engine_name
-                ),
+                f"Cannot find major version {major_engine_version} for {engine_name}",
             )
         if major_engine_version:
             return default_option_group_options[engine_name][major_engine_version]
@@ -1744,12 +1790,10 @@ class RDSBackend(BaseBackend):
 
     def create_db_parameter_group(self, db_parameter_group_kwargs):
         db_parameter_group_id = db_parameter_group_kwargs["name"]
-        if db_parameter_group_kwargs["name"] in self.db_parameter_groups:
+        if db_parameter_group_id in self.db_parameter_groups:
             raise RDSClientError(
                 "DBParameterGroupAlreadyExistsFault",
-                "A DB parameter group named {0} already exists.".format(
-                    db_parameter_group_kwargs["name"]
-                ),
+                f"A DB parameter group named {db_parameter_group_id} already exists.",
             )
         if not db_parameter_group_kwargs.get("description"):
             raise RDSClientError(
@@ -2062,7 +2106,7 @@ class RDSBackend(BaseBackend):
                     return self.subnet_groups[resource_name].get_tags()
         else:
             raise RDSClientError(
-                "InvalidParameterValue", "Invalid resource name: {0}".format(arn)
+                "InvalidParameterValue", f"Invalid resource name: {arn}"
             )
         return []
 
@@ -2102,7 +2146,7 @@ class RDSBackend(BaseBackend):
                     return self.subnet_groups[resource_name].remove_tags(tag_keys)
         else:
             raise RDSClientError(
-                "InvalidParameterValue", "Invalid resource name: {0}".format(arn)
+                "InvalidParameterValue", f"Invalid resource name: {arn}"
             )
 
     def add_tags_to_resource(self, arn, tags):
@@ -2141,7 +2185,7 @@ class RDSBackend(BaseBackend):
                     return self.subnet_groups[resource_name].add_tags(tags)
         else:
             raise RDSClientError(
-                "InvalidParameterValue", "Invalid resource name: {0}".format(arn)
+                "InvalidParameterValue", f"Invalid resource name: {arn}"
             )
 
     @staticmethod

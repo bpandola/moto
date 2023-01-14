@@ -5,7 +5,7 @@ import os
 import random
 import re
 
-import mock
+from unittest import mock
 import moto.cognitoidp.models
 import requests
 import hmac
@@ -35,9 +35,7 @@ def test_create_user_pool():
 
     result["UserPool"]["Id"].should.match(r"[\w-]+_[0-9a-zA-Z]+")
     result["UserPool"]["Arn"].should.equal(
-        "arn:aws:cognito-idp:us-west-2:{}:userpool/{}".format(
-            ACCOUNT_ID, result["UserPool"]["Id"]
-        )
+        f"arn:aws:cognito-idp:us-west-2:{ACCOUNT_ID}:userpool/{result['UserPool']['Id']}"
     )
     result["UserPool"]["Name"].should.equal(name)
     result["UserPool"]["LambdaConfig"]["PreSignUp"].should.equal(value)
@@ -847,9 +845,7 @@ def test_create_user_pool_domain_custom_domain_config():
 
     domain = str(uuid.uuid4())
     custom_domain_config = {
-        "CertificateArn": "arn:aws:acm:us-east-1:{}:certificate/123456789012".format(
-            ACCOUNT_ID
-        )
+        "CertificateArn": f"arn:aws:acm:us-east-1:{ACCOUNT_ID}:certificate/123456789012"
     }
     user_pool_id = conn.create_user_pool(PoolName=str(uuid.uuid4()))["UserPool"]["Id"]
     result = conn.create_user_pool_domain(
@@ -896,9 +892,7 @@ def test_update_user_pool_domain():
 
     domain = str(uuid.uuid4())
     custom_domain_config = {
-        "CertificateArn": "arn:aws:acm:us-east-1:{}:certificate/123456789012".format(
-            ACCOUNT_ID
-        )
+        "CertificateArn": f"arn:aws:acm:us-east-1:{ACCOUNT_ID}:certificate/123456789012"
     }
     user_pool_id = conn.create_user_pool(PoolName=str(uuid.uuid4()))["UserPool"]["Id"]
     conn.create_user_pool_domain(UserPoolId=user_pool_id, Domain=domain)
@@ -1430,7 +1424,7 @@ def test_group_in_access_token():
     conn = boto3.client("cognito-idp", "us-west-2")
 
     username = str(uuid.uuid4())
-    temporary_password = str(uuid.uuid4())
+    temporary_password = "P2$Sword"
     user_pool_id = conn.create_user_pool(PoolName=str(uuid.uuid4()))["UserPool"]["Id"]
     user_attribute_name = str(uuid.uuid4())
     user_attribute_value = str(uuid.uuid4())
@@ -1466,7 +1460,7 @@ def test_group_in_access_token():
     result["Session"].should_not.equal(None)
 
     # This sets a new password and logs the user in (creates tokens)
-    new_password = str(uuid.uuid4())
+    new_password = "P2$Sword"
     result = conn.respond_to_auth_challenge(
         Session=result["Session"],
         ClientId=client_id,
@@ -2395,7 +2389,7 @@ def test_list_users_inherent_attributes():
 
     for name, filter_value, response_field, response_field_expected_value in filters:
         result = conn.list_users(
-            UserPoolId=user_pool_id, Filter='{}="{}"'.format(name, filter_value)
+            UserPoolId=user_pool_id, Filter=f'{name}="{filter_value}"'
         )
         result["Users"].should.have.length_of(1)
         result["Users"][0][response_field].should.equal(response_field_expected_value)
@@ -2606,7 +2600,7 @@ def test_admin_delete_user_with_username_attributes():
 
 def authentication_flow(conn, auth_flow):
     username = str(uuid.uuid4())
-    temporary_password = str(uuid.uuid4())
+    temporary_password = "P2$Sword"
     user_pool_id = conn.create_user_pool(PoolName=str(uuid.uuid4()))["UserPool"]["Id"]
     user_attribute_name = str(uuid.uuid4())
     user_attribute_value = str(uuid.uuid4())
@@ -2635,7 +2629,7 @@ def authentication_flow(conn, auth_flow):
     result["Session"].should_not.equal(None)
 
     # This sets a new password and logs the user in (creates tokens)
-    new_password = str(uuid.uuid4())
+    new_password = "P2$Sword"
     result = conn.respond_to_auth_challenge(
         Session=result["Session"],
         ClientId=client_id,
@@ -2697,7 +2691,7 @@ def test_authentication_flow_invalid_user_flow():
 
 def user_authentication_flow(conn):
     username = str(uuid.uuid4())
-    password = str(uuid.uuid4())
+    password = "P2$Sword"
     user_pool_id = conn.create_user_pool(PoolName=str(uuid.uuid4()))["UserPool"]["Id"]
     user_attribute_name = str(uuid.uuid4())
     user_attribute_value = str(uuid.uuid4())
@@ -2839,8 +2833,8 @@ def test_token_legitimacy():
         access_token = outputs["access_token"]
         client_id = outputs["client_id"]
         username = outputs["username"]
-        issuer = "https://cognito-idp.us-west-2.amazonaws.com/{}".format(
-            outputs["user_pool_id"]
+        issuer = (
+            f"https://cognito-idp.us-west-2.amazonaws.com/{outputs['user_pool_id']}"
         )
         id_claims = json.loads(jws.verify(id_token, json_web_key, "RS256"))
         id_claims["iss"].should.equal(issuer)
@@ -2850,7 +2844,7 @@ def test_token_legitimacy():
             id_claims[k].should.equal(v)
         access_claims = json.loads(jws.verify(access_token, json_web_key, "RS256"))
         access_claims["iss"].should.equal(issuer)
-        access_claims["aud"].should.equal(client_id)
+        access_claims["client_id"].should.equal(client_id)
         access_claims["token_use"].should.equal("access")
         access_claims["username"].should.equal(username)
 
@@ -2863,7 +2857,7 @@ def test_change_password():
         outputs = authentication_flow(conn, auth_flow)
 
         # Take this opportunity to test change_password, which requires an access token.
-        newer_password = str(uuid.uuid4())
+        newer_password = "P2$Sword2"
         conn.change_password(
             AccessToken=outputs["access_token"],
             PreviousPassword=outputs["password"],
@@ -2887,7 +2881,7 @@ def test_change_password():
 
 @mock_cognitoidp
 def test_change_password__using_custom_user_agent_header():
-    # https://github.com/spulec/moto/issues/3098
+    # https://github.com/getmoto/moto/issues/3098
     # As the admin_initiate_auth-method is unauthenticated, we use the user-agent header to pass in the region
     # This test verifies this works, even if we pass in our own user-agent header
     from botocore.config import Config
@@ -2899,7 +2893,7 @@ def test_change_password__using_custom_user_agent_header():
         outputs = authentication_flow(conn, auth_flow)
 
         # Take this opportunity to test change_password, which requires an access token.
-        newer_password = str(uuid.uuid4())
+        newer_password = "P2$Sword2"
         conn.change_password(
             AccessToken=outputs["access_token"],
             PreviousPassword=outputs["password"],
@@ -3218,6 +3212,12 @@ def test_global_sign_out():
     err["Code"].should.equal("NotAuthorizedException")
     err["Message"].should.equal("Refresh Token has been revoked")
 
+    with pytest.raises(ClientError) as ex:
+        conn.get_user(AccessToken=result["access_token"])
+
+    err = ex.value.response["Error"]
+    err["Code"].should.equal("NotAuthorizedException")
+
 
 @mock_cognitoidp
 def test_global_sign_out_unknown_accesstoken():
@@ -3451,7 +3451,7 @@ def test_resource_server():
     ex.value.operation_name.should.equal("CreateResourceServer")
     ex.value.response["Error"]["Code"].should.equal("InvalidParameterException")
     ex.value.response["Error"]["Message"].should.equal(
-        "%s already exists in user pool %s." % (identifier, user_pool_id)
+        f"{identifier} already exists in user pool {user_pool_id}."
     )
     ex.value.response["ResponseMetadata"]["HTTPStatusCode"].should.equal(400)
 
@@ -3464,10 +3464,26 @@ def test_sign_up():
         UserPoolId=user_pool_id, ClientName=str(uuid.uuid4())
     )["UserPoolClient"]["ClientId"]
     username = str(uuid.uuid4())
-    password = str(uuid.uuid4())
+    password = "P2$Sword"
     result = conn.sign_up(ClientId=client_id, Username=username, Password=password)
     result["UserConfirmed"].should.equal(False)
     result["UserSub"].should_not.equal(None)
+
+
+@mock_cognitoidp
+@pytest.mark.parametrize("password", ["p2$$word", "P2$s"])
+def test_sign_up_with_invalid_password(password):
+    conn = boto3.client("cognito-idp", "us-west-2")
+    user_pool_id = conn.create_user_pool(PoolName=str(uuid.uuid4()))["UserPool"]["Id"]
+    client_id = conn.create_user_pool_client(
+        UserPoolId=user_pool_id, ClientName=str(uuid.uuid4())
+    )["UserPoolClient"]["ClientId"]
+    username = str(uuid.uuid4())
+
+    with pytest.raises(ClientError) as exc:
+        conn.sign_up(ClientId=client_id, Username=username, Password=password)
+    err = exc.value.response["Error"]
+    err["Code"].should.equal("InvalidPasswordException")
 
 
 @mock_cognitoidp
@@ -3480,7 +3496,7 @@ def test_sign_up_with_username_attributes():
         UserPoolId=user_pool_id, ClientName=str(uuid.uuid4())
     )["UserPoolClient"]["ClientId"]
     username = str(uuid.uuid4())
-    password = str(uuid.uuid4())
+    password = "P2$Sword"
     with pytest.raises(ClientError) as err:
         # Attempt to add user again
         conn.sign_up(ClientId=client_id, Username=username, Password=password)
@@ -3506,7 +3522,7 @@ def test_sign_up_existing_user():
         UserPoolId=user_pool_id, ClientName=str(uuid.uuid4())
     )["UserPoolClient"]["ClientId"]
     username = str(uuid.uuid4())
-    password = str(uuid.uuid4())
+    password = "P2$Sword"
 
     # Add initial user
     conn.sign_up(ClientId=client_id, Username=username, Password=password)
@@ -3522,7 +3538,7 @@ def test_sign_up_existing_user():
 def test_confirm_sign_up():
     conn = boto3.client("cognito-idp", "us-west-2")
     username = str(uuid.uuid4())
-    password = str(uuid.uuid4())
+    password = "P2$Sword"
     user_pool_id = conn.create_user_pool(PoolName=str(uuid.uuid4()))["UserPool"]["Id"]
     client_id = conn.create_user_pool_client(
         UserPoolId=user_pool_id, ClientName=str(uuid.uuid4()), GenerateSecret=True
@@ -3541,7 +3557,7 @@ def test_confirm_sign_up():
 def test_confirm_sign_up_with_username_attributes():
     conn = boto3.client("cognito-idp", "us-west-2")
     username = "test@example.com"
-    password = str(uuid.uuid4())
+    password = "P2$Sword"
     user_pool_id = conn.create_user_pool(
         PoolName=str(uuid.uuid4()), UsernameAttributes=["email"]
     )["UserPool"]["Id"]
@@ -3562,7 +3578,7 @@ def test_confirm_sign_up_with_username_attributes():
 def test_initiate_auth_USER_SRP_AUTH():
     conn = boto3.client("cognito-idp", "us-west-2")
     username = str(uuid.uuid4())
-    password = str(uuid.uuid4())
+    password = "P2$Sword"
     user_pool_id = conn.create_user_pool(PoolName=str(uuid.uuid4()))["UserPool"]["Id"]
     client_id = conn.create_user_pool_client(
         UserPoolId=user_pool_id, ClientName=str(uuid.uuid4()), GenerateSecret=True
@@ -3598,7 +3614,7 @@ def test_initiate_auth_USER_SRP_AUTH():
 def test_initiate_auth_USER_SRP_AUTH_with_username_attributes():
     conn = boto3.client("cognito-idp", "us-west-2")
     username = "test@example.com"
-    password = str(uuid.uuid4())
+    password = "P2$Sword"
     user_pool_id = conn.create_user_pool(
         PoolName=str(uuid.uuid4()), UsernameAttributes=["email"]
     )["UserPool"]["Id"]
@@ -3732,7 +3748,7 @@ def test_initiate_auth_USER_PASSWORD_AUTH_with_FORCE_CHANGE_PASSWORD_status():
     )["UserPoolClient"]["ClientId"]
 
     # Create user in status FORCE_CHANGE_PASSWORD
-    temporary_password = str(uuid.uuid4())
+    temporary_password = "P2$Sword"
     client.admin_create_user(
         UserPoolId=user_pool_id, Username=username, TemporaryPassword=temporary_password
     )
@@ -3748,7 +3764,7 @@ def test_initiate_auth_USER_PASSWORD_AUTH_with_FORCE_CHANGE_PASSWORD_status():
     result["Session"].should_not.equal("")
     assert result.get("AuthenticationResult") is None
 
-    new_password = str(uuid.uuid4())
+    new_password = "P2$Sword2"
     result = client.respond_to_auth_challenge(
         ClientId=client_id,
         ChallengeName="NEW_PASSWORD_REQUIRED",
@@ -3798,7 +3814,7 @@ def test_initiate_auth_USER_PASSWORD_AUTH_user_incorrect_password():
 def test_initiate_auth_USER_PASSWORD_AUTH_unconfirmed_user():
     conn = boto3.client("cognito-idp", "us-west-2")
     username = str(uuid.uuid4())
-    password = str(uuid.uuid4())
+    password = "P2$Sword"
     user_pool_id = conn.create_user_pool(PoolName=str(uuid.uuid4()))["UserPool"]["Id"]
     client_id = conn.create_user_pool_client(
         UserPoolId=user_pool_id, ClientName=str(uuid.uuid4()), GenerateSecret=True
@@ -3819,7 +3835,7 @@ def test_initiate_auth_USER_PASSWORD_AUTH_unconfirmed_user():
 def test_initiate_auth_for_unconfirmed_user():
     conn = boto3.client("cognito-idp", "us-west-2")
     username = str(uuid.uuid4())
-    password = str(uuid.uuid4())
+    password = "P2$Sword"
     user_pool_id = conn.create_user_pool(PoolName=str(uuid.uuid4()))["UserPool"]["Id"]
     client_id = conn.create_user_pool_client(
         UserPoolId=user_pool_id, ClientName=str(uuid.uuid4()), GenerateSecret=True
@@ -3852,7 +3868,7 @@ def test_initiate_auth_for_unconfirmed_user():
 def test_initiate_auth_with_invalid_secret_hash():
     conn = boto3.client("cognito-idp", "us-west-2")
     username = str(uuid.uuid4())
-    password = str(uuid.uuid4())
+    password = "P2$Sword"
     user_pool_id = conn.create_user_pool(PoolName=str(uuid.uuid4()))["UserPool"]["Id"]
     client_id = conn.create_user_pool_client(
         UserPoolId=user_pool_id, ClientName=str(uuid.uuid4()), GenerateSecret=True
@@ -4006,7 +4022,7 @@ def test_admin_set_user_password():
 
     username = str(uuid.uuid4())
     value = str(uuid.uuid4())
-    password = str(uuid.uuid4())
+    password = "P2$$word"
     user_pool_id = conn.create_user_pool(PoolName=str(uuid.uuid4()))["UserPool"]["Id"]
     conn.admin_create_user(
         UserPoolId=user_pool_id,
@@ -4026,6 +4042,73 @@ def test_admin_set_user_password():
         attr[0]["Value"].should.equal(v)
 
     _verify_attribute("thing", value)
+
+
+@mock_cognitoidp
+@pytest.mark.parametrize("password", ["pa$$word", "Password", "p2ssword", "P2$S"])
+def test_admin_set_invalid_user_password(password):
+    conn = boto3.client("cognito-idp", "us-west-2")
+
+    username = str(uuid.uuid4())
+    value = str(uuid.uuid4())
+    user_pool_id = conn.create_user_pool(PoolName=str(uuid.uuid4()))["UserPool"]["Id"]
+    conn.admin_create_user(
+        UserPoolId=user_pool_id,
+        Username=username,
+        UserAttributes=[{"Name": "thing", "Value": value}],
+    )
+    with pytest.raises(ClientError) as exc:
+        conn.admin_set_user_password(
+            UserPoolId=user_pool_id,
+            Username=username,
+            Password=password,
+            Permanent=True,
+        )
+    err = exc.value.response["Error"]
+    err["Code"].should.equal("InvalidPasswordException")
+
+
+@mock_cognitoidp
+@pytest.mark.parametrize("password", ["password", "P2$$word"])
+def test_admin_set_invalid_user_password__custom_policy_provided(password):
+    conn = boto3.client("cognito-idp", "us-west-2")
+
+    username = str(uuid.uuid4())
+    value = str(uuid.uuid4())
+    user_pool_id = conn.create_user_pool(
+        PoolName=str(uuid.uuid4()),
+        Policies={
+            "PasswordPolicy": {
+                "MinimumLength": 12,
+                "RequireUppercase": False,
+                "RequireLowercase": False,
+                "RequireNumbers": False,
+                "RequireSymbols": False,
+            }
+        },
+    )["UserPool"]["Id"]
+    conn.admin_create_user(
+        UserPoolId=user_pool_id,
+        Username=username,
+        UserAttributes=[{"Name": "thing", "Value": value}],
+    )
+    with pytest.raises(ClientError) as exc:
+        conn.admin_set_user_password(
+            UserPoolId=user_pool_id,
+            Username=username,
+            Password=password,
+            Permanent=True,
+        )
+    err = exc.value.response["Error"]
+    err["Code"].should.equal("InvalidPasswordException")
+
+    # We can set a plain password, as long as it's 12 characters long
+    conn.admin_set_user_password(
+        UserPoolId=user_pool_id,
+        Username=username,
+        Password="longpassword",
+        Permanent=True,
+    )
 
 
 @mock_cognitoidp
@@ -4244,7 +4327,7 @@ if not settings.TEST_SERVER_MODE:
 
     @mock_cognitoidp
     def test_idtoken_contains_kid_header():
-        # https://github.com/spulec/moto/issues/3078
+        # https://github.com/getmoto/moto/issues/3078
         # Setup
         cognito = boto3.client("cognito-idp", "us-west-2")
         user_pool_id = cognito.create_user_pool(PoolName=str(uuid.uuid4()))["UserPool"][
@@ -4308,8 +4391,6 @@ def verify_kid_header(token):
 
 
 def fetch_public_keys():
-    keys_url = "https://cognito-idp.{}.amazonaws.com/{}/.well-known/jwks.json".format(
-        "us-west-2", "someuserpoolid"
-    )
+    keys_url = "https://cognito-idp.us-west-2.amazonaws.com/someuserpoolid/.well-known/jwks.json"
     response = requests.get(keys_url).json()
     return response["keys"]

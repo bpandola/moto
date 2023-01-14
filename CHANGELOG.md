@@ -1,6 +1,137 @@
 Moto Changelog
 ==============
 
+
+4.1.0
+-----
+Docker Digest for 4.1.0: _sha256:1c38613f7273054650d08f3cb3ce118753296d08ffbfee8c96400c89a529c9ca_
+
+    General:
+        * Dropped support for Py 3.6
+        * Moto now uses setup.cfg to hold our packaging configuration, instead of setup.py, making Moto compatible with more recent Pip-versions
+
+
+4.0.13
+-----
+Docker Digest for 4.0.13: _sha256:703a9d464c11e1f4cacff66acdc9b46f9fa8fb0b969ca9f1e79fa4eb41678565_
+
+    New Methods:
+        * EC2:
+            * get_password_data()
+        * Sagemaker:
+            * update_pipeline()
+        * SecretsManager:
+            * cancel_rotate_secret()
+
+    Miscellaneous:
+        * CloudWatch: put_metric_data() now supports the StatisticValues-parameter
+        * CognitoIDP: sign_out() now also invalidates the AccessToken
+        * IAM: get_account_authorization_details() now returns the Tags-attribute
+        * IOT: create_keys_and_certificate() now creates valid certificates, instead of random data
+
+
+4.0.12
+-----
+Docker Digest for 4.0.12: _sha256:06916d3f310c68fd445468f06d6d4ae6f855e7f2b80e007a90bd11eeb421b5ed_
+
+    General:
+        * Fixes our Kinesis-compatibility with botocore>=1.29.31 - earlier Moto-versions will connect to AWS when using this botocore-version 
+
+    New Methods:
+        * Athena:
+            * get_query_results()
+            * list_query_executions()
+        * RDS:
+            * promote_read_replica()
+        * Sagemaker:
+            * create_pipeline()
+            * delete_pipeline()
+            * list_pipelines()
+
+    Miscellaneous:
+        * AWSLambda: publish_function() and update_function_code() now only increment the version if the source code has changed
+        * CognitoIDP: Passwords are now validated using the PasswordPolicy (either supplied, or the default)
+        * CloudFormation: create_stack() now propagates parameters StackPolicyBody and TimeoutInMinutes
+        * CloudFormation: create_stack_instances() now returns the actual OperationId
+        * CloudFormation: create_stack_set() now validates the provided name
+        * CloudFormation: create_stack_set() now supports the DeploymentTargets-parameter
+        * CloudFormation: create_stack_set() now actually creates the provided resources
+        * CloudFormation: create_stack_set() now propagates parameters AdministrationRoleARN and ExecutionRoleName
+        * CloudFormation: describe_stack_set() now returns the attributes Description, PermissionModel
+        * CloudFormation: delete_stack_set() now validates that no instances are present before deleting the set
+        * CloudWatch: get_metric_data() now supports the Label-parameter
+        * EC2: allocate_address() now has improved behaviour for the Domain-parameter
+        * EC2: create_volume() now supports the Iops-parameter
+        * ECR: Improved ImageManifest support
+        * KMS: describe_key() now returns an AccessDeniedException if the supplied policy does not allow this action
+        * Route53: change_resource_record_sets() has additional validations
+        * Route53: create_hosted_zone() now also creates a SOA-record by default
+        * S3: put_object() now returns the ChecksumAlgorithm-attribute if supplied
+        * SSM: describe_parameters() now has improved support for filtering by tags 
+
+
+4.0.11
+-----
+Docker Digest for 4.0.11: _sha256:ba07f61edd4f91b221ea20368586dce024e7da4d018e2741aceafa1f07f47ec5_
+
+    New Services:
+        * ACM-PCA:
+            * create_certificate_authority()
+            * delete_certificate_authority()
+            * describe_certificate_authority()
+            * get_certificate()
+            * get_certificate_authority_certificate()
+            * get_certificate_authority_csr()
+            * import_certificate_authority_certificate()
+            * issue_certificate()
+            * list_tags()
+            * revoke_certificate()
+            * tag_certificate_authority()
+            * update_certificate_authority()
+            * untag_certificate_authority()
+
+    New Methods:
+        * create_api_mapping()
+        * create_domain_name()
+        * delete_api_mapping()
+        * delete_domain_name()
+        * get_api_mapping()
+        * get_api_mappings()
+        * get_domain_name()
+        * get_domain_names()
+
+    Miscellaneous:
+        * APIGateway: create_rest_api() now supports the propagation of parameter disableExecuteApiEndpoint (not the actual behaviour)
+        * APIGateway: put_integration() now supports the parameters contentHandling, credentials, tlsConfig
+        * AWSLambda: create_function() is now able to validate the existence of the provided ImageURI. Set environment variable MOTO_LAMBDA_STUB_ECR=false to enable this.
+        * Batch: submit_job() now adds validation for the jobName parameter
+        * CloudWatch: get_metric_data() now adds support for filtering by the unit-value
+        * DynamoDB: transact_write_items() now supports up to 100 items instead of 25, in line with AWS
+        * ELB: describe_instance_health() now validates the existence of the provided LoadBalancer
+        * Polly: The list of available voices has been updated.
+        * S3: put_object() now has improved support for filenames containing spaces
+        * SQS: send_message() and send_message_batch() now adds validation for the DelaySeconds-parameter
+
+
+4.0.10
+-----
+Docker Digest for 4.0.10: _sha256:faf0e4b591c47c7775da4f827c2ec2e1ff48a32b31169236fa604ffb95dafb78_
+
+    New Methods:
+        * CloudFront:
+            * get_distribution_config()
+        * Organizations:
+            * delete_organizational_unit()
+
+    Miscellaneous:
+        * APIGateway: put_integration_response() now supports the responseParameters-parameter
+        * Cloudformation now supports the creation/update/deletion of AWS::SSM::Parameter
+        * Cloudformation: create_stack() now returns the attribute EnableTerminationProtection
+        * CloudWatch: put_metric_data() now supports the MetricData.Values parameter
+        * DynamoDB: transact_write_items() now supports the ReturnValuesOnConditionCheckFailure-parameter
+        * RDS: describe_db_cluster now returns the EarliestRestorableTime-attribute
+        * S3: get_object() and head_object() now correctly handle the IfModifiedSince-parameter
+
 4.0.9
 -----
 Docker Digest for 4.0.9: _sha256:0c7a87255814035794733764d497fcb659ae0d6c843fae41040bb1a29c0726ab_
@@ -1315,7 +1446,7 @@ Docker Digest for 3.0.4: _sha256:320e1d2ab89729d5580dbe08d8c2153a28db4c28023c577
 -----
     General:
         * The mock_dynamodb and mock_rds-decorators have been deprecated, and will be repurposed in a later release.
-          Please see https://github.com/spulec/moto/issues/4526 for more information.
+          Please see https://github.com/getmoto/moto/issues/4526 for more information.
 
     New Methods:
         * API Gateway:
@@ -2217,7 +2348,7 @@ Docker Digest for 3.0.4: _sha256:320e1d2ab89729d5580dbe08d8c2153a28db4c28023c577
 2.0.0
 ----
 Full list of PRs merged in this release:
-https://github.com/spulec/moto/pulls?q=is%3Apr+is%3Aclosed+merged%3A2020-09-07..2021-02-23
+https://github.com/getmoto/moto/pulls?q=is%3Apr+is%3Aclosed+merged%3A2020-09-07..2021-02-23
 
     General Changes:
         * When installing, it is now required to specify the service you want to use:
@@ -2408,7 +2539,7 @@ https://github.com/spulec/moto/pulls?q=is%3Apr+is%3Aclosed+merged%3A2020-09-07..
 1.3.16
 -----
 Full list of PRs merged in this release:
-https://github.com/spulec/moto/pulls?q=is%3Apr+is%3Aclosed+merged%3A2019-11-14..2020-09-07
+https://github.com/getmoto/moto/pulls?q=is%3Apr+is%3Aclosed+merged%3A2019-11-14..2020-09-07
 
 
     General Changes:

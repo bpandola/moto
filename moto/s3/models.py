@@ -8,7 +8,6 @@ import codecs
 import string
 import tempfile
 import threading
-import pytz
 import sys
 import urllib.parse
 
@@ -121,6 +120,7 @@ class FakeKey(BaseModel, ManagedState):
         self.last_modified = datetime.datetime.utcnow()
         self.acl = get_canned_acl("private")
         self.website_redirect_location = None
+        self.checksum_algorithm = None
         self._storage_class = storage if storage else "STANDARD"
         self._metadata = LowercaseDict()
         self._expiry = None
@@ -160,19 +160,16 @@ class FakeKey(BaseModel, ManagedState):
 
     @property
     def value(self):
-        self.lock.acquire()
-        self._value_buffer.seek(0)
-        r = self._value_buffer.read()
-        r = copy.copy(r)
-        self.lock.release()
-        return r
+        with self.lock:
+            self._value_buffer.seek(0)
+            r = self._value_buffer.read()
+            r = copy.copy(r)
+            return r
 
     @property
     def arn(self):
         # S3 Objects don't have an ARN, but we do need something unique when creating tags against this resource
-        return "arn:aws:s3:::{}/{}/{}".format(
-            self.bucket_name, self.name, self.version_id
-        )
+        return f"arn:aws:s3:::{self.bucket_name}/{self.name}/{self.version_id}"
 
     @value.setter
     def value(self, new_value):
@@ -217,7 +214,7 @@ class FakeKey(BaseModel, ManagedState):
                 value_md5.update(block)
 
             self._etag = value_md5.hexdigest()
-        return '"{0}"'.format(self._etag)
+        return f'"{self._etag}"'
 
     @property
     def last_modified_ISO8601(self):
@@ -254,14 +251,14 @@ class FakeKey(BaseModel, ManagedState):
             if self.status == "IN_PROGRESS":
                 header = 'ongoing-request="true"'
             else:
-                header = 'ongoing-request="false", expiry-date="{0}"'.format(
-                    self.expiry_date
-                )
+                header = f'ongoing-request="false", expiry-date="{self.expiry_date}"'
             res["x-amz-restore"] = header
 
         if self._is_versioned:
             res["x-amz-version-id"] = str(self.version_id)
 
+        if self.checksum_algorithm is not None:
+            res["x-amz-sdk-checksum-algorithm"] = self.checksum_algorithm
         if self.website_redirect_location:
             res["x-amz-website-redirect-location"] = self.website_redirect_location
         if self.lock_legal_status:
@@ -413,7 +410,7 @@ class FakeMultipart(BaseModel):
 
         etag = md5_hash()
         etag.update(bytes(md5s))
-        return total, "{0}-{1}".format(etag.hexdigest(), count)
+        return total, f"{etag.hexdigest()}-{count}"
 
     def set_part(self, part_id, value):
         if part_id < 1:
@@ -460,9 +457,7 @@ class FakeGrantee(BaseModel):
         return "Group" if self.uri else "CanonicalUser"
 
     def __repr__(self):
-        return "FakeGrantee(display_name: '{}', id: '{}', uri: '{}')".format(
-            self.display_name, self.id, self.uri
-        )
+        return f"FakeGrantee(display_name: '{self.display_name}', id: '{self.id}', uri: '{self.uri}')"
 
 
 ALL_USERS_GRANTEE = FakeGrantee(uri="http://acs.amazonaws.com/groups/global/AllUsers")
@@ -492,9 +487,7 @@ class FakeGrant(BaseModel):
         self.permissions = permissions
 
     def __repr__(self):
-        return "FakeGrant(grantees: {}, permissions: {})".format(
-            self.grantees, self.permissions
-        )
+        return f"FakeGrant(grantees: {self.grantees}, permissions: {self.permissions})"
 
 
 class FakeAcl(BaseModel):
@@ -513,7 +506,7 @@ class FakeAcl(BaseModel):
         return False
 
     def __repr__(self):
-        return "FakeAcl(grants: {})".format(self.grants)
+        return f"FakeAcl(grants: {self.grants})"
 
     def to_config_dict(self):
         """Returns the object into the format expected by AWS Config"""
@@ -584,7 +577,7 @@ def get_canned_acl(acl):
             FakeGrant([LOG_DELIVERY_GRANTEE], [PERMISSION_READ_ACP, PERMISSION_WRITE])
         )
     else:
-        assert False, "Unknown canned acl: %s" % (acl,)
+        assert False, f"Unknown canned acl: {acl}"
     return FakeAcl(grants=grants)
 
 
@@ -919,7 +912,7 @@ class FakeBucket(CloudFormationModel):
         self.notification_configuration = None
         self.accelerate_configuration = None
         self.payer = "BucketOwner"
-        self.creation_date = datetime.datetime.now(tz=pytz.utc)
+        self.creation_date = datetime.datetime.now(tz=datetime.timezone.utc)
         self.public_access_block = None
         self.encryption = None
         self.object_lock_enabled = False
@@ -1238,25 +1231,23 @@ class FakeBucket(CloudFormationModel):
 
     @property
     def arn(self):
-        return "arn:aws:s3:::{}".format(self.name)
+        return f"arn:aws:s3:::{self.name}"
 
     @property
     def domain_name(self):
-        return "{}.s3.amazonaws.com".format(self.name)
+        return f"{self.name}.s3.amazonaws.com"
 
     @property
     def dual_stack_domain_name(self):
-        return "{}.s3.dualstack.{}.amazonaws.com".format(self.name, self.region_name)
+        return f"{self.name}.s3.dualstack.{self.region_name}.amazonaws.com"
 
     @property
     def regional_domain_name(self):
-        return "{}.s3.{}.amazonaws.com".format(self.name, self.region_name)
+        return f"{self.name}.s3.{self.region_name}.amazonaws.com"
 
     @property
     def website_url(self):
-        return "http://{}.s3-website.{}.amazonaws.com".format(
-            self.name, self.region_name
-        )
+        return f"http://{self.name}.s3-website.{self.region_name}.amazonaws.com"
 
     @property
     def physical_resource_id(self):
@@ -1525,7 +1516,7 @@ class S3Backend(BaseBackend, CloudWatchMetricProvider):
                         {"Name": "StorageType", "Value": "StandardStorage"},
                         {"Name": "BucketName", "Value": name},
                     ],
-                    timestamp=datetime.datetime.now(tz=pytz.utc).replace(
+                    timestamp=datetime.datetime.now(tz=datetime.timezone.utc).replace(
                         hour=0, minute=0, second=0, microsecond=0
                     ),
                     unit="Bytes",
@@ -1540,7 +1531,7 @@ class S3Backend(BaseBackend, CloudWatchMetricProvider):
                         {"Name": "StorageType", "Value": "AllStorageTypes"},
                         {"Name": "BucketName", "Value": name},
                     ],
-                    timestamp=datetime.datetime.now(tz=pytz.utc).replace(
+                    timestamp=datetime.datetime.now(tz=datetime.timezone.utc).replace(
                         hour=0, minute=0, second=0, microsecond=0
                     ),
                     unit="Count",
@@ -2066,7 +2057,7 @@ class S3Backend(BaseBackend, CloudWatchMetricProvider):
                         # If delimiter, we need to split out folder_results
                         key_without_delimiter = key_without_prefix.split(delimiter)[0]
                         folder_results.add(
-                            "{0}{1}{2}".format(prefix, key_without_delimiter, delimiter)
+                            f"{prefix}{key_without_delimiter}{delimiter}"
                         )
                     else:
                         key_results.add(key)

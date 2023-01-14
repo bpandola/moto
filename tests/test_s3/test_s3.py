@@ -1023,9 +1023,7 @@ def test_policy():
                     "Effect": "Deny",
                     "Principal": "*",
                     "Action": "s3:PutObject",
-                    "Resource": "arn:aws:s3:::{bucket_name}/*".format(
-                        bucket_name=bucket_name
-                    ),
+                    "Resource": f"arn:aws:s3:::{bucket_name}/*",
                     "Condition": {
                         "StringNotEquals": {
                             "s3:x-amz-server-side-encryption": "aws:kms"
@@ -1104,7 +1102,7 @@ def test_website_redirect_location():
     resp = s3.get_object(Bucket="mybucket", Key="steve")
     resp.get("WebsiteRedirectLocation").should.equal(None)
 
-    url = "https://github.com/spulec/moto"
+    url = "https://github.com/getmoto/moto"
     s3.put_object(
         Bucket="mybucket", Key="steve", Body=b"is awesome", WebsiteRedirectLocation=url
     )
@@ -1206,7 +1204,7 @@ def test_list_objects_v2_common_prefix_pagination():
     s3.create_bucket(Bucket="mybucket")
 
     max_keys = 1
-    keys = ["test/{i}/{i}".format(i=i) for i in range(3)]
+    keys = [f"test/{i}/{i}" for i in range(3)]
     for key in keys:
         s3.put_object(Bucket="mybucket", Key=key, Body=b"v")
 
@@ -1235,7 +1233,7 @@ def test_list_objects_v2_common_invalid_continuation_token():
     s3.create_bucket(Bucket="mybucket")
 
     max_keys = 1
-    keys = ["test/{i}/{i}".format(i=i) for i in range(3)]
+    keys = [f"test/{i}/{i}" for i in range(3)]
     for key in keys:
         s3.put_object(Bucket="mybucket", Key=key, Body=b"v")
 
@@ -1396,6 +1394,36 @@ def test_list_objects_v2_truncate_combined_keys_and_folders():
     assert resp["Contents"][0]["Key"] == "4"
     assert len(resp["CommonPrefixes"]) == 1
     assert resp["CommonPrefixes"][0]["Prefix"] == "3/"
+
+
+@mock_s3
+def test_list_objects_v2_checksum_algo():
+    s3 = boto3.client("s3", region_name=DEFAULT_REGION_NAME)
+    s3.create_bucket(Bucket="mybucket")
+    resp = s3.put_object(Bucket="mybucket", Key="0", Body="a")
+    resp.should_not.have.key("ChecksumCRC32")
+    resp["ResponseMetadata"]["HTTPHeaders"].should_not.have.key(
+        "x-amz-sdk-checksum-algorithm"
+    )
+    resp = s3.put_object(
+        Bucket="mybucket", Key="1", Body="a", ChecksumAlgorithm="CRC32"
+    )
+    resp.should.have.key("ChecksumCRC32")
+    resp["ResponseMetadata"]["HTTPHeaders"][
+        "x-amz-sdk-checksum-algorithm"
+    ].should.equal("CRC32")
+    resp = s3.put_object(
+        Bucket="mybucket", Key="2", Body="b", ChecksumAlgorithm="SHA256"
+    )
+    resp.should.have.key("ChecksumSHA256")
+    resp["ResponseMetadata"]["HTTPHeaders"][
+        "x-amz-sdk-checksum-algorithm"
+    ].should.equal("SHA256")
+
+    resp = s3.list_objects_v2(Bucket="mybucket")["Contents"]
+    resp[0].should_not.have.key("ChecksumAlgorithm")
+    resp[1].should.have.key("ChecksumAlgorithm").equals(["CRC32"])
+    resp[2].should.have.key("ChecksumAlgorithm").equals(["SHA256"])
 
 
 @mock_s3
@@ -2139,11 +2167,9 @@ def test_put_bucket_notification_errors():
             s3.put_bucket_notification_configuration(
                 Bucket="bucket",
                 NotificationConfiguration={
-                    "{}Configurations".format(tech): [
+                    f"{tech}Configurations": [
                         {
-                            "{}Arn".format(
-                                tech
-                            ): "arn:aws:{}:us-east-1:012345678910:lksajdfkldskfj",
+                            f"{tech}Arn": "arn:aws:{}:us-east-1:012345678910:lksajdfkldskfj",
                             "Events": ["s3:ObjectCreated:*"],
                         }
                     ]
@@ -2280,13 +2306,13 @@ def test_put_bucket_logging():
         BucketLoggingStatus={
             "LoggingEnabled": {
                 "TargetBucket": log_bucket,
-                "TargetPrefix": "{}/".format(bucket_name),
+                "TargetPrefix": f"{bucket_name}/",
             }
         },
     )
     result = s3.get_bucket_logging(Bucket=bucket_name)
     assert result["LoggingEnabled"]["TargetBucket"] == log_bucket
-    assert result["LoggingEnabled"]["TargetPrefix"] == "{}/".format(bucket_name)
+    assert result["LoggingEnabled"]["TargetPrefix"] == f"{bucket_name}/"
     assert not result["LoggingEnabled"].get("TargetGrants")
 
     # And disabling:
@@ -2299,7 +2325,7 @@ def test_put_bucket_logging():
         BucketLoggingStatus={
             "LoggingEnabled": {
                 "TargetBucket": log_bucket,
-                "TargetPrefix": "{}/".format(bucket_name),
+                "TargetPrefix": f"{bucket_name}/",
                 "TargetGrants": [
                     {
                         "Grantee": {
@@ -2333,7 +2359,7 @@ def test_put_bucket_logging():
         BucketLoggingStatus={
             "LoggingEnabled": {
                 "TargetBucket": log_bucket,
-                "TargetPrefix": "{}/".format(bucket_name),
+                "TargetPrefix": f"{bucket_name}/",
                 "TargetGrants": [
                     {
                         "Grantee": {
@@ -2356,7 +2382,7 @@ def test_put_bucket_logging():
             BucketLoggingStatus={
                 "LoggingEnabled": {
                     "TargetBucket": log_bucket,
-                    "TargetPrefix": "{}/".format(bucket_name),
+                    "TargetPrefix": f"{bucket_name}/",
                     "TargetGrants": [
                         {
                             "Grantee": {
@@ -3074,7 +3100,7 @@ def test_creating_presigned_post():
     ]
     conditions.append(["content-length-range", 1, 30])
 
-    real_key = "{file_uid}.txt".format(file_uid=file_uid)
+    real_key = f"{file_uid}.txt"
     data = s3.generate_presigned_post(
         Bucket=bucket,
         Key=real_key,
@@ -3289,7 +3315,9 @@ if settings.TEST_SERVER_MODE:
 
 
 @mock_s3
-@pytest.mark.parametrize("prefix", ["file", "file+else", "file&another"])
+@pytest.mark.parametrize(
+    "prefix", ["file", "file+else", "file&another", "file another"]
+)
 def test_get_object_versions_with_prefix(prefix):
     bucket_name = "testbucket-3113"
     s3_resource = boto3.resource("s3", region_name=DEFAULT_REGION_NAME)
@@ -3417,7 +3445,7 @@ def test_head_object_should_return_default_content_type():
 
 @mock_s3
 def test_request_partial_content_should_contain_all_metadata():
-    # github.com/spulec/moto/issues/4203
+    # github.com/getmoto/moto/issues/4203
     bucket = "bucket"
     object_key = "key"
     body = "some text"
@@ -3428,12 +3456,12 @@ def test_request_partial_content_should_contain_all_metadata():
     obj = boto3.resource("s3").Object(bucket, object_key)
     obj.put(Body=body)
 
-    response = obj.get(Range="bytes={}".format(query_range))
+    response = obj.get(Range=f"bytes={query_range}")
 
     assert response["ETag"] == obj.e_tag
     assert response["LastModified"] == obj.last_modified
     assert response["ContentLength"] == 4
-    assert response["ContentRange"] == "bytes {}/{}".format(query_range, len(body))
+    assert response["ContentRange"] == f"bytes {query_range}/{len(body)}"
 
 
 @mock_s3

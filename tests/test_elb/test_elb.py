@@ -248,7 +248,7 @@ def test_describe_paginated_balancers():
 
     for i in range(51):
         client.create_load_balancer(
-            LoadBalancerName="my-lb%d" % i,
+            LoadBalancerName=f"my-lb{i}",
             Listeners=[
                 {"Protocol": "tcp", "LoadBalancerPort": 80, "InstancePort": 8080}
             ],
@@ -931,6 +931,17 @@ def test_describe_instance_health__with_instance_ids():
     # The third instance was stopped
     instances_health[2]["InstanceId"].should.equal(instance_ids[2])
     instances_health[2]["State"].should.equal("OutOfService")
+
+
+@mock_elb
+def test_describe_instance_health_of_unknown_lb():
+    elb = boto3.client("elb", region_name="us-east-1")
+
+    with pytest.raises(ClientError) as exc:
+        elb.describe_instance_health(LoadBalancerName="what")
+    err = exc.value.response["Error"]
+    err["Code"].should.equal("LoadBalancerNotFound")
+    err["Message"].should.equal("There is no ACTIVE Load Balancer named 'what'")
 
 
 @mock_elb

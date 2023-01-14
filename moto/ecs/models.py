@@ -1,8 +1,7 @@
 import re
 from copy import copy
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
-import pytz
 
 from moto import settings
 from moto.core import BaseBackend, BackendDict, BaseModel, CloudFormationModel
@@ -422,7 +421,7 @@ class Service(BaseObject, CloudFormationModel):
         if self.deployment_controller["type"] == "ECS":
             self.deployments = [
                 {
-                    "createdAt": datetime.now(pytz.utc),
+                    "createdAt": datetime.now(timezone.utc),
                     "desiredCount": self.desired_count,
                     "id": f"ecs-svc/{mock_random.randint(0, 32**12)}",
                     "launchType": self.launch_type,
@@ -430,7 +429,7 @@ class Service(BaseObject, CloudFormationModel):
                     "runningCount": 0,
                     "status": "PRIMARY",
                     "taskDefinition": self.task_definition,
-                    "updatedAt": datetime.now(pytz.utc),
+                    "updatedAt": datetime.now(timezone.utc),
                 }
             ]
         else:
@@ -651,7 +650,7 @@ class ContainerInstance(BaseObject):
             if ec2_instance.platform == "windows"
             else "linux",  # options are windows and linux, linux is default
         }
-        self.registered_at = datetime.now(pytz.utc)
+        self.registered_at = datetime.now(timezone.utc)
         self.region_name = region_name
         self.id = str(mock_random.uuid4())
         self.cluster_name = cluster_name
@@ -748,9 +747,9 @@ class TaskSet(BaseObject):
         self.client_token = client_token or ""
         self.tags = tags or []
         self.stabilityStatus = "STEADY_STATE"
-        self.createdAt = datetime.now(pytz.utc)
-        self.updatedAt = datetime.now(pytz.utc)
-        self.stabilityStatusAt = datetime.now(pytz.utc)
+        self.createdAt = datetime.now(timezone.utc)
+        self.updatedAt = datetime.now(timezone.utc)
+        self.stabilityStatusAt = datetime.now(timezone.utc)
         self.id = f"ecs-svc/{mock_random.randint(0, 32**12)}"
         self.service_arn = ""
         self.cluster_arn = ""
@@ -1144,6 +1143,7 @@ class EC2ContainerServiceBackend(BaseBackend):
         container_instances,
         overrides,
         started_by,
+        tags=None,
     ):
         cluster = self._get_cluster(cluster_str)
 
@@ -1170,6 +1170,7 @@ class EC2ContainerServiceBackend(BaseBackend):
                 backend=self,
                 overrides=overrides or {},
                 started_by=started_by or "",
+                tags=tags,
             )
             tasks.append(task)
             self.update_container_instance_resources(
@@ -1178,7 +1179,10 @@ class EC2ContainerServiceBackend(BaseBackend):
             self.tasks[cluster.name][task.task_arn] = task
         return tasks
 
-    def describe_tasks(self, cluster_str, tasks):
+    def describe_tasks(self, cluster_str, tasks, include=None):
+        """
+        Only include=TAGS is currently supported.
+        """
         self._get_cluster(cluster_str)
 
         if not tasks:
@@ -1193,6 +1197,11 @@ class EC2ContainerServiceBackend(BaseBackend):
                     or any(task_id in task for task in tasks)
                 ):
                     response.append(task)
+        if "TAGS" in (include or []):
+            return response
+
+        for task in response:
+            task.tags = []
         return response
 
     def list_tasks(

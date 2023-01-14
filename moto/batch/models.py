@@ -39,6 +39,7 @@ logger = logging.getLogger(__name__)
 COMPUTE_ENVIRONMENT_NAME_REGEX = re.compile(
     r"^[A-Za-z0-9][A-Za-z0-9_-]{1,126}[A-Za-z0-9]$"
 )
+JOB_NAME_REGEX = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{1,127}$")
 
 
 def datetime2int_milliseconds(date: datetime.datetime) -> int:
@@ -472,6 +473,8 @@ class Job(threading.Thread, BaseModel, DockerModel, ManagedState):
         self.name = "MOTO-BATCH-" + self.job_id
 
         self._log_backend = log_backend
+        self._log_group = "/aws/batch/job"
+        self._stream_name = f"{self.job_definition.name}/default/{self.job_id}"
         self.log_stream_name: Optional[str] = None
 
         self.attempts: List[Dict[str, Any]] = []
@@ -725,15 +728,15 @@ class Job(threading.Thread, BaseModel, DockerModel, ManagedState):
                     )
                     date = unix_time_millis(date_obj)
                     logs.append({"timestamp": date, "message": line.strip()})
-                logs = sorted(logs, key=lambda l: l["timestamp"])
+                logs = sorted(logs, key=lambda log: log["timestamp"])
 
                 # Send to cloudwatch
-                log_group = "/aws/batch/job"
-                stream_name = f"{self.job_definition.name}/default/{self.job_id}"
-                self.log_stream_name = stream_name
-                self._log_backend.ensure_log_group(log_group, None)
-                self._log_backend.create_log_stream(log_group, stream_name)
-                self._log_backend.put_log_events(log_group, stream_name, logs)
+                self.log_stream_name = self._stream_name
+                self._log_backend.ensure_log_group(self._log_group, None)
+                self._log_backend.create_log_stream(self._log_group, self._stream_name)
+                self._log_backend.put_log_events(
+                    self._log_group, self._stream_name, logs
+                )
 
                 result = container.wait() or {}
                 exit_code = result.get("StatusCode", 0)
@@ -1523,6 +1526,9 @@ class BatchBackend(BaseBackend):
         """
         Parameters RetryStrategy and Parameters are not yet implemented.
         """
+        if JOB_NAME_REGEX.match(job_name) is None:
+            raise ClientException("Job name should match valid pattern")
+
         # Look for job definition
         job_def = self.get_job_definition(job_def_id)
         if job_def is None:
@@ -1599,11 +1605,11 @@ class BatchBackend(BaseBackend):
     def cancel_job(self, job_id: str, reason: str) -> None:
         if job_id == "":
             raise ClientException(
-                "'reason' is a required field (cannot be an empty string)"
+                "'jobId' is a required field (cannot be an empty string)"
             )
         if reason == "":
             raise ClientException(
-                "'jobId' is a required field (cannot be an empty string)"
+                "'reason' is a required field (cannot be an empty string)"
             )
 
         job = self.get_job_by_id(job_id)
@@ -1615,11 +1621,11 @@ class BatchBackend(BaseBackend):
     def terminate_job(self, job_id: str, reason: str) -> None:
         if job_id == "":
             raise ClientException(
-                "'reason' is a required field (cannot be a empty string)"
+                "'jobId' is a required field (cannot be a empty string)"
             )
         if reason == "":
             raise ClientException(
-                "'jobId' is a required field (cannot be a empty string)"
+                "'reason' is a required field (cannot be a empty string)"
             )
 
         job = self.get_job_by_id(job_id)

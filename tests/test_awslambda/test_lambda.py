@@ -1,4 +1,7 @@
 import base64
+import json
+import os
+from unittest import SkipTest
 import botocore.client
 import boto3
 import hashlib
@@ -7,14 +10,17 @@ import pytest
 
 from botocore.exceptions import ClientError
 from freezegun import freeze_time
-from moto import mock_lambda, mock_s3
+from tests.test_ecr.test_ecr_helpers import _create_image_manifest
+from moto import mock_lambda, mock_s3, mock_ecr, settings
 from moto.core import DEFAULT_ACCOUNT_ID as ACCOUNT_ID
 from uuid import uuid4
 from .utilities import (
     get_role_name,
     get_test_zip_file1,
     get_test_zip_file2,
+    get_test_zip_file3,
     create_invalid_lambda,
+    _process_lambda,
 )
 
 _lambda_region = "us-west-2"
@@ -60,17 +66,13 @@ def test_list_functions():
     v1 = [f for f in our_functions if f["Version"] == "1"][0]
     v1["Description"].should.equal("v2")
     v1["FunctionArn"].should.equal(
-        "arn:aws:lambda:{}:{}:function:{}:1".format(
-            _lambda_region, ACCOUNT_ID, function_name
-        )
+        f"arn:aws:lambda:{_lambda_region}:{ACCOUNT_ID}:function:{function_name}:1"
     )
 
     latest = [f for f in our_functions if f["Version"] == "$LATEST"][0]
     latest["Description"].should.equal("")
     latest["FunctionArn"].should.equal(
-        "arn:aws:lambda:{}:{}:function:{}:$LATEST".format(
-            _lambda_region, ACCOUNT_ID, function_name
-        )
+        f"arn:aws:lambda:{_lambda_region}:{ACCOUNT_ID}:function:{function_name}:$LATEST"
     )
 
 
@@ -125,9 +127,7 @@ def test_create_function_from_aws_bucket():
 
     result.should.have.key("FunctionName").equals(function_name)
     result.should.have.key("FunctionArn").equals(
-        "arn:aws:lambda:{}:{}:function:{}".format(
-            _lambda_region, ACCOUNT_ID, function_name
-        )
+        f"arn:aws:lambda:{_lambda_region}:{ACCOUNT_ID}:function:{function_name}"
     )
     result.should.have.key("Runtime").equals("python2.7")
     result.should.have.key("Handler").equals("lambda_function.lambda_handler")
@@ -163,9 +163,7 @@ def test_create_function_from_zipfile():
     result.should.equal(
         {
             "FunctionName": function_name,
-            "FunctionArn": "arn:aws:lambda:{}:{}:function:{}".format(
-                _lambda_region, ACCOUNT_ID, function_name
-            ),
+            "FunctionArn": f"arn:aws:lambda:{_lambda_region}:{ACCOUNT_ID}:function:{function_name}",
             "Runtime": "python2.7",
             "Role": result["Role"],
             "Handler": "lambda_function.lambda_handler",
@@ -213,11 +211,29 @@ def test_create_function__with_tracingmode(tracing_mode):
     result.should.have.key("TracingConfig").should.equal({"Mode": output})
 
 
+@pytest.fixture(name="with_ecr_mock")
+def ecr_repo_fixture():
+    with mock_ecr():
+        os.environ["MOTO_LAMBDA_STUB_ECR"] = "FALSE"
+        repo_name = "testlambdaecr"
+        ecr_client = ecr_client = boto3.client("ecr", "us-east-1")
+        ecr_client.create_repository(repositoryName=repo_name)
+        response = ecr_client.put_image(
+            repositoryName=repo_name,
+            imageManifest=json.dumps(_create_image_manifest()),
+            imageTag="latest",
+        )
+        yield response["image"]["imageId"]
+        ecr_client.delete_repository(repositoryName=repo_name, force=True)
+        os.environ["MOTO_LAMBDA_STUB_ECR"] = "TRUE"
+
+
 @mock_lambda
-def test_create_function_from_image():
+def test_create_function_from_stubbed_ecr():
     lambda_client = boto3.client("lambda", "us-east-1")
     fn_name = str(uuid4())[0:6]
     image_uri = "111122223333.dkr.ecr.us-east-1.amazonaws.com/testlambda:latest"
+
     dic = {
         "FunctionName": fn_name,
         "Role": get_role_name(),
@@ -225,6 +241,7 @@ def test_create_function_from_image():
         "PackageType": "Image",
         "Timeout": 100,
     }
+
     resp = lambda_client.create_function(**dic)
 
     resp.should.have.key("FunctionName").equals(fn_name)
@@ -242,6 +259,111 @@ def test_create_function_from_image():
     image_uri_without_tag = image_uri.split(":")[0]
     resolved_image_uri = f"{image_uri_without_tag}@sha256:{config['CodeSha256']}"
     code.should.have.key("ResolvedImageUri").equals(resolved_image_uri)
+
+
+@mock_lambda
+def test_create_function_from_mocked_ecr_image_tag(
+    with_ecr_mock,
+):  # pylint: disable=unused-argument
+    if settings.TEST_SERVER_MODE:
+        raise SkipTest(
+            "Envars not easily set in server mode, feature off by default, skipping..."
+        )
+
+    lambda_client = boto3.client("lambda", "us-east-1")
+    fn_name = str(uuid4())[0:6]
+    image = with_ecr_mock
+    image_uri = f"{ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/testlambdaecr:{image['imageTag']}"
+
+    dic = {
+        "FunctionName": fn_name,
+        "Role": get_role_name(),
+        "Code": {"ImageUri": image_uri},
+        "PackageType": "Image",
+        "Timeout": 100,
+    }
+    resp = lambda_client.create_function(**dic)
+
+    resp.should.have.key("FunctionName").equals(fn_name)
+    resp.should.have.key("CodeSize").greater_than(0)
+    resp.should.have.key("CodeSha256")
+    resp.should.have.key("PackageType").equals("Image")
+
+    result = lambda_client.get_function(FunctionName=fn_name)
+    result.should.have.key("Configuration")
+    config = result["Configuration"]
+    config.should.have.key("CodeSha256").equals(
+        image["imageDigest"].replace("sha256:", "")
+    )
+    config.should.have.key("CodeSize").equals(resp["CodeSize"])
+    result.should.have.key("Code")
+    code = result["Code"]
+    code.should.have.key("RepositoryType").equals("ECR")
+    code.should.have.key("ImageUri").equals(image_uri)
+    image_uri_without_tag = image_uri.split(":")[0]
+    resolved_image_uri = f"{image_uri_without_tag}@sha256:{config['CodeSha256']}"
+    code.should.have.key("ResolvedImageUri").equals(resolved_image_uri)
+
+
+@mock_lambda
+def test_create_function_from_mocked_ecr_image_digest(
+    with_ecr_mock,
+):  # pylint: disable=unused-argument
+    if settings.TEST_SERVER_MODE:
+        raise SkipTest(
+            "Envars not easily set in server mode, feature off by default, skipping..."
+        )
+    lambda_client = boto3.client("lambda", "us-east-1")
+    fn_name = str(uuid4())[0:6]
+    image = with_ecr_mock
+    image_uri = f"{ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/testlambdaecr@{image['imageDigest']}"
+
+    dic = {
+        "FunctionName": fn_name,
+        "Role": get_role_name(),
+        "Code": {"ImageUri": image_uri},
+        "PackageType": "Image",
+        "Timeout": 100,
+    }
+    resp = lambda_client.create_function(**dic)
+    resp.should.have.key("FunctionName").equals(fn_name)
+    resp.should.have.key("CodeSize").greater_than(0)
+    resp.should.have.key("CodeSha256").equals(
+        image["imageDigest"].replace("sha256:", "")
+    )
+    resp.should.have.key("PackageType").equals("Image")
+
+
+@mock_lambda
+def test_create_function_from_mocked_ecr_missing_image(
+    with_ecr_mock,
+):  # pylint: disable=unused-argument
+    if settings.TEST_SERVER_MODE:
+        raise SkipTest(
+            "Envars not easily set in server mode, feature off by default, skipping..."
+        )
+
+    lambda_client = boto3.client("lambda", "us-east-1")
+
+    fn_name = str(uuid4())[0:6]
+    image_uri = f"{ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/testlambdaecr:dne"
+
+    dic = {
+        "FunctionName": fn_name,
+        "Role": get_role_name(),
+        "Code": {"ImageUri": image_uri},
+        "PackageType": "Image",
+        "Timeout": 100,
+    }
+
+    with pytest.raises(ClientError) as exc:
+        lambda_client.create_function(**dic)
+
+    err = exc.value.response["Error"]
+    err["Code"].should.equal("ImageNotFoundException")
+    err["Message"].should.equal(
+        "The image with imageId {'imageTag': 'dne'} does not exist within the repository with name 'testlambdaecr' in the registry with id '123456789012'"
+    )
 
 
 @mock_lambda
@@ -281,7 +403,7 @@ def test_get_function():
     result["Configuration"].pop("LastModified")
 
     result["Code"]["Location"].should.equal(
-        "s3://awslambda-{0}-tasks.s3-{0}.amazonaws.com/test.zip".format(_lambda_region)
+        f"s3://awslambda-{_lambda_region}-tasks.s3-{_lambda_region}.amazonaws.com/test.zip"
     )
     result["Code"]["RepositoryType"].should.equal("S3")
 
@@ -309,9 +431,7 @@ def test_get_function():
     result = conn.get_function(FunctionName=function_name, Qualifier="$LATEST")
     result["Configuration"]["Version"].should.equal("$LATEST")
     result["Configuration"]["FunctionArn"].should.equal(
-        "arn:aws:lambda:us-west-2:{}:function:{}:$LATEST".format(
-            ACCOUNT_ID, function_name
-        )
+        f"arn:aws:lambda:us-west-2:{ACCOUNT_ID}:function:{function_name}:$LATEST"
     )
 
     # Test get function when can't find function name
@@ -376,9 +496,7 @@ def test_get_function_configuration(key):
     )
     result["Version"].should.equal("$LATEST")
     result["FunctionArn"].should.equal(
-        "arn:aws:lambda:{}:{}:function:{}:$LATEST".format(
-            _lambda_region, ACCOUNT_ID, function_name
-        )
+        f"arn:aws:lambda:{_lambda_region}:{ACCOUNT_ID}:function:{function_name}:$LATEST"
     )
 
     # Test get function when can't find function name
@@ -591,7 +709,7 @@ def test_publish():
 
     # #SetComprehension ;-)
     published_arn = list({f["FunctionArn"] for f in our_functions} - {latest_arn})[0]
-    published_arn.should.contain("{}:1".format(function_name))
+    published_arn.should.contain(f"{function_name}:1")
 
     conn.delete_function(FunctionName=function_name, Qualifier="1")
 
@@ -639,9 +757,7 @@ def test_list_create_list_get_delete_list():
     )
     expected_function_result = {
         "Code": {
-            "Location": "s3://awslambda-{0}-tasks.s3-{0}.amazonaws.com/test.zip".format(
-                _lambda_region
-            ),
+            "Location": f"s3://awslambda-{_lambda_region}-tasks.s3-{_lambda_region}.amazonaws.com/test.zip",
             "RepositoryType": "S3",
         },
         "Configuration": {
@@ -673,9 +789,7 @@ def test_list_create_list_get_delete_list():
         f["FunctionArn"] for f in functions if f["FunctionName"] == function_name
     ][0]
     func_arn.should.equal(
-        "arn:aws:lambda:{}:{}:function:{}".format(
-            _lambda_region, ACCOUNT_ID, function_name
-        )
+        f"arn:aws:lambda:{_lambda_region}:{ACCOUNT_ID}:function:{function_name}"
     )
     functions = conn.list_functions(FunctionVersion="ALL")["Functions"]
     our_functions = [f for f in functions if f["FunctionName"] == function_name]
@@ -683,9 +797,7 @@ def test_list_create_list_get_delete_list():
 
     latest = [f for f in our_functions if f["Version"] == "$LATEST"][0]
     latest["FunctionArn"].should.equal(
-        "arn:aws:lambda:{}:{}:function:{}:$LATEST".format(
-            _lambda_region, ACCOUNT_ID, function_name
-        )
+        f"arn:aws:lambda:{_lambda_region}:{ACCOUNT_ID}:function:{function_name}:$LATEST"
     )
     latest.pop("FunctionArn")
     latest.pop("LastModified")
@@ -694,17 +806,13 @@ def test_list_create_list_get_delete_list():
     published = [f for f in our_functions if f["Version"] != "$LATEST"][0]
     published["Version"].should.equal("1")
     published["FunctionArn"].should.equal(
-        "arn:aws:lambda:{}:{}:function:{}:1".format(
-            _lambda_region, ACCOUNT_ID, function_name
-        )
+        f"arn:aws:lambda:{_lambda_region}:{ACCOUNT_ID}:function:{function_name}:1"
     )
 
     func = conn.get_function(FunctionName=function_name)
 
     func["Configuration"]["FunctionArn"].should.equal(
-        "arn:aws:lambda:{}:{}:function:{}".format(
-            _lambda_region, ACCOUNT_ID, function_name
-        )
+        f"arn:aws:lambda:{_lambda_region}:{ACCOUNT_ID}:function:{function_name}"
     )
 
     # this is hard to match against, so remove it
@@ -746,7 +854,7 @@ def test_get_function_created_with_zipfile():
     assert len(response["Code"]) == 2
     assert response["Code"]["RepositoryType"] == "S3"
     assert response["Code"]["Location"].startswith(
-        "s3://awslambda-{0}-tasks.s3-{0}.amazonaws.com".format(_lambda_region)
+        f"s3://awslambda-{_lambda_region}-tasks.s3-{_lambda_region}.amazonaws.com"
     )
     response.should.have.key("Configuration")
     config = response["Configuration"]
@@ -796,22 +904,24 @@ def test_list_versions_by_function():
         MemorySize=128,
         Publish=True,
     )
+    conn.update_function_code(FunctionName=function_name, ZipFile=get_test_zip_file1())
 
     res = conn.publish_version(FunctionName=function_name)
     assert res["ResponseMetadata"]["HTTPStatusCode"] == 201
     versions = conn.list_versions_by_function(FunctionName=function_name)
     assert len(versions["Versions"]) == 3
-    assert versions["Versions"][0][
-        "FunctionArn"
-    ] == "arn:aws:lambda:us-west-2:{}:function:{}:$LATEST".format(
-        ACCOUNT_ID, function_name
+    assert (
+        versions["Versions"][0]["FunctionArn"]
+        == f"arn:aws:lambda:us-west-2:{ACCOUNT_ID}:function:{function_name}:$LATEST"
     )
-    assert versions["Versions"][1][
-        "FunctionArn"
-    ] == "arn:aws:lambda:us-west-2:{}:function:{}:1".format(ACCOUNT_ID, function_name)
-    assert versions["Versions"][2][
-        "FunctionArn"
-    ] == "arn:aws:lambda:us-west-2:{}:function:{}:2".format(ACCOUNT_ID, function_name)
+    assert (
+        versions["Versions"][1]["FunctionArn"]
+        == f"arn:aws:lambda:us-west-2:{ACCOUNT_ID}:function:{function_name}:1"
+    )
+    assert (
+        versions["Versions"][2]["FunctionArn"]
+        == f"arn:aws:lambda:us-west-2:{ACCOUNT_ID}:function:{function_name}:2"
+    )
 
     conn.create_function(
         FunctionName="testFunction_2",
@@ -826,10 +936,9 @@ def test_list_versions_by_function():
     )
     versions = conn.list_versions_by_function(FunctionName="testFunction_2")
     assert len(versions["Versions"]) == 1
-    assert versions["Versions"][0][
-        "FunctionArn"
-    ] == "arn:aws:lambda:us-west-2:{}:function:testFunction_2:$LATEST".format(
-        ACCOUNT_ID
+    assert (
+        versions["Versions"][0]["FunctionArn"]
+        == f"arn:aws:lambda:us-west-2:{ACCOUNT_ID}:function:testFunction_2:$LATEST"
     )
 
 
@@ -967,12 +1076,14 @@ def test_update_function_zip(key):
         Publish=True,
     )
     name_or_arn = fxn[key]
+    first_sha = fxn["CodeSha256"]
 
     zip_content_two = get_test_zip_file2()
 
-    conn.update_function_code(
+    update1 = conn.update_function_code(
         FunctionName=name_or_arn, ZipFile=zip_content_two, Publish=True
     )
+    update1["CodeSha256"].shouldnt.equal(first_sha)
 
     response = conn.get_function(FunctionName=function_name, Qualifier="2")
 
@@ -980,7 +1091,7 @@ def test_update_function_zip(key):
     assert len(response["Code"]) == 2
     assert response["Code"]["RepositoryType"] == "S3"
     assert response["Code"]["Location"].startswith(
-        "s3://awslambda-{0}-tasks.s3-{0}.amazonaws.com".format(_lambda_region)
+        f"s3://awslambda-{_lambda_region}-tasks.s3-{_lambda_region}.amazonaws.com"
     )
 
     config = response["Configuration"]
@@ -992,6 +1103,30 @@ def test_update_function_zip(key):
     config.should.have.key("FunctionName").equals(function_name)
     config.should.have.key("Version").equals("2")
     config.should.have.key("LastUpdateStatus").equals("Successful")
+    config.should.have.key("CodeSha256").equals(update1["CodeSha256"])
+
+    most_recent_config = conn.get_function(FunctionName=function_name)
+    most_recent_config["Configuration"]["CodeSha256"].should.equal(
+        update1["CodeSha256"]
+    )
+
+    # Publishing this again, with the same code, gives us the same version
+    same_update = conn.update_function_code(
+        FunctionName=name_or_arn, ZipFile=zip_content_two, Publish=True
+    )
+    same_update["FunctionArn"].should.equal(
+        most_recent_config["Configuration"]["FunctionArn"] + ":2"
+    )
+    same_update["Version"].should.equal("2")
+
+    # Only when updating the code should we have a new version
+    new_update = conn.update_function_code(
+        FunctionName=name_or_arn, ZipFile=get_test_zip_file3(), Publish=True
+    )
+    new_update["FunctionArn"].should.equal(
+        most_recent_config["Configuration"]["FunctionArn"] + ":3"
+    )
+    new_update["Version"].should.equal("3")
 
 
 @mock_lambda
@@ -1038,7 +1173,7 @@ def test_update_function_s3():
     assert len(response["Code"]) == 2
     assert response["Code"]["RepositoryType"] == "S3"
     assert response["Code"]["Location"].startswith(
-        "s3://awslambda-{0}-tasks.s3-{0}.amazonaws.com".format(_lambda_region)
+        f"s3://awslambda-{_lambda_region}-tasks.s3-{_lambda_region}.amazonaws.com"
     )
 
     config = response["Configuration"]
@@ -1117,6 +1252,8 @@ def test_multiple_qualifiers():
     )
 
     for _ in range(10):
+        new_zip = _process_lambda(f"func content {_}")
+        client.update_function_code(FunctionName=fn_name, ZipFile=new_zip)
         client.publish_version(FunctionName=fn_name)
 
     resp = client.list_versions_by_function(FunctionName=fn_name)["Versions"]

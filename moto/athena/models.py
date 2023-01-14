@@ -90,7 +90,21 @@ class Execution(BaseModel):
         self.config = config
         self.workgroup = workgroup
         self.start_time = time.time()
-        self.status = "QUEUED"
+        self.status = "SUCCEEDED"
+
+
+class QueryResults(BaseModel):
+    def __init__(self, rows: List[Dict[str, Any]], column_info: List[Dict[str, str]]):
+        self.rows = rows
+        self.column_info = column_info
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "ResultSet": {
+                "Rows": self.rows,
+                "ResultSetMetadata": {"ColumnInfo": self.column_info},
+            },
+        }
 
 
 class NamedQuery(BaseModel):
@@ -117,6 +131,7 @@ class AthenaBackend(BaseBackend):
         self.executions: Dict[str, Execution] = {}
         self.named_queries: Dict[str, NamedQuery] = {}
         self.data_catalogs: Dict[str, DataCatalog] = {}
+        self.query_results: Dict[str, QueryResults] = {}
 
     @staticmethod
     def default_vpc_endpoint_service(
@@ -172,8 +187,48 @@ class AthenaBackend(BaseBackend):
         self.executions[execution.id] = execution
         return execution.id
 
-    def get_execution(self, exec_id: str) -> Execution:
+    def get_query_execution(self, exec_id: str) -> Execution:
         return self.executions[exec_id]
+
+    def list_query_executions(self) -> Dict[str, Execution]:
+        return self.executions
+
+    def get_query_results(self, exec_id: str) -> QueryResults:
+        """
+        Queries are not executed, so this call will always return 0 rows by default.
+
+        When using decorators, you can use the internal API to manually set results:
+
+        .. sourcecode:: python
+
+            from moto.athena.models import athena_backends, QueryResults
+            from moto.core import DEFAULT_ACCOUNT_ID
+
+            backend = athena_backends[DEFAULT_ACCOUNT_ID]["us-east-1"]
+            rows = [{'Data': [{'VarCharValue': '..'}]}]
+            column_info = [{
+                              'CatalogName': 'string',
+                              'SchemaName': 'string',
+                              'TableName': 'string',
+                              'Name': 'string',
+                              'Label': 'string',
+                              'Type': 'string',
+                              'Precision': 123,
+                              'Scale': 123,
+                              'Nullable': 'NOT_NULL',
+                              'CaseSensitive': True
+                          }]
+            results = QueryResults(rows=rows, column_info=column_info)
+            backend.query_results["test"] = results
+
+            result = client.get_query_results(QueryExecutionId="test")
+        """
+        results = (
+            self.query_results[exec_id]
+            if exec_id in self.query_results
+            else QueryResults(rows=[], column_info=[])
+        )
+        return results
 
     def stop_query_execution(self, exec_id: str) -> None:
         execution = self.executions[exec_id]

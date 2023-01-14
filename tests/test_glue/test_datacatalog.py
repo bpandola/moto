@@ -6,8 +6,7 @@ import boto3
 from botocore.client import ClientError
 
 
-from datetime import datetime
-import pytz
+from datetime import datetime, timezone
 from freezegun import freeze_time
 
 from moto import mock_glue, settings
@@ -480,14 +479,14 @@ def test_create_partition():
 
     helpers.create_table(client, database_name, table_name)
 
-    before = datetime.now(pytz.utc)
+    before = datetime.now(timezone.utc)
 
     part_input = helpers.create_partition_input(
         database_name, table_name, values=values
     )
     helpers.create_partition(client, database_name, table_name, part_input)
 
-    after = datetime.now(pytz.utc)
+    after = datetime.now(timezone.utc)
 
     response = client.get_partitions(DatabaseName=database_name, TableName=table_name)
 
@@ -548,11 +547,11 @@ def test_batch_create_partition():
 
     helpers.create_table(client, database_name, table_name)
 
-    before = datetime.now(pytz.utc)
+    before = datetime.now(timezone.utc)
 
     partition_inputs = []
     for i in range(0, 20):
-        values = ["2018-10-{:2}".format(i)]
+        values = [f"2018-10-{i:2}"]
         part_input = helpers.create_partition_input(
             database_name, table_name, values=values
         )
@@ -564,7 +563,7 @@ def test_batch_create_partition():
         PartitionInputList=partition_inputs,
     )
 
-    after = datetime.now(pytz.utc)
+    after = datetime.now(timezone.utc)
 
     response = client.get_partitions(DatabaseName=database_name, TableName=table_name)
 
@@ -994,7 +993,7 @@ def test_batch_delete_partition():
 
     partition_inputs = []
     for i in range(0, 20):
-        values = ["2018-10-{:2}".format(i)]
+        values = [f"2018-10-{i:2}"]
         part_input = helpers.create_partition_input(
             database_name, table_name, values=values
         )
@@ -1027,7 +1026,7 @@ def test_batch_delete_partition_with_bad_partitions():
 
     partition_inputs = []
     for i in range(0, 20):
-        values = ["2018-10-{:2}".format(i)]
+        values = [f"2018-10-{i:2}"]
         part_input = helpers.create_partition_input(
             database_name, table_name, values=values
         )

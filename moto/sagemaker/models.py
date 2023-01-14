@@ -1,6 +1,9 @@
 import json
 import os
+import random
+import string
 from datetime import datetime
+
 from moto.core import BaseBackend, BackendDict, BaseModel, CloudFormationModel
 from moto.sagemaker import validators
 from moto.utilities.paginator import paginate
@@ -10,6 +13,12 @@ from .exceptions import (
     AWSValidationException,
     ResourceNotFound,
 )
+from .utils import (
+    get_pipeline_from_name,
+    get_pipeline_execution_from_arn,
+    get_pipeline_name_from_execution_arn,
+)
+from .utils import load_pipeline_definition_from_s3, arn_formatter
 
 
 PAGINATION_MODEL = {
@@ -44,10 +53,6 @@ PAGINATION_MODEL = {
 }
 
 
-def arn_formatter(_type, _id, account_id, region_name):
-    return f"arn:aws:sagemaker:{region_name}:{account_id}:{_type}/{_id}"
-
-
 class BaseObject(BaseModel):
     def camelCase(self, key):
         words = []
@@ -72,6 +77,101 @@ class BaseObject(BaseModel):
     @property
     def response_object(self):
         return self.gen_response_object()
+
+
+class FakePipelineExecution(BaseObject):
+    def __init__(
+        self,
+        pipeline_execution_arn,
+        pipeline_execution_display_name,
+        pipeline_parameters,
+        pipeline_execution_description,
+        parallelism_configuration,
+        pipeline_definition,
+    ):
+        self.pipeline_execution_arn = pipeline_execution_arn
+        self.pipeline_execution_display_name = pipeline_execution_display_name
+        self.pipeline_parameters = pipeline_parameters
+        self.pipeline_execution_description = pipeline_execution_description
+        self.pipeline_execution_status = "Succeeded"
+        self.pipeline_execution_failure_reason = None
+        self.parallelism_configuration = parallelism_configuration
+        self.pipeline_definition_for_execution = pipeline_definition
+
+        now_string = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        self.creation_time = now_string
+        self.last_modified_time = now_string
+        self.start_time = now_string
+
+        fake_user_profile_name = "fake-user-profile-name"
+        fake_domain_id = "fake-domain-id"
+        fake_user_profile_arn = arn_formatter(
+            "user-profile",
+            f"{fake_domain_id}/{fake_user_profile_name}",
+            pipeline_execution_arn.split(":")[4],
+            pipeline_execution_arn.split(":")[3],
+        )
+        self.created_by = {
+            "UserProfileArn": fake_user_profile_arn,
+            "UserProfileName": fake_user_profile_name,
+            "DomainId": fake_domain_id,
+        }
+        self.last_modified_by = {
+            "UserProfileArn": fake_user_profile_arn,
+            "UserProfileName": fake_user_profile_name,
+            "DomainId": fake_domain_id,
+        }
+
+
+class FakePipeline(BaseObject):
+    def __init__(
+        self,
+        pipeline_name,
+        pipeline_display_name,
+        pipeline_definition,
+        pipeline_description,
+        role_arn,
+        tags,
+        account_id,
+        region_name,
+        parallelism_configuration,
+    ):
+        self.pipeline_name = pipeline_name
+        self.pipeline_arn = arn_formatter(
+            "pipeline", pipeline_name, account_id, region_name
+        )
+        self.pipeline_display_name = pipeline_display_name or pipeline_name
+        self.pipeline_definition = pipeline_definition
+        self.pipeline_description = pipeline_description
+        self.pipeline_executions = dict()
+        self.role_arn = role_arn
+        self.tags = tags or []
+        self.parallelism_configuration = parallelism_configuration
+
+        now_string = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        self.creation_time = now_string
+        self.last_modified_time = now_string
+        self.last_execution_time = None
+
+        self.pipeline_status = "Active"
+        fake_user_profile_name = "fake-user-profile-name"
+        fake_domain_id = "fake-domain-id"
+        fake_user_profile_arn = arn_formatter(
+            "user-profile",
+            f"{fake_domain_id}/{fake_user_profile_name}",
+            account_id,
+            region_name,
+        )
+        self.created_by = {
+            "UserProfileArn": fake_user_profile_arn,
+            "UserProfileName": fake_user_profile_name,
+            "DomainId": fake_domain_id,
+        }
+        self.last_modified_by = {
+            "UserProfileArn": fake_user_profile_arn,
+            "UserProfileName": fake_user_profile_name,
+            "DomainId": fake_domain_id,
+        }
 
 
 class FakeProcessingJob(BaseObject):
@@ -406,9 +506,7 @@ class FakeEndpointConfig(BaseObject, CloudFormationModel):
             elif "ServerlessConfig" in production_variant.keys():
                 self.validate_serverless_config(production_variant["ServerlessConfig"])
             else:
-                message = "Invalid Keys for ProductionVariant: received {} but expected it to contain one of {}".format(
-                    production_variant.keys(), ["InstanceType", "ServerlessConfig"]
-                )
+                message = f"Invalid Keys for ProductionVariant: received {production_variant.keys()} but expected it to contain one of {['InstanceType', 'ServerlessConfig']}"
                 raise ValidationError(message=message)
 
     def validate_serverless_config(self, serverless_config):
@@ -416,9 +514,7 @@ class FakeEndpointConfig(BaseObject, CloudFormationModel):
         if not validators.is_one_of(
             serverless_config["MemorySizeInMB"], VALID_SERVERLESS_MEMORY_SIZE
         ):
-            message = "Value '{}' at 'MemorySizeInMB' failed to satisfy constraint: Member must satisfy enum value set: {}".format(
-                serverless_config["MemorySizeInMB"], VALID_SERVERLESS_MEMORY_SIZE
-            )
+            message = f"Value '{serverless_config['MemorySizeInMB']}' at 'MemorySizeInMB' failed to satisfy constraint: Member must satisfy enum value set: {VALID_SERVERLESS_MEMORY_SIZE}"
             raise ValidationError(message=message)
 
     def validate_instance_type(self, instance_type):
@@ -491,9 +587,7 @@ class FakeEndpointConfig(BaseObject, CloudFormationModel):
             "ml.m4.4xlarge",
         ]
         if not validators.is_one_of(instance_type, VALID_INSTANCE_TYPES):
-            message = "Value '{}' at 'instanceType' failed to satisfy constraint: Member must satisfy enum value set: {}".format(
-                instance_type, VALID_INSTANCE_TYPES
-            )
+            message = f"Value '{instance_type}' at 'instanceType' failed to satisfy constraint: Member must satisfy enum value set: {VALID_INSTANCE_TYPES}"
             raise ValidationError(message=message)
 
     @property
@@ -824,15 +918,13 @@ class FakeSagemakerNotebookInstance(CloudFormationModel):
             "ml.m4.4xlarge",
         ]
         if not validators.is_one_of(instance_type, VALID_INSTANCE_TYPES):
-            message = "Value '{}' at 'instanceType' failed to satisfy constraint: Member must satisfy enum value set: {}".format(
-                instance_type, VALID_INSTANCE_TYPES
-            )
+            message = f"Value '{instance_type}' at 'instanceType' failed to satisfy constraint: Member must satisfy enum value set: {VALID_INSTANCE_TYPES}"
             raise ValidationError(message=message)
 
     @property
     def url(self):
-        return "{}.notebook.{}.sagemaker.aws".format(
-            self.notebook_instance_name, self.region_name
+        return (
+            f"{self.notebook_instance_name}.notebook.{self.region_name}.sagemaker.aws"
         )
 
     def start(self):
@@ -1047,6 +1139,8 @@ class SageMakerModelBackend(BaseBackend):
         self.endpoint_configs = {}
         self.endpoints = {}
         self.experiments = {}
+        self.pipelines = {}
+        self.pipeline_executions = {}
         self.processing_jobs = {}
         self.trials = {}
         self.trial_components = {}
@@ -1168,6 +1262,7 @@ class SageMakerModelBackend(BaseBackend):
             "experiment-trial": self.trials,
             "experiment-trial-component": self.trial_components,
             "processing-job": self.processing_jobs,
+            "pipeline": self.pipelines,
         }
         target_resource, target_name = arn.split(":")[-1].split("/")
         try:
@@ -1325,10 +1420,10 @@ class SageMakerModelBackend(BaseBackend):
         try:
             del self.experiments[experiment_name]
         except KeyError:
-            message = "Could not find experiment configuration '{}'.".format(
-                FakeTrial.arn_formatter(experiment_name, self.region_name)
+            arn = FakeTrial.arn_formatter(experiment_name, self.region_name)
+            raise ValidationError(
+                message=f"Could not find experiment configuration '{arn}'."
             )
-            raise ValidationError(message=message)
 
     def create_trial(self, trial_name, experiment_name):
         trial = FakeTrial(
@@ -1346,19 +1441,17 @@ class SageMakerModelBackend(BaseBackend):
         try:
             return self.trials[trial_name].response_object
         except KeyError:
-            message = "Could not find trial '{}'.".format(
-                FakeTrial.arn_formatter(trial_name, self.region_name)
-            )
-            raise ValidationError(message=message)
+            arn = FakeTrial.arn_formatter(trial_name, self.region_name)
+            raise ValidationError(message=f"Could not find trial '{arn}'.")
 
     def delete_trial(self, trial_name):
         try:
             del self.trials[trial_name]
         except KeyError:
-            message = "Could not find trial configuration '{}'.".format(
-                FakeTrial.arn_formatter(trial_name, self.region_name)
+            arn = FakeTrial.arn_formatter(trial_name, self.region_name)
+            raise ValidationError(
+                message=f"Could not find trial configuration '{arn}'."
             )
-            raise ValidationError(message=message)
 
     @paginate(pagination_model=PAGINATION_MODEL)
     def list_trials(self, experiment_name=None, trial_component_name=None):
@@ -1396,21 +1489,19 @@ class SageMakerModelBackend(BaseBackend):
         try:
             del self.trial_components[trial_component_name]
         except KeyError:
-            message = "Could not find trial-component configuration '{}'.".format(
-                FakeTrial.arn_formatter(trial_component_name, self.region_name)
+            arn = FakeTrial.arn_formatter(trial_component_name, self.region_name)
+            raise ValidationError(
+                message=f"Could not find trial-component configuration '{arn}'."
             )
-            raise ValidationError(message=message)
 
     def describe_trial_component(self, trial_component_name):
         try:
             return self.trial_components[trial_component_name].response_object
         except KeyError:
-            message = "Could not find trial component '{}'.".format(
-                FakeTrialComponent.arn_formatter(
-                    trial_component_name, self.account_id, self.region_name
-                )
+            arn = FakeTrialComponent.arn_formatter(
+                trial_component_name, self.account_id, self.region_name
             )
-            raise ValidationError(message=message)
+            raise ValidationError(message=f"Could not find trial component '{arn}'.")
 
     def _update_trial_component_details(self, trial_component_name, details_json):
         self.trial_components[trial_component_name].update(details_json)
@@ -1511,9 +1602,7 @@ class SageMakerModelBackend(BaseBackend):
     def _validate_unique_notebook_instance_name(self, notebook_instance_name):
         if notebook_instance_name in self.notebook_instances:
             duplicate_arn = self.notebook_instances[notebook_instance_name].arn
-            message = "Cannot create a duplicate Notebook Instance ({})".format(
-                duplicate_arn
-            )
+            message = f"Cannot create a duplicate Notebook Instance ({duplicate_arn})"
             raise ValidationError(message=message)
 
     def get_notebook_instance(self, notebook_instance_name):
@@ -1533,9 +1622,7 @@ class SageMakerModelBackend(BaseBackend):
     def delete_notebook_instance(self, notebook_instance_name):
         notebook_instance = self.get_notebook_instance(notebook_instance_name)
         if not notebook_instance.is_deletable:
-            message = "Status ({}) not in ([Stopped, Failed]). Unable to transition to (Deleting) for Notebook Instance ({})".format(
-                notebook_instance.status, notebook_instance.arn
-            )
+            message = f"Status ({notebook_instance.status}) not in ([Stopped, Failed]). Unable to transition to (Deleting) for Notebook Instance ({notebook_instance.arn})"
             raise ValidationError(message=message)
         del self.notebook_instances[notebook_instance_name]
 
@@ -1546,13 +1633,12 @@ class SageMakerModelBackend(BaseBackend):
             notebook_instance_lifecycle_config_name
             in self.notebook_instance_lifecycle_configurations
         ):
-            message = "Unable to create Notebook Instance Lifecycle Config {}. (Details: Notebook Instance Lifecycle Config already exists.)".format(
-                FakeSageMakerNotebookInstanceLifecycleConfig.arn_formatter(
-                    notebook_instance_lifecycle_config_name,
-                    self.account_id,
-                    self.region_name,
-                )
+            arn = FakeSageMakerNotebookInstanceLifecycleConfig.arn_formatter(
+                notebook_instance_lifecycle_config_name,
+                self.account_id,
+                self.region_name,
             )
+            message = f"Unable to create Notebook Instance Lifecycle Config {arn}. (Details: Notebook Instance Lifecycle Config already exists.)"
             raise ValidationError(message=message)
         lifecycle_config = FakeSageMakerNotebookInstanceLifecycleConfig(
             account_id=self.account_id,
@@ -1574,13 +1660,12 @@ class SageMakerModelBackend(BaseBackend):
                 notebook_instance_lifecycle_config_name
             ].response_object
         except KeyError:
-            message = "Unable to describe Notebook Instance Lifecycle Config '{}'. (Details: Notebook Instance Lifecycle Config does not exist.)".format(
-                FakeSageMakerNotebookInstanceLifecycleConfig.arn_formatter(
-                    notebook_instance_lifecycle_config_name,
-                    self.account_id,
-                    self.region_name,
-                )
+            arn = FakeSageMakerNotebookInstanceLifecycleConfig.arn_formatter(
+                notebook_instance_lifecycle_config_name,
+                self.account_id,
+                self.region_name,
             )
+            message = f"Unable to describe Notebook Instance Lifecycle Config '{arn}'. (Details: Notebook Instance Lifecycle Config does not exist.)"
             raise ValidationError(message=message)
 
     def delete_notebook_instance_lifecycle_config(
@@ -1591,13 +1676,12 @@ class SageMakerModelBackend(BaseBackend):
                 notebook_instance_lifecycle_config_name
             ]
         except KeyError:
-            message = "Unable to delete Notebook Instance Lifecycle Config '{}'. (Details: Notebook Instance Lifecycle Config does not exist.)".format(
-                FakeSageMakerNotebookInstanceLifecycleConfig.arn_formatter(
-                    notebook_instance_lifecycle_config_name,
-                    self.account_id,
-                    self.region_name,
-                )
+            arn = FakeSageMakerNotebookInstanceLifecycleConfig.arn_formatter(
+                notebook_instance_lifecycle_config_name,
+                self.account_id,
+                self.region_name,
             )
+            message = f"Unable to delete Notebook Instance Lifecycle Config '{arn}'. (Details: Notebook Instance Lifecycle Config does not exist.)"
             raise ValidationError(message=message)
 
     def create_endpoint_config(
@@ -1731,6 +1815,312 @@ class SageMakerModelBackend(BaseBackend):
                 processing_job_name, self.account_id, self.region_name
             )
             raise ValidationError(message=f"Could not find processing job '{arn}'.")
+
+    def create_pipeline(
+        self,
+        pipeline_name,
+        pipeline_display_name,
+        pipeline_definition,
+        pipeline_definition_s3_location,
+        pipeline_description,
+        role_arn,
+        tags,
+        parallelism_configuration,
+    ):
+        if not any([pipeline_definition, pipeline_definition_s3_location]):
+            raise ValidationError(
+                "An error occurred (ValidationException) when calling the CreatePipeline operation: Either "
+                "Pipeline Definition or Pipeline Definition S3 location should be provided"
+            )
+        if all([pipeline_definition, pipeline_definition_s3_location]):
+            raise ValidationError(
+                "An error occurred (ValidationException) when calling the CreatePipeline operation: "
+                "Both Pipeline Definition and Pipeline Definition S3 Location shouldn't be present"
+            )
+
+        if pipeline_name in self.pipelines:
+            raise ValidationError(
+                f"An error occurred (ValidationException) when calling the CreatePipeline operation: Pipeline names "
+                f"must be unique within an AWS account and region. Pipeline with name ({pipeline_name}) already exists."
+            )
+
+        if pipeline_definition_s3_location:
+            pipeline_definition = load_pipeline_definition_from_s3(
+                pipeline_definition_s3_location, self.account_id
+            )
+
+        pipeline = FakePipeline(
+            pipeline_name,
+            pipeline_display_name,
+            pipeline_definition,
+            pipeline_description,
+            role_arn,
+            tags,
+            self.account_id,
+            self.region_name,
+            parallelism_configuration,
+        )
+
+        self.pipelines[pipeline_name] = pipeline
+        return pipeline
+
+    def delete_pipeline(
+        self,
+        pipeline_name,
+    ):
+        pipeline = get_pipeline_from_name(self.pipelines, pipeline_name)
+        del self.pipelines[pipeline.pipeline_name]
+        return pipeline.pipeline_arn
+
+    def update_pipeline(
+        self,
+        pipeline_name,
+        **kwargs,
+    ):
+        pipeline = get_pipeline_from_name(self.pipelines, pipeline_name)
+        if all(
+            [
+                kwargs.get("pipeline_definition"),
+                kwargs.get("pipeline_definition_s3_location"),
+            ]
+        ):
+            raise ValidationError(
+                "An error occurred (ValidationException) when calling the UpdatePipeline operation: "
+                "Both Pipeline Definition and Pipeline Definition S3 Location shouldn't be present"
+            )
+
+        for attr_key, attr_value in kwargs.items():
+            if attr_value:
+                if attr_key == "pipeline_definition_s3_location":
+                    self.pipelines[
+                        pipeline_name
+                    ].pipeline_definition = load_pipeline_definition_from_s3(
+                        attr_value, self.account_id
+                    )
+                    continue
+                setattr(self.pipelines[pipeline_name], attr_key, attr_value)
+
+        return pipeline.pipeline_arn
+
+    def start_pipeline_execution(
+        self,
+        pipeline_name,
+        pipeline_execution_display_name,
+        pipeline_parameters,
+        pipeline_execution_description,
+        parallelism_configuration,
+    ):
+        pipeline = get_pipeline_from_name(self.pipelines, pipeline_name)
+        execution_id = "".join(
+            random.choices(string.ascii_lowercase + string.digits, k=12)
+        )
+        pipeline_execution_arn = arn_formatter(
+            _type="pipeline",
+            _id=f"{pipeline.pipeline_name}/execution/{execution_id}",
+            account_id=self.account_id,
+            region_name=self.region_name,
+        )
+
+        fake_pipeline_execution = FakePipelineExecution(
+            pipeline_execution_arn=pipeline_execution_arn,
+            pipeline_execution_display_name=pipeline_execution_display_name,
+            pipeline_parameters=pipeline_parameters,
+            pipeline_execution_description=pipeline_execution_description,
+            pipeline_definition=pipeline.pipeline_definition,
+            parallelism_configuration=parallelism_configuration
+            or pipeline.parallelism_configuration,
+        )
+
+        self.pipelines[pipeline_name].pipeline_executions[
+            pipeline_execution_arn
+        ] = fake_pipeline_execution
+        self.pipelines[
+            pipeline_name
+        ].last_execution_time = fake_pipeline_execution.start_time
+
+        response = {"PipelineExecutionArn": pipeline_execution_arn}
+        return response
+
+    def list_pipeline_executions(
+        self,
+        pipeline_name,
+    ):
+        pipeline = get_pipeline_from_name(self.pipelines, pipeline_name)
+        response = {
+            "PipelineExecutionSummaries": [
+                {
+                    "PipelineExecutionArn": pipeline_execution_arn,
+                    "StartTime": pipeline_execution.start_time,
+                    "PipelineExecutionStatus": pipeline_execution.pipeline_execution_status,
+                    "PipelineExecutionDescription": pipeline_execution.pipeline_execution_description,
+                    "PipelineExecutionDisplayName": pipeline_execution.pipeline_execution_display_name,
+                    "PipelineExecutionFailureReason": str(
+                        pipeline_execution.pipeline_execution_failure_reason
+                    ),
+                }
+                for pipeline_execution_arn, pipeline_execution in pipeline.pipeline_executions.items()
+            ]
+        }
+        return response
+
+    def describe_pipeline_definition_for_execution(
+        self,
+        pipeline_execution_arn,
+    ):
+        pipeline_execution = get_pipeline_execution_from_arn(
+            self.pipelines, pipeline_execution_arn
+        )
+        response = {
+            "PipelineDefinition": str(
+                pipeline_execution.pipeline_definition_for_execution
+            ),
+            "CreationTime": pipeline_execution.creation_time,
+        }
+        return response
+
+    def list_pipeline_parameters_for_execution(
+        self,
+        pipeline_execution_arn,
+    ):
+        pipeline_execution = get_pipeline_execution_from_arn(
+            self.pipelines, pipeline_execution_arn
+        )
+        response = {
+            "PipelineParameters": pipeline_execution.pipeline_parameters,
+        }
+        return response
+
+    def describe_pipeline_execution(
+        self,
+        pipeline_execution_arn,
+    ):
+        pipeline_execution = get_pipeline_execution_from_arn(
+            self.pipelines, pipeline_execution_arn
+        )
+        pipeline_name = get_pipeline_name_from_execution_arn(pipeline_execution_arn)
+        pipeline = get_pipeline_from_name(self.pipelines, pipeline_name)
+
+        pipeline_execution_summaries = {
+            "PipelineArn": pipeline.pipeline_arn,
+            "PipelineExecutionArn": pipeline_execution.pipeline_execution_arn,
+            "PipelineExecutionDisplayName": pipeline_execution.pipeline_execution_display_name,
+            "PipelineExecutionStatus": pipeline_execution.pipeline_execution_status,
+            "PipelineExecutionDescription": pipeline_execution.pipeline_execution_description,
+            "PipelineExperimentConfig": {},
+            "FailureReason": "",
+            "CreationTime": pipeline_execution.creation_time,
+            "LastModifiedTime": pipeline_execution.last_modified_time,
+            "CreatedBy": pipeline_execution.created_by,
+            "LastModifiedBy": pipeline_execution.last_modified_by,
+            "ParallelismConfiguration": pipeline_execution.parallelism_configuration,
+        }
+        return pipeline_execution_summaries
+
+    def describe_pipeline(
+        self,
+        pipeline_name,
+    ):
+        pipeline = get_pipeline_from_name(self.pipelines, pipeline_name)
+        response = {
+            "PipelineArn": pipeline.pipeline_arn,
+            "PipelineName": pipeline.pipeline_name,
+            "PipelineDisplayName": pipeline.pipeline_display_name,
+            "PipelineDescription": pipeline.pipeline_description,
+            "PipelineDefinition": pipeline.pipeline_definition,
+            "RoleArn": pipeline.role_arn,
+            "PipelineStatus": pipeline.pipeline_status,
+            "CreationTime": pipeline.creation_time,
+            "LastModifiedTime": pipeline.last_modified_time,
+            "LastRunTime": pipeline.last_execution_time,
+            "CreatedBy": pipeline.created_by,
+            "LastModifiedBy": pipeline.last_modified_by,
+            "ParallelismConfiguration": pipeline.parallelism_configuration,
+        }
+
+        return response
+
+    def list_pipelines(
+        self,
+        pipeline_name_prefix,
+        created_after,
+        created_before,
+        next_token,
+        max_results,
+        sort_by,
+        sort_order,
+    ):
+        if next_token:
+            try:
+                starting_index = int(next_token)
+                if starting_index > len(self.pipelines):
+                    raise ValueError  # invalid next_token
+            except ValueError:
+                raise AWSValidationException('Invalid pagination token because "{0}".')
+        else:
+            starting_index = 0
+
+        if max_results:
+            end_index = max_results + starting_index
+            pipelines_fetched = list(self.pipelines.values())[starting_index:end_index]
+            if end_index >= len(self.pipelines):
+                next_index = None
+            else:
+                next_index = end_index
+        else:
+            pipelines_fetched = list(self.pipelines.values())
+            next_index = None
+
+        if pipeline_name_prefix is not None:
+            pipelines_fetched = filter(
+                lambda x: pipeline_name_prefix in x.pipeline_name,
+                pipelines_fetched,
+            )
+
+        def format_time(x):
+            return (
+                x
+                if isinstance(x, str)
+                else datetime.fromtimestamp(x).strftime("%Y-%m-%d " "%H:%M:%S")
+            )
+
+        if created_after is not None:
+            pipelines_fetched = filter(
+                lambda x: x.creation_time > format_time(created_after),
+                pipelines_fetched,
+            )
+
+        if created_before is not None:
+            pipelines_fetched = filter(
+                lambda x: x.creation_time < format_time(created_before),
+                pipelines_fetched,
+            )
+
+        sort_key = "pipeline_name" if sort_by == "Name" else "creation_time"
+        sort_order = False if sort_order == "Ascending" else True
+        pipelines_fetched = sorted(
+            pipelines_fetched,
+            key=lambda pipeline_fetched: getattr(pipeline_fetched, sort_key),
+            reverse=sort_order,
+        )
+
+        pipeline_summaries = [
+            {
+                "PipelineArn": pipeline_data.pipeline_arn,
+                "PipelineName": pipeline_data.pipeline_name,
+                "PipelineDisplayName": pipeline_data.pipeline_display_name,
+                "PipelineDescription": pipeline_data.pipeline_description,
+                "RoleArn": pipeline_data.role_arn,
+                "CreationTime": pipeline_data.creation_time,
+                "LastModifiedTime": pipeline_data.last_modified_time,
+                "LastExecutionTime": pipeline_data.last_execution_time,
+            }
+            for pipeline_data in pipelines_fetched
+        ]
+
+        return {
+            "PipelineSummaries": pipeline_summaries,
+            "NextToken": str(next_index) if next_index is not None else None,
+        }
 
     def list_processing_jobs(
         self,
@@ -1867,11 +2257,10 @@ class SageMakerModelBackend(BaseBackend):
         try:
             return self.training_jobs[training_job_name].response_object
         except KeyError:
-            message = "Could not find training job '{}'.".format(
-                FakeTrainingJob.arn_formatter(
-                    training_job_name, self.account_id, self.region_name
-                )
+            arn = FakeTrainingJob.arn_formatter(
+                training_job_name, self.account_id, self.region_name
             )
+            message = f"Could not find training job '{arn}'."
             raise ValidationError(message=message)
 
     def list_training_jobs(

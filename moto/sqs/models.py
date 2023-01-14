@@ -44,6 +44,8 @@ MAXIMUM_MESSAGE_LENGTH = 262144  # 256 KiB
 MAXIMUM_MESSAGE_SIZE_ATTR_LOWER_BOUND = 1024
 MAXIMUM_MESSAGE_SIZE_ATTR_UPPER_BOUND = MAXIMUM_MESSAGE_LENGTH
 
+MAXIMUM_MESSAGE_DELAY = 900
+
 TRANSPORT_TYPE_ENCODINGS = {
     "String": b"\x01",
     "Binary": b"\x02",
@@ -135,9 +137,9 @@ class Message(BaseModel):
     def validate_attribute_name(name):
         if not ATTRIBUTE_NAME_PATTERN.match(name):
             raise MessageAttributesInvalid(
-                "The message attribute name '{0}' is invalid. "
+                f"The message attribute name '{name}' is invalid. "
                 "Attribute name can contain A-Z, a-z, 0-9, "
-                "underscore (_), hyphen (-), and period (.) characters.".format(name)
+                "underscore (_), hyphen (-), and period (.) characters."
             )
 
     @staticmethod
@@ -400,9 +402,7 @@ class Queue(CloudFormationModel):
         else:
             raise RESTError(
                 "AWS.SimpleQueueService.NonExistentQueue",
-                "Could not find DLQ for {0}".format(
-                    self.redrive_policy["deadLetterTargetArn"]
-                ),
+                f"Could not find DLQ for {self.redrive_policy['deadLetterTargetArn']}",
             )
 
     @staticmethod
@@ -511,8 +511,8 @@ class Queue(CloudFormationModel):
         return result
 
     def url(self, request_url):
-        return "{0}://{1}/{2}/{3}".format(
-            request_url.scheme, request_url.netloc, self.account_id, self.name
+        return (
+            f"{request_url.scheme}://{request_url.netloc}/{self.account_id}/{self.name}"
         )
 
     @property
@@ -625,7 +625,7 @@ class Queue(CloudFormationModel):
         else:
             self._policy_json = {
                 "Version": "2012-10-17",
-                "Id": "{}/SQSDefaultPolicy".format(self.queue_arn),
+                "Id": f"{self.queue_arn}/SQSDefaultPolicy",
                 "Statement": [],
             }
 
@@ -692,7 +692,7 @@ class SQSBackend(BaseBackend):
     def list_queues(self, queue_name_prefix):
         re_str = ".*"
         if queue_name_prefix:
-            re_str = "^{0}.*".format(queue_name_prefix)
+            re_str = f"^{queue_name_prefix}.*"
         prefix_re = re.compile(re_str)
         qs = []
         for name, q in self.queues.items():
@@ -759,9 +759,7 @@ class SQSBackend(BaseBackend):
         queue = self.get_queue(queue_name)
 
         if len(message_body) > queue.maximum_message_size:
-            msg = "One or more parameters are invalid. Reason: Message must be shorter than {} bytes.".format(
-                queue.maximum_message_size
-            )
+            msg = f"One or more parameters are invalid. Reason: Message must be shorter than {queue.maximum_message_size} bytes."
             raise InvalidParameterValue(msg)
 
         if delay_seconds:
@@ -794,14 +792,21 @@ class SQSBackend(BaseBackend):
         else:
             if not queue.fifo_queue:
                 msg = (
-                    "Value {} for parameter MessageGroupId is invalid. "
+                    f"Value {group_id} for parameter MessageGroupId is invalid. "
                     "Reason: The request include parameter that is not valid for this queue type."
-                ).format(group_id)
+                )
                 raise InvalidParameterValue(msg)
             message.group_id = group_id
 
         if message_attributes:
             message.message_attributes = message_attributes
+
+        if delay_seconds > MAXIMUM_MESSAGE_DELAY:
+            msg = (
+                f"Value {delay_seconds} for parameter DelaySeconds is invalid. "
+                "Reason: DelaySeconds must be >= 0 and <= 900."
+            )
+            raise InvalidParameterValue(msg)
 
         message.mark_sent(delay_seconds=delay_seconds)
 
@@ -838,21 +843,24 @@ class SQSBackend(BaseBackend):
             raise TooManyEntriesInBatchRequest(len(entries))
 
         messages = []
+        failedInvalidDelay = []
         for entry in entries.values():
-            # Loop through looking for messages
-            message = self.send_message(
-                queue_name,
-                entry["MessageBody"],
-                message_attributes=entry["MessageAttributes"],
-                delay_seconds=entry["DelaySeconds"],
-                group_id=entry.get("MessageGroupId"),
-                deduplication_id=entry.get("MessageDeduplicationId"),
-            )
-            message.user_id = entry["Id"]
+            try:
+                # Loop through looking for messages
+                message = self.send_message(
+                    queue_name,
+                    entry["MessageBody"],
+                    message_attributes=entry["MessageAttributes"],
+                    delay_seconds=entry["DelaySeconds"],
+                    group_id=entry.get("MessageGroupId"),
+                    deduplication_id=entry.get("MessageDeduplicationId"),
+                )
+                message.user_id = entry["Id"]
+                messages.append(message)
+            except InvalidParameterValue:
+                failedInvalidDelay.append(entry)
 
-            messages.append(message)
-
-        return messages
+        return messages, failedInvalidDelay
 
     def _get_first_duplicate_id(self, ids):
         unique_ids = set()
@@ -941,7 +949,7 @@ class SQSBackend(BaseBackend):
                     # so break to avoid an infinite loop.
                     break
 
-                queue.wait_for_messages(wait_seconds_timeout)
+                queue.wait_for_messages(1)
                 continue
 
             previous_result_count = len(result)
@@ -962,10 +970,8 @@ class SQSBackend(BaseBackend):
                 given_visibility_timeout = unix_time_millis() + visibility_timeout_msec
                 if given_visibility_timeout - message.sent_timestamp > 43200 * 1000:
                     raise InvalidParameterValue(
-                        "Value {0} for parameter VisibilityTimeout is invalid. Reason: Total "
-                        "VisibilityTimeout for the message is beyond the limit [43200 seconds]".format(
-                            visibility_timeout
-                        )
+                        f"Value {visibility_timeout} for parameter VisibilityTimeout is invalid. Reason: Total "
+                        "VisibilityTimeout for the message is beyond the limit [43200 seconds]"
                     )
 
                 message.change_visibility(visibility_timeout)
@@ -1012,10 +1018,8 @@ class SQSBackend(BaseBackend):
         )
         if invalid_action:
             raise InvalidParameterValue(
-                "Value SQS:{} for parameter ActionName is invalid. "
-                "Reason: Only the queue owner is allowed to invoke this action.".format(
-                    invalid_action
-                )
+                f"Value SQS:{invalid_action} for parameter ActionName is invalid. "
+                "Reason: Only the queue owner is allowed to invoke this action."
             )
 
         policy = queue._policy_json
@@ -1029,14 +1033,11 @@ class SQSBackend(BaseBackend):
         )
         if statement:
             raise InvalidParameterValue(
-                "Value {} for parameter Label is invalid. "
-                "Reason: Already exists.".format(label)
+                f"Value {label} for parameter Label is invalid. Reason: Already exists."
             )
 
-        principals = [
-            "arn:aws:iam::{}:root".format(account_id) for account_id in account_ids
-        ]
-        actions = ["SQS:{}".format(action) for action in actions]
+        principals = [f"arn:aws:iam::{account_id}:root" for account_id in account_ids]
+        actions = [f"SQS:{action}" for action in actions]
 
         statement = {
             "Sid": label,
@@ -1058,8 +1059,8 @@ class SQSBackend(BaseBackend):
 
         if len(statements) == len(statements_new):
             raise InvalidParameterValue(
-                "Value {} for parameter Label is invalid. "
-                "Reason: can't find label on existing policy.".format(label)
+                f"Value {label} for parameter Label is invalid. "
+                "Reason: can't find label on existing policy."
             )
 
         queue._policy_json["Statement"] = statements_new
@@ -1071,9 +1072,7 @@ class SQSBackend(BaseBackend):
             raise MissingParameter("Tags")
 
         if len(tags) > 50:
-            raise InvalidParameterValue(
-                "Too many tags added for queue {}.".format(queue_name)
-            )
+            raise InvalidParameterValue(f"Too many tags added for queue {queue_name}.")
 
         queue.tags.update(tags)
 

@@ -273,27 +273,25 @@ class SQSResponse(BaseResponse):
 
                 message_attributes = parse_message_attributes(
                     self.querystring,
-                    base="SendMessageBatchRequestEntry.{}.".format(index),
+                    base=f"SendMessageBatchRequestEntry.{index}.",
                 )
 
                 entries[index] = {
                     "Id": value[0],
                     "MessageBody": self.querystring.get(
-                        "SendMessageBatchRequestEntry.{}.MessageBody".format(index)
+                        f"SendMessageBatchRequestEntry.{index}.MessageBody"
                     )[0],
                     "DelaySeconds": self.querystring.get(
-                        "SendMessageBatchRequestEntry.{}.DelaySeconds".format(index),
+                        f"SendMessageBatchRequestEntry.{index}.DelaySeconds",
                         [None],
                     )[0],
                     "MessageAttributes": message_attributes,
                     "MessageGroupId": self.querystring.get(
-                        "SendMessageBatchRequestEntry.{}.MessageGroupId".format(index),
+                        f"SendMessageBatchRequestEntry.{index}.MessageGroupId",
                         [None],
                     )[0],
                     "MessageDeduplicationId": self.querystring.get(
-                        "SendMessageBatchRequestEntry.{}.MessageDeduplicationId".format(
-                            index
-                        ),
+                        f"SendMessageBatchRequestEntry.{index}.MessageDeduplicationId",
                         [None],
                     )[0],
                 }
@@ -301,10 +299,23 @@ class SQSResponse(BaseResponse):
         if entries == {}:
             raise EmptyBatchRequest()
 
-        messages = self.sqs_backend.send_message_batch(queue_name, entries)
+        messages, failedInvalidDelay = self.sqs_backend.send_message_batch(
+            queue_name, entries
+        )
+
+        errors = []
+        for entry in failedInvalidDelay:
+            errors.append(
+                {
+                    "Id": entry["Id"],
+                    "SenderFault": "true",
+                    "Code": "InvalidParameterValue",
+                    "Message": "Value 1800 for parameter DelaySeconds is invalid. Reason: DelaySeconds must be &gt;= 0 and &lt;= 900.",
+                }
+            )
 
         template = self.response_template(SEND_MESSAGE_BATCH_RESPONSE)
-        return template.render(messages=messages)
+        return template.render(messages=messages, errors=errors)
 
     def delete_message(self):
         queue_name = self._get_queue_name()
@@ -329,15 +340,13 @@ class SQSResponse(BaseResponse):
 
         for index in range(1, 11):
             # Loop through looking for messages
-            receipt_key = "DeleteMessageBatchRequestEntry.{0}.ReceiptHandle".format(
-                index
-            )
+            receipt_key = f"DeleteMessageBatchRequestEntry.{index}.ReceiptHandle"
             receipt_handle = self.querystring.get(receipt_key)
             if not receipt_handle:
                 # Found all messages
                 break
 
-            message_user_id_key = "DeleteMessageBatchRequestEntry.{0}.Id".format(index)
+            message_user_id_key = f"DeleteMessageBatchRequestEntry.{index}.Id"
             message_user_id = self.querystring.get(message_user_id_key)[0]
             receipts.append(
                 {"receipt_handle": receipt_handle[0], "msg_user_id": message_user_id}
@@ -396,9 +405,9 @@ class SQSResponse(BaseResponse):
             return self._error(
                 "InvalidParameterValue",
                 "An error occurred (InvalidParameterValue) when calling "
-                "the ReceiveMessage operation: Value %s for parameter "
+                f"the ReceiveMessage operation: Value {message_count} for parameter "
                 "MaxNumberOfMessages is invalid. Reason: must be between "
-                "1 and 10, if provided." % message_count,
+                "1 and 10, if provided.",
             )
 
         try:
@@ -410,9 +419,9 @@ class SQSResponse(BaseResponse):
             return self._error(
                 "InvalidParameterValue",
                 "An error occurred (InvalidParameterValue) when calling "
-                "the ReceiveMessage operation: Value %s for parameter "
+                f"the ReceiveMessage operation: Value {wait_time} for parameter "
                 "WaitTimeSeconds is invalid. Reason: must be &lt;= 0 and "
-                "&gt;= 20 if provided." % wait_time,
+                "&gt;= 20 if provided.",
             )
 
         try:
@@ -574,7 +583,8 @@ SEND_MESSAGE_RESPONSE = """<SendMessageResponse>
     </ResponseMetadata>
 </SendMessageResponse>"""
 
-RECEIVE_MESSAGE_RESPONSE = """<ReceiveMessageResponse>
+RECEIVE_MESSAGE_RESPONSE = """<?xml version="1.0"?>
+<ReceiveMessageResponse  xmlns="http://queue.amazonaws.com/doc/2012-11-05/">
   <ReceiveMessageResult>
     {% for message in messages %}
         <Message>
@@ -641,7 +651,7 @@ RECEIVE_MESSAGE_RESPONSE = """<ReceiveMessageResponse>
                 {% if 'Binary' in value.data_type %}
                 <BinaryValue>{{ value.binary_value }}</BinaryValue>
                 {% else %}
-                <StringValue><![CDATA[{{ value.string_value }}]]></StringValue>
+                <StringValue>{{ value.string_value|e }}</StringValue>
                 {% endif %}
               </Value>
             </MessageAttribute>
@@ -650,10 +660,11 @@ RECEIVE_MESSAGE_RESPONSE = """<ReceiveMessageResponse>
     {% endfor %}
   </ReceiveMessageResult>
   <ResponseMetadata>
-    <RequestId></RequestId>
+    <RequestId>5bdc09f4-0a03-5425-8468-55e04a092ed8</RequestId>
   </ResponseMetadata>
 </ReceiveMessageResponse>"""
 
+# UPDATED Line 681-688
 SEND_MESSAGE_BATCH_RESPONSE = """<SendMessageBatchResponse>
 <SendMessageBatchResult>
     {% for message in messages %}
@@ -665,6 +676,14 @@ SEND_MESSAGE_BATCH_RESPONSE = """<SendMessageBatchResponse>
             <MD5OfMessageAttributes>{{- message.attribute_md5 -}}</MD5OfMessageAttributes>
             {% endif %}
         </SendMessageBatchResultEntry>
+    {% endfor %}
+    {% for error_dict in errors %}
+    <BatchResultErrorEntry>
+        <Id>{{ error_dict['Id'] }}</Id>
+        <Code>{{ error_dict['Code'] }}</Code>
+        <Message>{{ error_dict['Message'] }}</Message>
+        <SenderFault>{{ error_dict['SenderFault'] }}</SenderFault>
+    </BatchResultErrorEntry>
     {% endfor %}
 </SendMessageBatchResult>
 <ResponseMetadata>

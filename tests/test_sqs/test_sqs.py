@@ -73,8 +73,9 @@ def test_create_queue_with_same_attributes():
         "MaximumMessageSize": "262144",
         "MessageRetentionPeriod": "1209600",
         "ReceiveMessageWaitTimeSeconds": "20",
-        "RedrivePolicy": '{"deadLetterTargetArn": "%s", "maxReceiveCount": 100}'
-        % (dlq_arn),
+        "RedrivePolicy": json.dumps(
+            {"deadLetterTargetArn": dlq_arn, "maxReceiveCount": 100}
+        ),
         "VisibilityTimeout": "43200",
     }
 
@@ -763,7 +764,7 @@ def test_get_queue_attributes():
     response["Attributes"]["MaximumMessageSize"].should.equal("262144")
     response["Attributes"]["MessageRetentionPeriod"].should.equal("345600")
     response["Attributes"]["QueueArn"].should.equal(
-        "arn:aws:sqs:us-east-1:{}:{}".format(ACCOUNT_ID, q_name)
+        f"arn:aws:sqs:us-east-1:{ACCOUNT_ID}:{q_name}"
     )
     response["Attributes"]["ReceiveMessageWaitTimeSeconds"].should.equal("0")
     response["Attributes"]["VisibilityTimeout"].should.equal("30")
@@ -783,7 +784,7 @@ def test_get_queue_attributes():
         {
             "ApproximateNumberOfMessages": "0",
             "MaximumMessageSize": "262144",
-            "QueueArn": "arn:aws:sqs:us-east-1:{}:{}".format(ACCOUNT_ID, q_name),
+            "QueueArn": f"arn:aws:sqs:us-east-1:{ACCOUNT_ID}:{q_name}",
             "VisibilityTimeout": "30",
             "RedrivePolicy": json.dumps(
                 {"deadLetterTargetArn": dlq_arn1, "maxReceiveCount": 2}
@@ -2057,9 +2058,7 @@ def test_send_message_batch_errors():
         ],
     ).should.throw(ClientError, "Id id_2 repeated.")
 
-    entries = [
-        {"Id": "id_{}".format(i), "MessageBody": "body_{}".format(i)} for i in range(11)
-    ]
+    entries = [{"Id": f"id_{i}", "MessageBody": f"body_{i}"} for i in range(11)]
     client.send_message_batch.when.called_with(
         QueueUrl=queue_url, Entries=entries
     ).should.throw(
@@ -2443,9 +2442,7 @@ def test_tag_queue_errors():
         ClientError, "The request must contain the parameter Tags."
     )
 
-    too_many_tags = {
-        "tag_key_{}".format(i): "tag_value_{}".format(i) for i in range(51)
-    }
+    too_many_tags = {f"tag_key_{i}": f"tag_value_{i}" for i in range(51)}
     client.tag_queue.when.called_with(
         QueueUrl=queue_url, Tags=too_many_tags
     ).should.throw(ClientError, f"Too many tags added for queue {q_name}.")
@@ -2620,7 +2617,7 @@ def test_redrive_policy_available():
 def test_redrive_policy_non_existent_queue():
     sqs = boto3.client("sqs", region_name="us-east-1")
     redrive_policy = {
-        "deadLetterTargetArn": "arn:aws:sqs:us-east-1:{}:no-queue".format(ACCOUNT_ID),
+        "deadLetterTargetArn": f"arn:aws:sqs:us-east-1:{ACCOUNT_ID}:no-queue",
         "maxReceiveCount": 1,
     }
 
@@ -2890,9 +2887,7 @@ def test_send_message_fails_when_message_size_greater_than_max_message_size():
         queue.send_message(MessageBody="a" * (message_size_limit + 1))
     ex = e.value
     ex.response["Error"]["Code"].should.equal("InvalidParameterValue")
-    ex.response["Error"]["Message"].should.contain(
-        "{} bytes".format(message_size_limit)
-    )
+    ex.response["Error"]["Message"].should.contain(f"{message_size_limit} bytes")
 
 
 @mock_sqs
@@ -3120,3 +3115,85 @@ def test_message_has_windows_return():
     messages = queue.receive_messages()
     messages.should.have.length_of(1)
     messages[0].body.should.match(message)
+
+
+@mock_sqs
+def test_message_delay_is_more_than_15_minutes():
+    client = boto3.client("sqs", region_name="us-east-1")
+    response = client.create_queue(
+        QueueName=f"{str(uuid4())[0:6]}.fifo", Attributes={"FifoQueue": "true"}
+    )
+    queue_url = response["QueueUrl"]
+
+    response = client.send_message_batch(
+        QueueUrl=queue_url,
+        Entries=[
+            {
+                "Id": "id_1",
+                "MessageBody": "body_1",
+                "DelaySeconds": 3,
+                "MessageAttributes": {
+                    "attribute_name_1": {
+                        "StringValue": "attribute_value_1",
+                        "DataType": "String",
+                    }
+                },
+                "MessageGroupId": "message_group_id_1",
+                "MessageDeduplicationId": "message_deduplication_id_1",
+            },
+            {
+                "Id": "id_2",
+                "MessageBody": "body_2",
+                "DelaySeconds": 1800,
+                "MessageAttributes": {
+                    "attribute_name_2": {"StringValue": "123", "DataType": "Number"}
+                },
+                "MessageGroupId": "message_group_id_2",
+                "MessageDeduplicationId": "message_deduplication_id_2",
+            },
+        ],
+    )
+
+    sorted([entry["Id"] for entry in response["Successful"]]).should.equal(["id_1"])
+
+    sorted([entry["Id"] for entry in response["Failed"]]).should.equal(["id_2"])
+
+    # print(response)
+
+    time.sleep(4)
+
+    response = client.receive_message(
+        QueueUrl=queue_url,
+        MaxNumberOfMessages=10,
+        MessageAttributeNames=["attribute_name_1", "attribute_name_2"],
+        AttributeNames=["MessageDeduplicationId", "MessageGroupId"],
+    )
+
+    response["Messages"].should.have.length_of(1)
+    response["Messages"][0]["Body"].should.equal("body_1")
+    response["Messages"][0]["MessageAttributes"].should.equal(
+        {"attribute_name_1": {"StringValue": "attribute_value_1", "DataType": "String"}}
+    )
+    response["Messages"][0]["Attributes"]["MessageGroupId"].should.equal(
+        "message_group_id_1"
+    )
+    response["Messages"][0]["Attributes"]["MessageDeduplicationId"].should.equal(
+        "message_deduplication_id_1"
+    )
+
+
+@mock_sqs
+def test_receive_message_that_becomes_visible_while_long_polling():
+    sqs = boto3.resource("sqs", region_name="us-east-1")
+    queue = sqs.create_queue(QueueName="test-queue")
+    msg_body = str(uuid4())
+    queue.send_message(MessageBody=msg_body)
+    messages = queue.receive_messages()
+    messages[0].change_visibility(VisibilityTimeout=1)
+    time_to_wait = 2
+    begin = time.time()
+    messages = queue.receive_messages(WaitTimeSeconds=time_to_wait)
+    end = time.time()
+    assert len(messages) == 1
+    assert messages[0].body == msg_body
+    assert end - begin < time_to_wait

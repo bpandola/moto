@@ -1,11 +1,10 @@
 import json
 import random
 import unittest
-from datetime import datetime
+from datetime import datetime, timezone
 
 import boto3
 import pytest
-import pytz
 import sure  # noqa # pylint: disable=unused-import
 from botocore.exceptions import ClientError
 
@@ -185,7 +184,7 @@ def test_describe_rule():
 
     response["Name"].should.equal(rule_name)
     response["Arn"].should.equal(
-        "arn:aws:events:us-west-2:{0}:rule/{1}".format(ACCOUNT_ID, rule_name)
+        f"arn:aws:events:us-west-2:{ACCOUNT_ID}:rule/{rule_name}"
     )
 
 
@@ -201,7 +200,7 @@ def test_describe_rule_with_event_bus_name():
         EventPattern=json.dumps({"account": [ACCOUNT_ID]}),
         State="DISABLED",
         Description="test rule",
-        RoleArn="arn:aws:iam::{}:role/test-role".format(ACCOUNT_ID),
+        RoleArn=f"arn:aws:iam::{ACCOUNT_ID}:role/test-role",
         EventBusName=event_bus_name,
     )
 
@@ -210,18 +209,14 @@ def test_describe_rule_with_event_bus_name():
 
     # then
     response["Arn"].should.equal(
-        "arn:aws:events:eu-central-1:{0}:rule/{1}/{2}".format(
-            ACCOUNT_ID, event_bus_name, rule_name
-        )
+        f"arn:aws:events:eu-central-1:{ACCOUNT_ID}:rule/{event_bus_name}/{rule_name}"
     )
     response["CreatedBy"].should.equal(ACCOUNT_ID)
     response["Description"].should.equal("test rule")
     response["EventBusName"].should.equal(event_bus_name)
     json.loads(response["EventPattern"]).should.equal({"account": [ACCOUNT_ID]})
     response["Name"].should.equal(rule_name)
-    response["RoleArn"].should.equal(
-        "arn:aws:iam::{}:role/test-role".format(ACCOUNT_ID)
-    )
+    response["RoleArn"].should.equal(f"arn:aws:iam::{ACCOUNT_ID}:role/test-role")
     response["State"].should.equal("DISABLED")
 
     response.should_not.have.key("ManagedBy")
@@ -322,6 +317,15 @@ def test_delete_rule_with_targets():
     ex.response["Error"]["Message"].should.equal(
         "Rule can't be deleted since it has targets."
     )
+
+
+@mock_events
+def test_delete_unknown_rule():
+    client = boto3.client("events", "us-west-1")
+    resp = client.delete_rule(Name="unknown")
+
+    # this fails silently - it just returns an empty 200. Verified against AWS.
+    resp["ResponseMetadata"].should.have.key("HTTPStatusCode").equals(200)
 
 
 @mock_events
@@ -496,9 +500,7 @@ def test_put_targets_error_missing_parameter_sqs_fifo():
             Targets=[
                 {
                     "Id": "sqs-fifo",
-                    "Arn": "arn:aws:sqs:eu-central-1:{}:test-queue.fifo".format(
-                        ACCOUNT_ID
-                    ),
+                    "Arn": f"arn:aws:sqs:eu-central-1:{ACCOUNT_ID}:test-queue.fifo",
                 }
             ],
         )
@@ -761,7 +763,7 @@ def test_create_event_bus():
     response = client.create_event_bus(Name="test-bus")
 
     response["EventBusArn"].should.equal(
-        "arn:aws:events:us-east-1:{}:event-bus/test-bus".format(ACCOUNT_ID)
+        f"arn:aws:events:us-east-1:{ACCOUNT_ID}:event-bus/test-bus"
     )
 
 
@@ -799,7 +801,7 @@ def test_describe_event_bus():
 
     response["Name"].should.equal("default")
     response["Arn"].should.equal(
-        "arn:aws:events:us-east-1:{}:event-bus/default".format(ACCOUNT_ID)
+        f"arn:aws:events:us-east-1:{ACCOUNT_ID}:event-bus/default"
     )
     response.should_not.have.key("Policy")
 
@@ -815,7 +817,7 @@ def test_describe_event_bus():
 
     response["Name"].should.equal("test-bus")
     response["Arn"].should.equal(
-        "arn:aws:events:us-east-1:{}:event-bus/test-bus".format(ACCOUNT_ID)
+        f"arn:aws:events:us-east-1:{ACCOUNT_ID}:event-bus/test-bus"
     )
     json.loads(response["Policy"]).should.equal(
         {
@@ -826,9 +828,7 @@ def test_describe_event_bus():
                     "Effect": "Allow",
                     "Principal": {"AWS": "arn:aws:iam::111111111111:root"},
                     "Action": "events:PutEvents",
-                    "Resource": "arn:aws:events:us-east-1:{}:event-bus/test-bus".format(
-                        ACCOUNT_ID
-                    ),
+                    "Resource": f"arn:aws:events:us-east-1:{ACCOUNT_ID}:event-bus/test-bus",
                 }
             ],
         }
@@ -859,33 +859,23 @@ def test_list_event_buses():
         [
             {
                 "Name": "default",
-                "Arn": "arn:aws:events:us-east-1:{}:event-bus/default".format(
-                    ACCOUNT_ID
-                ),
+                "Arn": f"arn:aws:events:us-east-1:{ACCOUNT_ID}:event-bus/default",
             },
             {
                 "Name": "other-bus-1",
-                "Arn": "arn:aws:events:us-east-1:{}:event-bus/other-bus-1".format(
-                    ACCOUNT_ID
-                ),
+                "Arn": f"arn:aws:events:us-east-1:{ACCOUNT_ID}:event-bus/other-bus-1",
             },
             {
                 "Name": "other-bus-2",
-                "Arn": "arn:aws:events:us-east-1:{}:event-bus/other-bus-2".format(
-                    ACCOUNT_ID
-                ),
+                "Arn": f"arn:aws:events:us-east-1:{ACCOUNT_ID}:event-bus/other-bus-2",
             },
             {
                 "Name": "test-bus-1",
-                "Arn": "arn:aws:events:us-east-1:{}:event-bus/test-bus-1".format(
-                    ACCOUNT_ID
-                ),
+                "Arn": f"arn:aws:events:us-east-1:{ACCOUNT_ID}:event-bus/test-bus-1",
             },
             {
                 "Name": "test-bus-2",
-                "Arn": "arn:aws:events:us-east-1:{}:event-bus/test-bus-2".format(
-                    ACCOUNT_ID
-                ),
+                "Arn": f"arn:aws:events:us-east-1:{ACCOUNT_ID}:event-bus/test-bus-2",
             },
         ]
     )
@@ -897,15 +887,11 @@ def test_list_event_buses():
         [
             {
                 "Name": "other-bus-1",
-                "Arn": "arn:aws:events:us-east-1:{}:event-bus/other-bus-1".format(
-                    ACCOUNT_ID
-                ),
+                "Arn": f"arn:aws:events:us-east-1:{ACCOUNT_ID}:event-bus/other-bus-1",
             },
             {
                 "Name": "other-bus-2",
-                "Arn": "arn:aws:events:us-east-1:{}:event-bus/other-bus-2".format(
-                    ACCOUNT_ID
-                ),
+                "Arn": f"arn:aws:events:us-east-1:{ACCOUNT_ID}:event-bus/other-bus-2",
             },
         ]
     )
@@ -927,9 +913,7 @@ def test_delete_event_bus():
         [
             {
                 "Name": "default",
-                "Arn": "arn:aws:events:us-east-1:{}:event-bus/default".format(
-                    ACCOUNT_ID
-                ),
+                "Arn": f"arn:aws:events:us-east-1:{ACCOUNT_ID}:event-bus/default",
             }
         ]
     )
@@ -1007,9 +991,7 @@ def test_tag_resource_error_unknown_arn():
     # when
     with pytest.raises(ClientError) as e:
         client.tag_resource(
-            ResourceARN="arn:aws:events:eu-central-1:{0}:rule/unknown".format(
-                ACCOUNT_ID
-            ),
+            ResourceARN=f"arn:aws:events:eu-central-1:{ACCOUNT_ID}:rule/unknown",
             Tags=[],
         )
 
@@ -1031,9 +1013,7 @@ def test_untag_resource_error_unknown_arn():
     # when
     with pytest.raises(ClientError) as e:
         client.untag_resource(
-            ResourceARN="arn:aws:events:eu-central-1:{0}:rule/unknown".format(
-                ACCOUNT_ID
-            ),
+            ResourceARN=f"arn:aws:events:eu-central-1:{ACCOUNT_ID}:rule/unknown",
             TagKeys=[],
         )
 
@@ -1055,9 +1035,7 @@ def test_list_tags_for_resource_error_unknown_arn():
     # when
     with pytest.raises(ClientError) as e:
         client.list_tags_for_resource(
-            ResourceARN="arn:aws:events:eu-central-1:{0}:rule/unknown".format(
-                ACCOUNT_ID
-            )
+            ResourceARN=f"arn:aws:events:eu-central-1:{ACCOUNT_ID}:rule/unknown"
         )
 
     # then
@@ -1079,24 +1057,22 @@ def test_create_archive():
     # when
     response = client.create_archive(
         ArchiveName=archive_name,
-        EventSourceArn="arn:aws:events:eu-central-1:{}:event-bus/default".format(
-            ACCOUNT_ID
-        ),
+        EventSourceArn=f"arn:aws:events:eu-central-1:{ACCOUNT_ID}:event-bus/default",
     )
 
     # then
     response["ArchiveArn"].should.equal(
-        "arn:aws:events:eu-central-1:{0}:archive/{1}".format(ACCOUNT_ID, archive_name)
+        f"arn:aws:events:eu-central-1:{ACCOUNT_ID}:archive/{archive_name}"
     )
     response["CreationTime"].should.be.a(datetime)
     response["State"].should.equal("ENABLED")
 
     # check for archive rule existence
-    rule_name = "Events-Archive-{}".format(archive_name)
+    rule_name = f"Events-Archive-{archive_name}"
     response = client.describe_rule(Name=rule_name)
 
     response["Arn"].should.equal(
-        "arn:aws:events:eu-central-1:{0}:rule/{1}".format(ACCOUNT_ID, rule_name)
+        f"arn:aws:events:eu-central-1:{ACCOUNT_ID}:rule/{rule_name}"
     )
     response["CreatedBy"].should.equal(ACCOUNT_ID)
     response["EventBusName"].should.equal("default")
@@ -1133,7 +1109,7 @@ def test_create_archive_custom_event_bus():
 
     # then
     response["ArchiveArn"].should.equal(
-        "arn:aws:events:eu-central-1:{}:archive/test-archive".format(ACCOUNT_ID)
+        f"arn:aws:events:eu-central-1:{ACCOUNT_ID}:archive/test-archive"
     )
     response["CreationTime"].should.be.a(datetime)
     response["State"].should.equal("ENABLED")
@@ -1150,7 +1126,7 @@ def test_create_archive_error_long_name():
         client.create_archive(
             ArchiveName=name,
             EventSourceArn=(
-                "arn:aws:events:eu-central-1:{}:event-bus/default".format(ACCOUNT_ID)
+                f"arn:aws:events:eu-central-1:{ACCOUNT_ID}:event-bus/default"
             ),
         )
 
@@ -1161,8 +1137,8 @@ def test_create_archive_error_long_name():
     ex.response["Error"]["Code"].should.contain("ValidationException")
     ex.response["Error"]["Message"].should.equal(
         " 1 validation error detected: "
-        "Value '{}' at 'archiveName' failed to satisfy constraint: "
-        "Member must have length less than or equal to 48".format(name)
+        f"Value '{name}' at 'archiveName' failed to satisfy constraint: "
+        "Member must have length less than or equal to 48"
     )
 
 
@@ -1176,7 +1152,7 @@ def test_create_archive_error_invalid_event_pattern():
         client.create_archive(
             ArchiveName="test-archive",
             EventSourceArn=(
-                "arn:aws:events:eu-central-1:{}:event-bus/default".format(ACCOUNT_ID)
+                f"arn:aws:events:eu-central-1:{ACCOUNT_ID}:event-bus/default"
             ),
             EventPattern="invalid",
         )
@@ -1201,7 +1177,7 @@ def test_create_archive_error_invalid_event_pattern_not_an_array():
         client.create_archive(
             ArchiveName="test-archive",
             EventSourceArn=(
-                "arn:aws:events:eu-central-1:{}:event-bus/default".format(ACCOUNT_ID)
+                f"arn:aws:events:eu-central-1:{ACCOUNT_ID}:event-bus/default"
             ),
             EventPattern=json.dumps(
                 {
@@ -1234,9 +1210,7 @@ def test_create_archive_error_unknown_event_bus():
         client.create_archive(
             ArchiveName="test-archive",
             EventSourceArn=(
-                "arn:aws:events:eu-central-1:{}:event-bus/{}".format(
-                    ACCOUNT_ID, event_bus_name
-                )
+                f"arn:aws:events:eu-central-1:{ACCOUNT_ID}:event-bus/{event_bus_name}"
             ),
         )
 
@@ -1246,7 +1220,7 @@ def test_create_archive_error_unknown_event_bus():
     ex.response["ResponseMetadata"]["HTTPStatusCode"].should.equal(400)
     ex.response["Error"]["Code"].should.contain("ResourceNotFoundException")
     ex.response["Error"]["Message"].should.equal(
-        "Event bus {} does not exist.".format(event_bus_name)
+        f"Event bus {event_bus_name} does not exist."
     )
 
 
@@ -1255,7 +1229,7 @@ def test_create_archive_error_duplicate():
     # given
     client = boto3.client("events", "eu-central-1")
     name = "test-archive"
-    source_arn = "arn:aws:events:eu-central-1:{}:event-bus/default".format(ACCOUNT_ID)
+    source_arn = f"arn:aws:events:eu-central-1:{ACCOUNT_ID}:event-bus/default"
     client.create_archive(ArchiveName=name, EventSourceArn=source_arn)
 
     # when
@@ -1275,7 +1249,7 @@ def test_describe_archive():
     # given
     client = boto3.client("events", "eu-central-1")
     name = "test-archive"
-    source_arn = "arn:aws:events:eu-central-1:{}:event-bus/default".format(ACCOUNT_ID)
+    source_arn = f"arn:aws:events:eu-central-1:{ACCOUNT_ID}:event-bus/default"
     event_pattern = json.dumps({"key": ["value"]})
     client.create_archive(
         ArchiveName=name,
@@ -1289,7 +1263,7 @@ def test_describe_archive():
 
     # then
     response["ArchiveArn"].should.equal(
-        "arn:aws:events:eu-central-1:{0}:archive/{1}".format(ACCOUNT_ID, name)
+        f"arn:aws:events:eu-central-1:{ACCOUNT_ID}:archive/{name}"
     )
     response["ArchiveName"].should.equal(name)
     response["CreationTime"].should.be.a(datetime)
@@ -1317,9 +1291,7 @@ def test_describe_archive_error_unknown_archive():
     ex.operation_name.should.equal("DescribeArchive")
     ex.response["ResponseMetadata"]["HTTPStatusCode"].should.equal(400)
     ex.response["Error"]["Code"].should.contain("ResourceNotFoundException")
-    ex.response["Error"]["Message"].should.equal(
-        "Archive {} does not exist.".format(name)
-    )
+    ex.response["Error"]["Message"].should.equal(f"Archive {name} does not exist.")
 
 
 @mock_events
@@ -1327,7 +1299,7 @@ def test_list_archives():
     # given
     client = boto3.client("events", "eu-central-1")
     name = "test-archive"
-    source_arn = "arn:aws:events:eu-central-1:{}:event-bus/default".format(ACCOUNT_ID)
+    source_arn = f"arn:aws:events:eu-central-1:{ACCOUNT_ID}:event-bus/default"
     event_pattern = json.dumps({"key": ["value"]})
     client.create_archive(
         ArchiveName=name,
@@ -1359,7 +1331,7 @@ def test_list_archives():
 def test_list_archives_with_name_prefix():
     # given
     client = boto3.client("events", "eu-central-1")
-    source_arn = "arn:aws:events:eu-central-1:{}:event-bus/default".format(ACCOUNT_ID)
+    source_arn = f"arn:aws:events:eu-central-1:{ACCOUNT_ID}:event-bus/default"
     client.create_archive(ArchiveName="test", EventSourceArn=source_arn)
     client.create_archive(ArchiveName="test-archive", EventSourceArn=source_arn)
 
@@ -1375,7 +1347,7 @@ def test_list_archives_with_name_prefix():
 def test_list_archives_with_source_arn():
     # given
     client = boto3.client("events", "eu-central-1")
-    source_arn = "arn:aws:events:eu-central-1:{}:event-bus/default".format(ACCOUNT_ID)
+    source_arn = f"arn:aws:events:eu-central-1:{ACCOUNT_ID}:event-bus/default"
     source_arn_2 = client.create_event_bus(Name="test-bus")["EventBusArn"]
     client.create_archive(ArchiveName="test", EventSourceArn=source_arn)
     client.create_archive(ArchiveName="test-archive", EventSourceArn=source_arn_2)
@@ -1392,7 +1364,7 @@ def test_list_archives_with_source_arn():
 def test_list_archives_with_state():
     # given
     client = boto3.client("events", "eu-central-1")
-    source_arn = "arn:aws:events:eu-central-1:{}:event-bus/default".format(ACCOUNT_ID)
+    source_arn = f"arn:aws:events:eu-central-1:{ACCOUNT_ID}:event-bus/default"
     client.create_archive(ArchiveName="test", EventSourceArn=source_arn)
     client.create_archive(ArchiveName="test-archive", EventSourceArn=source_arn)
 
@@ -1450,7 +1422,7 @@ def test_update_archive():
     # given
     client = boto3.client("events", "eu-central-1")
     name = "test-archive"
-    source_arn = "arn:aws:events:eu-central-1:{}:event-bus/default".format(ACCOUNT_ID)
+    source_arn = f"arn:aws:events:eu-central-1:{ACCOUNT_ID}:event-bus/default"
     event_pattern = json.dumps({"key": ["value"]})
     archive_arn = client.create_archive(ArchiveName=name, EventSourceArn=source_arn)[
         "ArchiveArn"
@@ -1490,9 +1462,7 @@ def test_update_archive_error_invalid_event_pattern():
     name = "test-archive"
     client.create_archive(
         ArchiveName=name,
-        EventSourceArn="arn:aws:events:eu-central-1:{}:event-bus/default".format(
-            ACCOUNT_ID
-        ),
+        EventSourceArn=f"arn:aws:events:eu-central-1:{ACCOUNT_ID}:event-bus/default",
     )
 
     # when
@@ -1524,9 +1494,7 @@ def test_update_archive_error_unknown_archive():
     ex.operation_name.should.equal("UpdateArchive")
     ex.response["ResponseMetadata"]["HTTPStatusCode"].should.equal(400)
     ex.response["Error"]["Code"].should.contain("ResourceNotFoundException")
-    ex.response["Error"]["Message"].should.equal(
-        "Archive {} does not exist.".format(name)
-    )
+    ex.response["Error"]["Message"].should.equal(f"Archive {name} does not exist.")
 
 
 @mock_events
@@ -1536,9 +1504,7 @@ def test_delete_archive():
     name = "test-archive"
     client.create_archive(
         ArchiveName=name,
-        EventSourceArn="arn:aws:events:eu-central-1:{}:event-bus/default".format(
-            ACCOUNT_ID
-        ),
+        EventSourceArn=f"arn:aws:events:eu-central-1:{ACCOUNT_ID}:event-bus/default",
     )
 
     # when
@@ -1564,9 +1530,7 @@ def test_delete_archive_error_unknown_archive():
     ex.operation_name.should.equal("DeleteArchive")
     ex.response["ResponseMetadata"]["HTTPStatusCode"].should.equal(400)
     ex.response["Error"]["Code"].should.contain("ResourceNotFoundException")
-    ex.response["Error"]["Message"].should.equal(
-        "Archive {} does not exist.".format(name)
-    )
+    ex.response["Error"]["Message"].should.equal(f"Archive {name} does not exist.")
 
 
 @mock_events
@@ -1576,9 +1540,7 @@ def test_archive_actual_events():
     name = "test-archive"
     name_2 = "test-archive-no-match"
     name_3 = "test-archive-matches"
-    event_bus_arn = "arn:aws:events:eu-central-1:{}:event-bus/default".format(
-        ACCOUNT_ID
-    )
+    event_bus_arn = f"arn:aws:events:eu-central-1:{ACCOUNT_ID}:event-bus/default"
     event = {
         "Source": "source",
         "DetailType": "type",
@@ -1620,9 +1582,7 @@ def test_archive_actual_events():
 def test_archive_event_with_bus_arn():
     # given
     client = boto3.client("events", "eu-central-1")
-    event_bus_arn = "arn:aws:events:eu-central-1:{}:event-bus/default".format(
-        ACCOUNT_ID
-    )
+    event_bus_arn = f"arn:aws:events:eu-central-1:{ACCOUNT_ID}:event-bus/default"
     archive_name = "mock_archive"
     event_with_bus_arn = {
         "Source": "source",
@@ -1649,9 +1609,7 @@ def test_start_replay():
     # given
     client = boto3.client("events", "eu-central-1")
     name = "test-replay"
-    event_bus_arn = "arn:aws:events:eu-central-1:{}:event-bus/default".format(
-        ACCOUNT_ID
-    )
+    event_bus_arn = f"arn:aws:events:eu-central-1:{ACCOUNT_ID}:event-bus/default"
     archive_arn = client.create_archive(
         ArchiveName="test-archive", EventSourceArn=event_bus_arn
     )["ArchiveArn"]
@@ -1667,7 +1625,7 @@ def test_start_replay():
 
     # then
     response["ReplayArn"].should.equal(
-        "arn:aws:events:eu-central-1:{0}:replay/{1}".format(ACCOUNT_ID, name)
+        f"arn:aws:events:eu-central-1:{ACCOUNT_ID}:replay/{name}"
     )
     response["ReplayStartTime"].should.be.a(datetime)
     response["State"].should.equal("STARTING")
@@ -1683,15 +1641,11 @@ def test_start_replay_error_unknown_event_bus():
     with pytest.raises(ClientError) as e:
         client.start_replay(
             ReplayName="test",
-            EventSourceArn="arn:aws:events:eu-central-1:{}:archive/test".format(
-                ACCOUNT_ID
-            ),
+            EventSourceArn=f"arn:aws:events:eu-central-1:{ACCOUNT_ID}:archive/test",
             EventStartTime=datetime(2021, 2, 1),
             EventEndTime=datetime(2021, 2, 2),
             Destination={
-                "Arn": "arn:aws:events:eu-central-1:{0}:event-bus/{1}".format(
-                    ACCOUNT_ID, event_bus_name
-                ),
+                "Arn": f"arn:aws:events:eu-central-1:{ACCOUNT_ID}:event-bus/{event_bus_name}",
             },
         )
 
@@ -1701,7 +1655,7 @@ def test_start_replay_error_unknown_event_bus():
     ex.response["ResponseMetadata"]["HTTPStatusCode"].should.equal(400)
     ex.response["Error"]["Code"].should.contain("ResourceNotFoundException")
     ex.response["Error"]["Message"].should.equal(
-        "Event bus {} does not exist.".format(event_bus_name)
+        f"Event bus {event_bus_name} does not exist."
     )
 
 
@@ -1714,9 +1668,7 @@ def test_start_replay_error_invalid_event_bus_arn():
     with pytest.raises(ClientError) as e:
         client.start_replay(
             ReplayName="test",
-            EventSourceArn="arn:aws:events:eu-central-1:{}:archive/test".format(
-                ACCOUNT_ID
-            ),
+            EventSourceArn=f"arn:aws:events:eu-central-1:{ACCOUNT_ID}:archive/test",
             EventStartTime=datetime(2021, 2, 1),
             EventEndTime=datetime(2021, 2, 2),
             Destination={
@@ -1744,15 +1696,11 @@ def test_start_replay_error_unknown_archive():
     with pytest.raises(ClientError) as e:
         client.start_replay(
             ReplayName="test",
-            EventSourceArn="arn:aws:events:eu-central-1:{0}:archive/{1}".format(
-                ACCOUNT_ID, archive_name
-            ),
+            EventSourceArn=f"arn:aws:events:eu-central-1:{ACCOUNT_ID}:archive/{archive_name}",
             EventStartTime=datetime(2021, 2, 1),
             EventEndTime=datetime(2021, 2, 2),
             Destination={
-                "Arn": "arn:aws:events:eu-central-1:{}:event-bus/default".format(
-                    ACCOUNT_ID
-                ),
+                "Arn": f"arn:aws:events:eu-central-1:{ACCOUNT_ID}:event-bus/default",
             },
         )
 
@@ -1763,7 +1711,7 @@ def test_start_replay_error_unknown_archive():
     ex.response["Error"]["Code"].should.contain("ValidationException")
     ex.response["Error"]["Message"].should.equal(
         "Parameter EventSourceArn is not valid. "
-        "Reason: Archive {} does not exist.".format(archive_name)
+        f"Reason: Archive {archive_name} does not exist."
     )
 
 
@@ -1773,9 +1721,7 @@ def test_start_replay_error_cross_event_bus():
     client = boto3.client("events", "eu-central-1")
     archive_arn = client.create_archive(
         ArchiveName="test-archive",
-        EventSourceArn="arn:aws:events:eu-central-1:{}:event-bus/default".format(
-            ACCOUNT_ID
-        ),
+        EventSourceArn=f"arn:aws:events:eu-central-1:{ACCOUNT_ID}:event-bus/default",
     )["ArchiveArn"]
     event_bus_arn = client.create_event_bus(Name="test-bus")["EventBusArn"]
 
@@ -1804,9 +1750,7 @@ def test_start_replay_error_cross_event_bus():
 def test_start_replay_error_invalid_end_time():
     # given
     client = boto3.client("events", "eu-central-1")
-    event_bus_arn = "arn:aws:events:eu-central-1:{}:event-bus/default".format(
-        ACCOUNT_ID
-    )
+    event_bus_arn = f"arn:aws:events:eu-central-1:{ACCOUNT_ID}:event-bus/default"
     archive_arn = client.create_archive(
         ArchiveName="test-archive", EventSourceArn=event_bus_arn
     )["ArchiveArn"]
@@ -1837,9 +1781,7 @@ def test_start_replay_error_duplicate():
     # given
     client = boto3.client("events", "eu-central-1")
     name = "test-replay"
-    event_bus_arn = "arn:aws:events:eu-central-1:{}:event-bus/default".format(
-        ACCOUNT_ID
-    )
+    event_bus_arn = f"arn:aws:events:eu-central-1:{ACCOUNT_ID}:event-bus/default"
     archive_arn = client.create_archive(
         ArchiveName="test-archive", EventSourceArn=event_bus_arn
     )["ArchiveArn"]
@@ -1866,9 +1808,7 @@ def test_start_replay_error_duplicate():
     ex.operation_name.should.equal("StartReplay")
     ex.response["ResponseMetadata"]["HTTPStatusCode"].should.equal(400)
     ex.response["Error"]["Code"].should.contain("ResourceAlreadyExistsException")
-    ex.response["Error"]["Message"].should.equal(
-        "Replay {} already exists.".format(name)
-    )
+    ex.response["Error"]["Message"].should.equal(f"Replay {name} already exists.")
 
 
 @mock_events
@@ -1876,9 +1816,7 @@ def test_describe_replay():
     # given
     client = boto3.client("events", "eu-central-1")
     name = "test-replay"
-    event_bus_arn = "arn:aws:events:eu-central-1:{}:event-bus/default".format(
-        ACCOUNT_ID
-    )
+    event_bus_arn = f"arn:aws:events:eu-central-1:{ACCOUNT_ID}:event-bus/default"
     archive_arn = client.create_archive(
         ArchiveName="test-archive", EventSourceArn=event_bus_arn
     )["ArchiveArn"]
@@ -1886,8 +1824,8 @@ def test_describe_replay():
         ReplayName=name,
         Description="test replay",
         EventSourceArn=archive_arn,
-        EventStartTime=datetime(2021, 2, 1, tzinfo=pytz.utc),
-        EventEndTime=datetime(2021, 2, 2, tzinfo=pytz.utc),
+        EventStartTime=datetime(2021, 2, 1, tzinfo=timezone.utc),
+        EventEndTime=datetime(2021, 2, 2, tzinfo=timezone.utc),
         Destination={"Arn": event_bus_arn},
     )
 
@@ -1898,10 +1836,10 @@ def test_describe_replay():
     response["Description"].should.equal("test replay")
     response["Destination"].should.equal({"Arn": event_bus_arn})
     response["EventSourceArn"].should.equal(archive_arn)
-    response["EventStartTime"].should.equal(datetime(2021, 2, 1, tzinfo=pytz.utc))
-    response["EventEndTime"].should.equal(datetime(2021, 2, 2, tzinfo=pytz.utc))
+    response["EventStartTime"].should.equal(datetime(2021, 2, 1, tzinfo=timezone.utc))
+    response["EventEndTime"].should.equal(datetime(2021, 2, 2, tzinfo=timezone.utc))
     response["ReplayArn"].should.equal(
-        "arn:aws:events:eu-central-1:{0}:replay/{1}".format(ACCOUNT_ID, name)
+        f"arn:aws:events:eu-central-1:{ACCOUNT_ID}:replay/{name}"
     )
     response["ReplayName"].should.equal(name)
     response["ReplayStartTime"].should.be.a(datetime)
@@ -1924,9 +1862,7 @@ def test_describe_replay_error_unknown_replay():
     ex.operation_name.should.equal("DescribeReplay")
     ex.response["ResponseMetadata"]["HTTPStatusCode"].should.equal(400)
     ex.response["Error"]["Code"].should.contain("ResourceNotFoundException")
-    ex.response["Error"]["Message"].should.equal(
-        "Replay {} does not exist.".format(name)
-    )
+    ex.response["Error"]["Message"].should.equal(f"Replay {name} does not exist.")
 
 
 @mock_events
@@ -1934,9 +1870,7 @@ def test_list_replays():
     # given
     client = boto3.client("events", "eu-central-1")
     name = "test-replay"
-    event_bus_arn = "arn:aws:events:eu-central-1:{}:event-bus/default".format(
-        ACCOUNT_ID
-    )
+    event_bus_arn = f"arn:aws:events:eu-central-1:{ACCOUNT_ID}:event-bus/default"
     archive_arn = client.create_archive(
         ArchiveName="test-replay", EventSourceArn=event_bus_arn
     )["ArchiveArn"]
@@ -1944,8 +1878,8 @@ def test_list_replays():
         ReplayName=name,
         Description="test replay",
         EventSourceArn=archive_arn,
-        EventStartTime=datetime(2021, 2, 1, tzinfo=pytz.utc),
-        EventEndTime=datetime(2021, 2, 2, tzinfo=pytz.utc),
+        EventStartTime=datetime(2021, 2, 1, tzinfo=timezone.utc),
+        EventEndTime=datetime(2021, 2, 2, tzinfo=timezone.utc),
         Destination={"Arn": event_bus_arn},
     )
 
@@ -1956,8 +1890,8 @@ def test_list_replays():
     replays.should.have.length_of(1)
     replay = replays[0]
     replay["EventSourceArn"].should.equal(archive_arn)
-    replay["EventStartTime"].should.equal(datetime(2021, 2, 1, tzinfo=pytz.utc))
-    replay["EventEndTime"].should.equal(datetime(2021, 2, 2, tzinfo=pytz.utc))
+    replay["EventStartTime"].should.equal(datetime(2021, 2, 1, tzinfo=timezone.utc))
+    replay["EventEndTime"].should.equal(datetime(2021, 2, 2, tzinfo=timezone.utc))
     replay["ReplayName"].should.equal(name)
     replay["ReplayStartTime"].should.be.a(datetime)
     replay["ReplayEndTime"].should.be.a(datetime)
@@ -1968,24 +1902,22 @@ def test_list_replays():
 def test_list_replays_with_name_prefix():
     # given
     client = boto3.client("events", "eu-central-1")
-    event_bus_arn = "arn:aws:events:eu-central-1:{}:event-bus/default".format(
-        ACCOUNT_ID
-    )
+    event_bus_arn = f"arn:aws:events:eu-central-1:{ACCOUNT_ID}:event-bus/default"
     archive_arn = client.create_archive(
         ArchiveName="test-replay", EventSourceArn=event_bus_arn
     )["ArchiveArn"]
     client.start_replay(
         ReplayName="test",
         EventSourceArn=archive_arn,
-        EventStartTime=datetime(2021, 1, 1, tzinfo=pytz.utc),
-        EventEndTime=datetime(2021, 1, 2, tzinfo=pytz.utc),
+        EventStartTime=datetime(2021, 1, 1, tzinfo=timezone.utc),
+        EventEndTime=datetime(2021, 1, 2, tzinfo=timezone.utc),
         Destination={"Arn": event_bus_arn},
     )
     client.start_replay(
         ReplayName="test-replay",
         EventSourceArn=archive_arn,
-        EventStartTime=datetime(2021, 2, 1, tzinfo=pytz.utc),
-        EventEndTime=datetime(2021, 2, 2, tzinfo=pytz.utc),
+        EventStartTime=datetime(2021, 2, 1, tzinfo=timezone.utc),
+        EventEndTime=datetime(2021, 2, 2, tzinfo=timezone.utc),
         Destination={"Arn": event_bus_arn},
     )
 
@@ -2001,24 +1933,22 @@ def test_list_replays_with_name_prefix():
 def test_list_replays_with_source_arn():
     # given
     client = boto3.client("events", "eu-central-1")
-    event_bus_arn = "arn:aws:events:eu-central-1:{}:event-bus/default".format(
-        ACCOUNT_ID
-    )
+    event_bus_arn = f"arn:aws:events:eu-central-1:{ACCOUNT_ID}:event-bus/default"
     archive_arn = client.create_archive(
         ArchiveName="test-replay", EventSourceArn=event_bus_arn
     )["ArchiveArn"]
     client.start_replay(
         ReplayName="test",
         EventSourceArn=archive_arn,
-        EventStartTime=datetime(2021, 1, 1, tzinfo=pytz.utc),
-        EventEndTime=datetime(2021, 1, 2, tzinfo=pytz.utc),
+        EventStartTime=datetime(2021, 1, 1, tzinfo=timezone.utc),
+        EventEndTime=datetime(2021, 1, 2, tzinfo=timezone.utc),
         Destination={"Arn": event_bus_arn},
     )
     client.start_replay(
         ReplayName="test-replay",
         EventSourceArn=archive_arn,
-        EventStartTime=datetime(2021, 2, 1, tzinfo=pytz.utc),
-        EventEndTime=datetime(2021, 2, 2, tzinfo=pytz.utc),
+        EventStartTime=datetime(2021, 2, 1, tzinfo=timezone.utc),
+        EventEndTime=datetime(2021, 2, 2, tzinfo=timezone.utc),
         Destination={"Arn": event_bus_arn},
     )
 
@@ -2033,24 +1963,22 @@ def test_list_replays_with_source_arn():
 def test_list_replays_with_state():
     # given
     client = boto3.client("events", "eu-central-1")
-    event_bus_arn = "arn:aws:events:eu-central-1:{}:event-bus/default".format(
-        ACCOUNT_ID
-    )
+    event_bus_arn = f"arn:aws:events:eu-central-1:{ACCOUNT_ID}:event-bus/default"
     archive_arn = client.create_archive(
         ArchiveName="test-replay", EventSourceArn=event_bus_arn
     )["ArchiveArn"]
     client.start_replay(
         ReplayName="test",
         EventSourceArn=archive_arn,
-        EventStartTime=datetime(2021, 1, 1, tzinfo=pytz.utc),
-        EventEndTime=datetime(2021, 1, 2, tzinfo=pytz.utc),
+        EventStartTime=datetime(2021, 1, 1, tzinfo=timezone.utc),
+        EventEndTime=datetime(2021, 1, 2, tzinfo=timezone.utc),
         Destination={"Arn": event_bus_arn},
     )
     client.start_replay(
         ReplayName="test-replay",
         EventSourceArn=archive_arn,
-        EventStartTime=datetime(2021, 2, 1, tzinfo=pytz.utc),
-        EventEndTime=datetime(2021, 2, 2, tzinfo=pytz.utc),
+        EventStartTime=datetime(2021, 2, 1, tzinfo=timezone.utc),
+        EventEndTime=datetime(2021, 2, 2, tzinfo=timezone.utc),
         Destination={"Arn": event_bus_arn},
     )
 
@@ -2108,9 +2036,7 @@ def test_cancel_replay():
     # given
     client = boto3.client("events", "eu-central-1")
     name = "test-replay"
-    event_bus_arn = "arn:aws:events:eu-central-1:{}:event-bus/default".format(
-        ACCOUNT_ID
-    )
+    event_bus_arn = f"arn:aws:events:eu-central-1:{ACCOUNT_ID}:event-bus/default"
     archive_arn = client.create_archive(
         ArchiveName="test-archive", EventSourceArn=event_bus_arn
     )["ArchiveArn"]
@@ -2118,8 +2044,8 @@ def test_cancel_replay():
         ReplayName=name,
         Description="test replay",
         EventSourceArn=archive_arn,
-        EventStartTime=datetime(2021, 2, 1, tzinfo=pytz.utc),
-        EventEndTime=datetime(2021, 2, 2, tzinfo=pytz.utc),
+        EventStartTime=datetime(2021, 2, 1, tzinfo=timezone.utc),
+        EventEndTime=datetime(2021, 2, 2, tzinfo=timezone.utc),
         Destination={"Arn": event_bus_arn},
     )
 
@@ -2128,7 +2054,7 @@ def test_cancel_replay():
 
     # then
     response["ReplayArn"].should.equal(
-        "arn:aws:events:eu-central-1:{0}:replay/{1}".format(ACCOUNT_ID, name)
+        f"arn:aws:events:eu-central-1:{ACCOUNT_ID}:replay/{name}"
     )
     response["State"].should.equal("CANCELLING")
 
@@ -2151,9 +2077,7 @@ def test_cancel_replay_error_unknown_replay():
     ex.operation_name.should.equal("CancelReplay")
     ex.response["ResponseMetadata"]["HTTPStatusCode"].should.equal(400)
     ex.response["Error"]["Code"].should.contain("ResourceNotFoundException")
-    ex.response["Error"]["Message"].should.equal(
-        "Replay {} does not exist.".format(name)
-    )
+    ex.response["Error"]["Message"].should.equal(f"Replay {name} does not exist.")
 
 
 @mock_events
@@ -2161,9 +2085,7 @@ def test_cancel_replay_error_illegal_state():
     # given
     client = boto3.client("events", "eu-central-1")
     name = "test-replay"
-    event_bus_arn = "arn:aws:events:eu-central-1:{}:event-bus/default".format(
-        ACCOUNT_ID
-    )
+    event_bus_arn = f"arn:aws:events:eu-central-1:{ACCOUNT_ID}:event-bus/default"
     archive_arn = client.create_archive(
         ArchiveName="test-archive", EventSourceArn=event_bus_arn
     )["ArchiveArn"]
@@ -2171,8 +2093,8 @@ def test_cancel_replay_error_illegal_state():
         ReplayName=name,
         Description="test replay",
         EventSourceArn=archive_arn,
-        EventStartTime=datetime(2021, 2, 1, tzinfo=pytz.utc),
-        EventEndTime=datetime(2021, 2, 2, tzinfo=pytz.utc),
+        EventStartTime=datetime(2021, 2, 1, tzinfo=timezone.utc),
+        EventEndTime=datetime(2021, 2, 2, tzinfo=timezone.utc),
         Destination={"Arn": event_bus_arn},
     )
     client.cancel_replay(ReplayName=name)
@@ -2187,7 +2109,7 @@ def test_cancel_replay_error_illegal_state():
     ex.response["ResponseMetadata"]["HTTPStatusCode"].should.equal(400)
     ex.response["Error"]["Code"].should.contain("IllegalStatusException")
     ex.response["Error"]["Message"].should.equal(
-        "Replay {} is not in a valid state for this operation.".format(name)
+        f"Replay {name} is not in a valid state for this operation."
     )
 
 
@@ -2200,18 +2122,14 @@ def test_start_replay_send_to_log_group():
     log_group_name = "/test-group"
     rule_name = "test-rule"
     logs_client.create_log_group(logGroupName=log_group_name)
-    event_bus_arn = "arn:aws:events:eu-central-1:{}:event-bus/default".format(
-        ACCOUNT_ID
-    )
+    event_bus_arn = f"arn:aws:events:eu-central-1:{ACCOUNT_ID}:event-bus/default"
     client.put_rule(Name=rule_name, EventPattern=json.dumps({"account": [ACCOUNT_ID]}))
     client.put_targets(
         Rule=rule_name,
         Targets=[
             {
                 "Id": "test",
-                "Arn": "arn:aws:logs:eu-central-1:{0}:log-group:{1}".format(
-                    ACCOUNT_ID, log_group_name
-                ),
+                "Arn": f"arn:aws:logs:eu-central-1:{ACCOUNT_ID}:log-group:{log_group_name}",
             }
         ],
     )
@@ -2287,13 +2205,13 @@ def test_create_and_list_connections():
     )
 
     response.get("ConnectionArn").should.contain(
-        "arn:aws:events:eu-central-1:{0}:connection/test/".format(ACCOUNT_ID)
+        f"arn:aws:events:eu-central-1:{ACCOUNT_ID}:connection/test/"
     )
 
     response = client.list_connections()
 
     response.get("Connections")[0].get("ConnectionArn").should.contain(
-        "arn:aws:events:eu-central-1:{0}:connection/test/".format(ACCOUNT_ID)
+        f"arn:aws:events:eu-central-1:{ACCOUNT_ID}:connection/test/"
     )
 
 

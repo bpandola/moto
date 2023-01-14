@@ -229,6 +229,29 @@ class SecretsManagerBackend(BaseBackend):
             version_id = str(mock_random.uuid4())
         return version_id
 
+    def cancel_rotate_secret(self, secret_id: str):
+        if not self._is_valid_identifier(secret_id):
+            raise SecretNotFoundException()
+
+        if self.secrets[secret_id].is_deleted():
+            raise InvalidRequestException(
+                "You tried to perform the operation on a secret that's currently marked deleted."
+            )
+
+        secret = self.secrets.get(key=secret_id)
+        if not secret.rotation_lambda_arn:
+            # This response doesn't make much sense for  `CancelRotateSecret`, but this is what AWS has documented ...
+            # https://docs.aws.amazon.com/secretsmanager/latest/apireference/API_CancelRotateSecret.html
+            raise InvalidRequestException(
+                (
+                    "You tried to enable rotation on a secret that doesn't already have a Lambda function ARN configured"
+                    "and you didn't include such an ARN as a parameter in this call."
+                )
+            )
+
+        secret.rotation_enabled = False
+        return secret.to_short_dict()
+
     def get_secret_value(self, secret_id, version_id, version_stage):
         if not self._is_valid_identifier(secret_id):
             raise SecretNotFoundException()
@@ -265,9 +288,7 @@ class SecretsManagerBackend(BaseBackend):
         if not secret_version:
             raise ResourceNotFoundException(
                 "An error occurred (ResourceNotFoundException) when calling the GetSecretValue operation: Secrets "
-                "Manager can't find the specified secret value for VersionId: {}".format(
-                    version_id
-                )
+                f"Manager can't find the specified secret value for VersionId: {version_id}"
             )
 
         response_data = {
@@ -522,9 +543,14 @@ class SecretsManagerBackend(BaseBackend):
         # We add the new secret version as "pending". The previous version remains
         # as "current" for now. Once we've passed the new secret through the lambda
         # rotation function (if provided) we can then update the status to "current".
+        old_secret_version_secret_string = (
+            old_secret_version["secret_string"]
+            if "secret_string" in old_secret_version
+            else None
+        )
         self._add_secret(
             secret_id,
-            old_secret_version["secret_string"],
+            old_secret_version_secret_string,
             description=secret.description,
             tags=secret.tags,
             version_id=new_version_id,
@@ -548,9 +574,7 @@ class SecretsManagerBackend(BaseBackend):
             try:
                 func = lambda_backend.get_function(secret.rotation_lambda_arn)
             except Exception:
-                msg = "Resource not found for ARN '{}'.".format(
-                    secret.rotation_lambda_arn
-                )
+                msg = f"Resource not found for ARN '{secret.rotation_lambda_arn}'."
                 raise ResourceNotFoundException(msg)
 
             for step in ["create", "set", "test", "finish"]:
@@ -589,11 +613,9 @@ class SecretsManagerBackend(BaseBackend):
         # password size must have value less than or equal to 4096
         if password_length > 4096:
             raise ClientError(
-                "ClientError: An error occurred (ValidationException) \
-                when calling the GetRandomPassword operation: 1 validation error detected: Value '{}' at 'passwordLength' \
-                failed to satisfy constraint: Member must have value less than or equal to 4096".format(
-                    password_length
-                )
+                f"ClientError: An error occurred (ValidationException) \
+                when calling the GetRandomPassword operation: 1 validation error detected: Value '{password_length}' at 'passwordLength' \
+                failed to satisfy constraint: Member must have value less than or equal to 4096"
             )
         if password_length < 4:
             raise InvalidParameterException(
@@ -767,14 +789,13 @@ class SecretsManagerBackend(BaseBackend):
         if remove_from_version_id:
             if remove_from_version_id not in secret.versions:
                 raise InvalidParameterException(
-                    "Not a valid version: %s" % remove_from_version_id
+                    f"Not a valid version: {remove_from_version_id}"
                 )
 
             stages = secret.versions[remove_from_version_id]["version_stages"]
             if version_stage not in stages:
                 raise InvalidParameterException(
-                    "Version stage %s not found in version %s"
-                    % (version_stage, remove_from_version_id)
+                    f"Version stage {version_stage} not found in version {remove_from_version_id}"
                 )
 
             stages.remove(version_stage)
@@ -782,7 +803,7 @@ class SecretsManagerBackend(BaseBackend):
         if move_to_version_id:
             if move_to_version_id not in secret.versions:
                 raise InvalidParameterException(
-                    "Not a valid version: %s" % move_to_version_id
+                    f"Not a valid version: {move_to_version_id}"
                 )
 
             stages = secret.versions[move_to_version_id]["version_stages"]
