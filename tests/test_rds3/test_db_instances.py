@@ -3,6 +3,7 @@ import time
 import uuid
 
 import boto3
+import pytest
 import pytz
 from botocore.exceptions import ClientError
 from sure import this
@@ -155,3 +156,33 @@ def test_modify_with_no_modifications_raises_error():
 #     client = boto3.client('rds', region_name='us-west-2')
 #     client.describe_db_instances(DBInstanceIdentifier='fake')
 #     client.describe_db_instances(MaxRecords=500)
+
+
+@mock_rds
+@pytest.mark.parametrize(
+    "preferred_maintenance_window", ["02:40-wed:03:10", "wed:02:40wed:03:10"]
+)
+def test_create_with_invalid_maintenance_window_fails(preferred_maintenance_window):
+    client = boto3.client("rds", region_name="us-west-2")
+    with pytest.raises(ClientError) as exc:
+        create_db_instance(
+            client, PreferredMaintenanceWindow=preferred_maintenance_window
+        )
+    err = exc.value.response["Error"]
+    err["Code"].should.equal("InvalidParameterValue")
+
+
+@mock_rds
+@pytest.mark.parametrize(
+    "preferred_maintenance_window", ["02:40-wed:03:10", "wed:02:40wed:03:10"]
+)
+def test_update_with_invalid_maintenance_window_fails(preferred_maintenance_window):
+    client = boto3.client("rds", region_name="us-west-2")
+    identifier, _ = create_db_instance(client)
+    with pytest.raises(ClientError) as exc:
+        client.modify_db_instance(
+            DBInstanceIdentifier=identifier,
+            PreferredMaintenanceWindow=preferred_maintenance_window,
+        )
+    err = exc.value.response["Error"]
+    err["Code"].should.equal("InvalidParameterValue")

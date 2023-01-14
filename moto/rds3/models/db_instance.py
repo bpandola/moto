@@ -266,6 +266,14 @@ class DBInstance(TaggableRDSResource, EventMixin, BaseRDSModel):
             elif attr == "option_group_name":
                 self._option_groups = [{"name": value_new, "status": "in-sync"}]
                 was_updated = True
+            elif attr == "preferred_maintenance_window":
+                from ...rds.utils import valid_preferred_maintenance_window
+
+                msg = valid_preferred_maintenance_window(
+                    value_new, self.preferred_backup_window
+                )
+                if msg:
+                    raise InvalidParameterValue(msg)
             else:
                 setattr(self, attr, value_new)
                 was_updated = True
@@ -625,4 +633,18 @@ class DBInstanceBackend:
             # the engine version of your DB cluster (9.6.3).
             if msg:
                 raise InvalidParameterCombination(msg)
+        # InvalidParameterValue errors
+        # HACK for backup/maintenance windows
+        from ...rds.utils import valid_preferred_maintenance_window
+
+        preferred_backup_window = kwargs.get("preferred_backup_window", "13:14-13:44")
+        preferred_maintenance_window = kwargs.get(
+            "preferred_maintenance_window", "wed:06:38-wed:07:08"
+        ).lower()
+        msg = valid_preferred_maintenance_window(
+            preferred_maintenance_window,
+            preferred_backup_window,
+        )
+        if msg:
+            raise InvalidParameterValue(msg)
         return kwargs
