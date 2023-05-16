@@ -547,6 +547,7 @@ class DBInstanceBackend:
         db_instance_identifier,
         final_db_snapshot_identifier=None,
         skip_final_snapshot=False,
+        delete_automated_backups=True,
     ):
         db_instance = self.get_db_instance(db_instance_identifier)
         if final_db_snapshot_identifier and not skip_final_snapshot:
@@ -558,8 +559,9 @@ class DBInstanceBackend:
             db_snapshot_identifier=None,
             snapshot_type="automated",
         )
-        for snapshot in automated_snapshots:
-            self.delete_db_snapshot(snapshot.resource_id)
+        if delete_automated_backups:
+            for snapshot in automated_snapshots:
+                self.delete_db_snapshot(snapshot.resource_id)
         db_instance.delete_events()
         db_instance.status = "deleting"
         return self.db_instances.pop(db_instance_identifier)
