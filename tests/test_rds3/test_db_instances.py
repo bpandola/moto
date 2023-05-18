@@ -4,7 +4,6 @@ import uuid
 
 import boto3
 import pytest
-import pytz
 from botocore.exceptions import ClientError
 from sure import this
 
@@ -133,7 +132,7 @@ def test_restore_db_instance_to_point_in_time():
         SourceDBInstanceIdentifier=source_identifier,
         TargetDBInstanceIdentifier="pit-id",
         RestoreTime=datetime.datetime.fromtimestamp(
-            time.time() - 600, pytz.utc
+            time.time() - 600, datetime.timezone.utc
         ).strftime("%Y-%m-%dT%H:%M:%SZ"),
     )["DBInstance"]
     details_target["CopyTagsToSnapshot"].should.equal(
