@@ -50,7 +50,7 @@ class TagBackend:
 
     def _verify_resource(self, arn):
         if not self.arn_match.match(arn):
-            raise InvalidParameterValue("Invalid resource name: {0}".format(arn))
+            raise InvalidParameterValue(f"Invalid resource name: {arn}")
 
     def add_tags_to_resource(self, resource_name=None, tags=None):
         # TODO: Add check for null tags

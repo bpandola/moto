@@ -5,11 +5,10 @@ import time
 class LogFileManager(object):
     def __init__(self, engine):
         self.log_files = []
-        filename = "error/{}.log".format(engine)
+        filename = f"error/{engine}.log"
         if engine == "postgres":
-            filename = "error/postgresql.log.{}".format(
-                datetime.datetime.utcnow().strftime("%Y-%m-%d-%H")
-            )
+            formatted_time = datetime.datetime.utcnow().strftime("%Y-%m-%d-%H")
+            filename = f"error/postgresql.log.{formatted_time}"
         self.log_files.append(DBLogFile(filename))
 
     @property
@@ -25,7 +24,7 @@ class DBLogFile(object):
 
     @property
     def resource_id(self):
-        return "{}-{}-{}".format(self.log_file_name, self.last_written, self.size)
+        return f"{self.log_file_name}-{self.last_written}-{self.size}"
 
 
 class LogBackend:

@@ -53,7 +53,7 @@ def test_describe_db_cluster_snapshots_paginated():
     custom_snap_start = len(auto_snapshots)
     for i in range(custom_snap_start, 21):
         client.create_db_cluster_snapshot(
-            DBClusterSnapshotIdentifier="cluster-snap-{}".format(i),
+            DBClusterSnapshotIdentifier=f"cluster-snap-{i}",
             DBClusterIdentifier="cluster-1",
         )
 
@@ -61,7 +61,7 @@ def test_describe_db_cluster_snapshots_paginated():
     snaps = resp.get("DBClusterSnapshots")
     snaps.should.have.length_of(20)
     snaps[custom_snap_start]["DBClusterSnapshotIdentifier"].should.equal(
-        "cluster-snap-{}".format(custom_snap_start)
+        f"cluster-snap-{custom_snap_start}"
     )
 
     resp2 = client.describe_db_cluster_snapshots(Marker=resp["Marker"])

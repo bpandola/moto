@@ -165,7 +165,7 @@ def test_add_tags_security_group():
         DBSecurityGroupName="db_sg", DBSecurityGroupDescription="DB Security Group"
     )["DBSecurityGroup"]["DBSecurityGroupName"]
 
-    resource = "arn:aws:rds:us-west-2:1234567890:secgrp:{0}".format(security_group)
+    resource = f"arn:aws:rds:us-west-2:1234567890:secgrp:{security_group}"
     conn.add_tags_to_resource(
         ResourceName=resource,
         Tags=[{"Value": "bar", "Key": "foo"}, {"Value": "bar1", "Key": "foo1"}],
@@ -189,7 +189,7 @@ def test_remove_tags_security_group():
         Tags=[{"Value": "bar", "Key": "foo"}, {"Value": "bar1", "Key": "foo1"}],
     )["DBSecurityGroup"]["DBSecurityGroupName"]
 
-    resource = "arn:aws:rds:us-west-2:123456789012:secgrp:{0}".format(security_group)
+    resource = f"arn:aws:rds:us-west-2:123456789012:secgrp:{security_group}"
     conn.remove_tags_from_resource(ResourceName=resource, TagKeys=["foo"])
 
     result = conn.list_tags_for_resource(ResourceName=resource)

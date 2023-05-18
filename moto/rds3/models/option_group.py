@@ -45,7 +45,7 @@ class OptionGroupOption(object):
 
     @property
     def resource_id(self):
-        return "{}-{}-{}".format(self.engine_name, self.major_engine_version, self.name)
+        return f"{self.engine_name}-{self.major_engine_version}-{self.name}"
 
     @staticmethod
     def _make_option_group_option_settings(option_group_option_settings_kwargs):
@@ -172,9 +172,7 @@ class OptionGroupBackend:
             raise InvalidParameterValue("Invalid DB engine: non-existent")
         if major_engine_version not in valid_option_group_engines[engine_name]:
             raise InvalidParameterCombination(
-                "Cannot find major version {0} for {1}".format(
-                    major_engine_version, engine_name
-                )
+                f"Cannot find major version {major_engine_version} for {engine_name}"
             )
         option_group = OptionGroup(
             backend=self,
@@ -226,9 +224,7 @@ class OptionGroupBackend:
             if major_engine_version not in set(
                 [ogo.major_engine_version for ogo in option_group_options]
             ):
-                msg = "Cannot find major version {} for {}".format(
-                    major_engine_version, engine_name
-                )
+                msg = f"Cannot find major version {major_engine_version} for {engine_name}"
                 raise InvalidParameterCombination(msg)
             option_group_options = [
                 ogo

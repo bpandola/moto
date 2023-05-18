@@ -49,9 +49,7 @@ class RDSResponse(BaseResponse):
         http_status_code = 200
         # backend = self.backend.backend  # Stupid new moto changes...
         if not hasattr(self.backend, action_method):
-            raise NotImplementedError(
-                "The {0} action has not been implemented".format(action)
-            )
+            raise NotImplementedError(f"The {action} action has not been implemented")
         try:
             result = getattr(self.backend, action_method)(**self.parameters)
             if client.can_paginate(action_method):  # or Marker or MaxRecords in params?
@@ -74,8 +72,8 @@ class RDSResponse(BaseResponse):
         marker = self.parameters.get("marker")
         page_size = self.parameters.get("max_records", MAX_RECORDS)
         if page_size < 20 or page_size > 100:
-            msg = "Invalid value {} for MaxRecords. Must be between 20 and 100".format(
-                page_size
+            msg = (
+                f"Invalid value {page_size} for MaxRecords. Must be between 20 and 100"
             )
             raise InvalidParameterValue(msg)
         all_resources = list(resources)

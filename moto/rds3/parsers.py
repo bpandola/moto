@@ -26,7 +26,7 @@ class CloudFormationPropertiesParser(object):
         return parsed
 
     def _parse_shape(self, shape, prop):
-        handler = getattr(self, "_handle_%s" % shape.type_name, self._default_handle)
+        handler = getattr(self, f"_handle_{shape.type_name}", self._default_handle)
         return handler(shape, prop)
 
     def _handle_structure(self, shape, prop):
@@ -87,7 +87,7 @@ class QueryStringParametersParser(object):
         return parsed
 
     def _parse_shape(self, shape, query_params, prefix=""):
-        handler = getattr(self, "_handle_%s" % shape.type_name, self._default_handle)
+        handler = getattr(self, f"_handle_{shape.type_name}", self._default_handle)
         return handler(shape, query_params, prefix=prefix)
 
     def _handle_structure(self, shape, query_params, prefix=""):
@@ -97,7 +97,7 @@ class QueryStringParametersParser(object):
             member_shape = members[member_name]
             member_prefix = self._get_serialized_name(member_shape, member_name)
             if prefix:
-                member_prefix = "%s.%s" % (prefix, member_prefix)
+                member_prefix = f"{prefix}.{member_prefix}"
             if self._has_member(query_params, member_prefix):
                 parsed_key = self._parsed_key_name(member_name)
                 parsed[parsed_key] = self._parse_shape(
@@ -112,15 +112,13 @@ class QueryStringParametersParser(object):
         list_prefixes = []
         list_names = list({shape.member.serialization.get("name", "member"), "member"})
         for list_name in list_names:
-            list_prefixes.append("%s.%s" % (prefix, list_name))
+            list_prefixes.append(f"{prefix}.{list_name}")
 
         for list_prefix in list_prefixes:
             i = 1
-            while self._has_member(query_params, "%s.%s" % (list_prefix, i)):
+            while self._has_member(query_params, f"{list_prefix}.{i}"):
                 parsed.append(
-                    self._parse_shape(
-                        member_shape, query_params, "%s.%s" % (list_prefix, i)
-                    )
+                    self._parse_shape(member_shape, query_params, f"{list_prefix}.{i}")
                 )
                 i += 1
         return parsed

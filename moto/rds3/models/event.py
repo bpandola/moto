@@ -61,7 +61,7 @@ class Event(object):
 
     @property
     def resource_id(self):
-        return "{}-{}-{}".format(self.source_identifier, self.source_type, self.date)
+        return f"{self.source_identifier}-{self.source_type}-{self.date}"
 
 
 class EventBackend:

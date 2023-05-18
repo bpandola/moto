@@ -26,12 +26,7 @@ class BaseRDSModel(BaseModel):
 
     @property
     def arn(self):
-        return "arn:aws:rds:{region}:{account_id}:{resource_type}:{resource_id}".format(
-            region=self.region,
-            account_id=self.account_id,
-            resource_type=self.resource_type,
-            resource_id=self.resource_id,
-        )
+        return f"arn:aws:rds:{self.region}:{self.account_id}:{self.resource_type}:{self.resource_id}"
 
     def get_regional_backend(self, region):
         from . import rds3_backends

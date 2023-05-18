@@ -109,11 +109,8 @@ def default_option_group_name(engine_name, engine_version):
             == engine_version[: len(og["MajorEngineVersion"])]
         )
     except StopIteration:
-        option_group = {
-            "OptionGroupName": "default:{}-{}".format(
-                engine_name, engine_version.replace(".", "-")
-            )
-        }
+        engine_version = engine_version.replace(".", "-")
+        option_group = {"OptionGroupName": f"default:{engine_name}-{engine_version}"}
     return option_group["OptionGroupName"]
 
 
@@ -141,7 +138,7 @@ def default_db_parameter_group_name(engine_name, engine_version):
             parameter_group_name = param_group["DBParameterGroupName"]
         except StopIteration:
             pass
-    return parameter_group_name or "default.{}".format(engine_version)
+    return parameter_group_name or f"default.{engine_version}"
 
 
 def get_engine_defaults(engine_name):

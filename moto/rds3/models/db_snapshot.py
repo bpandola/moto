@@ -161,8 +161,8 @@ class DBSnapshotBackend:
         snapshot = DBSnapshot(
             self, db_snapshot_identifier, db_instance, snapshot_type, tags
         )
-        snapshot.add_event("DB_SNAPSHOT_CREATE_{}_START".format(snapshot_type.upper()))
-        snapshot.add_event("DB_SNAPSHOT_CREATE_{}_FINISH".format(snapshot_type.upper()))
+        snapshot.add_event(f"DB_SNAPSHOT_CREATE_{snapshot_type}_START".upper())
+        snapshot.add_event(f"DB_SNAPSHOT_CREATE_{snapshot_type}_FINISH".upper())
         self.db_snapshots[db_snapshot_identifier] = snapshot
         return snapshot
 
@@ -176,7 +176,7 @@ class DBSnapshotBackend:
         db_instance_identifier=None,
         db_snapshot_identifier=None,
         snapshot_type=None,
-        **_
+        **_,
     ):
         if db_snapshot_identifier:
             return [self.get_db_snapshot(db_snapshot_identifier)]

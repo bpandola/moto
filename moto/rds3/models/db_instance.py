@@ -61,7 +61,7 @@ class DBInstance(TaggableRDSResource, EventMixin, BaseRDSModel):
         storage_encrypted=False,
         tags=None,
         vpc_security_group_ids=None,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(backend)
 
@@ -229,9 +229,7 @@ class DBInstance(TaggableRDSResource, EventMixin, BaseRDSModel):
 
     @property
     def address(self):
-        return "{0}.aaaaaaaaaa.{1}.rds.amazonaws.com".format(
-            self.resource_id, self.backend.region_name
-        )
+        return f"{self.resource_id}.aaaaaaaaaa.{self.backend.region_name}.rds.amazonaws.com"
 
     # Commenting this out for now because it breaks the stupid GraphQL snapshottests in the RDS Broker...
     # @property
@@ -394,7 +392,7 @@ class DBInstanceBackend:
         # TODO: Make this method on DBInstance?
         db_instance.add_event("DB_INSTANCE_BACKUP_START")
         time_stamp = datetime.datetime.utcnow().strftime("%Y-%m-%d-%H-%M")
-        snapshot_id = "rds:{}-{}".format(db_instance.resource_id, time_stamp)
+        snapshot_id = f"rds:{db_instance.resource_id}-{time_stamp}"
         self.create_db_snapshot(
             db_instance.resource_id, snapshot_id, snapshot_type="automated"
         )
@@ -464,7 +462,7 @@ class DBInstanceBackend:
         db_instance_identifier,
         source_db_instance_identifier,
         multi_az=False,
-        **kwargs
+        **kwargs,
     ):
         source_db_instance = self.find_db_from_id(source_db_instance_identifier)
         db_args = dict(**source_db_instance.__dict__)
@@ -480,7 +478,7 @@ class DBInstanceBackend:
         db_instance = DBInstance(
             identifier=db_instance_identifier,
             source_db_instance_identifier=source_db_instance_identifier,
-            **db_args
+            **db_args,
         )
         self.db_instances[db_instance_identifier] = db_instance
         return db_instance

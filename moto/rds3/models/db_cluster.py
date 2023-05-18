@@ -37,7 +37,7 @@ class DBCluster(TaggableRDSResource, EventMixin, BaseRDSModel):
         storage_encrypted=False,
         tags=None,
         vpc_security_group_ids=None,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(backend)
         self.allocated_storage = 1
@@ -79,9 +79,7 @@ class DBCluster(TaggableRDSResource, EventMixin, BaseRDSModel):
 
     @property
     def endpoint(self):
-        return "{}.cluster-xxxxxxxx.{}.rds.amazonaws.com".format(
-            self.resource_id, self.backend.region_name
-        )
+        return f"{self.resource_id}.cluster-xxxxxxxx.{self.backend.region_name}.rds.amazonaws.com"
 
     @property
     def reader_endpoint(self):
@@ -171,7 +169,7 @@ class DBCluster(TaggableRDSResource, EventMixin, BaseRDSModel):
             member.resource_id for member in self.members
         ]:
             raise InvalidParameterValue(
-                "Cannot find target instance :{}.".format(target_member_identifier)
+                f"Cannot find target instance :{target_member_identifier}."
             )
         target_instance = self.backend.get_db_instance(target_member_identifier)
         self.writer.is_cluster_writer = False
@@ -196,9 +194,8 @@ class DBClusterBackend:
         cluster_kwargs = self._validate_create_cluster_args(kwargs)
         cluster = DBCluster(self, db_cluster_identifier, **cluster_kwargs)
         self.db_clusters[db_cluster_identifier] = cluster
-        snapshot_id = "{}-{}".format(
-            db_cluster_identifier, datetime.datetime.utcnow().strftime("%Y-%m-%d-%H-%M")
-        )
+        formatted_time = datetime.datetime.utcnow().strftime("%Y-%m-%d-%H-%M")
+        snapshot_id = f"{db_cluster_identifier}-{formatted_time}"
         self.create_db_cluster_snapshot(
             db_cluster_identifier, snapshot_id, snapshot_type="automated"
         )
@@ -271,9 +268,7 @@ class DBClusterBackend:
         if "engine_version" not in kwargs:
             kwargs["engine_version"] = utils.default_engine_version(engine)
         if kwargs["engine_version"] not in utils.valid_engine_versions(engine):
-            msg = "Cannot find version {} for {}".format(
-                kwargs["engine_version"], engine
-            )
+            msg = f"Cannot find version {kwargs['engine_version']} for {engine}"
             raise InvalidParameterValue(msg)
         if "db_cluster_parameter_group_name" not in kwargs:
             kwargs[

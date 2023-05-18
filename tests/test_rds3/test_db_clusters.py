@@ -199,7 +199,7 @@ def test_db_cluster_writer_promotion():
     )
     for i in range(3):
         client.create_db_instance(
-            DBInstanceIdentifier="test-instance-{}".format(i),
+            DBInstanceIdentifier=f"test-instance-{i}",
             DBInstanceClass="db.m1.small",
             Engine="aurora-postgresql",
             DBClusterIdentifier="cluster-1",
@@ -271,7 +271,7 @@ def test_describe_db_clusters_paginated():
     client = boto3.client("rds", region_name="us-west-2")
     for i in range(21):
         client.create_db_cluster(
-            DBClusterIdentifier="cluster-{}".format(i),
+            DBClusterIdentifier=f"cluster-{i}",
             DatabaseName="db_name",
             Engine="aurora-postgresql",
             MasterUsername="root",
@@ -431,7 +431,7 @@ def test_modify_db_cluster_updates_cluster_instances():
         Engine="aurora-postgresql",
         MasterUsername="root",
         MasterUserPassword="password",
-        **cluster_only_attributes["create"]
+        **cluster_only_attributes["create"],
     )
     fmt_instance_id = "test-instance-{id}"
     for i in range(3):

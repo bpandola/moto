@@ -88,7 +88,7 @@ def test_describe_db_cluster_parameter_groups_paginated():
     custom_group_start = len(default_groups)
     for i in range(custom_group_start, 21):
         client.create_db_cluster_parameter_group(
-            DBClusterParameterGroupName="cluster-pg-{}".format(i),
+            DBClusterParameterGroupName=f"cluster-pg-{i}",
             DBParameterGroupFamily="aurora-postgresql9.6",
             Description="test description",
         )
@@ -97,7 +97,7 @@ def test_describe_db_cluster_parameter_groups_paginated():
     groups = resp.get("DBClusterParameterGroups")
     groups.should.have.length_of(20)
     groups[custom_group_start]["DBClusterParameterGroupName"].should.equal(
-        "cluster-pg-{}".format(custom_group_start)
+        f"cluster-pg-{custom_group_start}"
     )
 
     groups = client.describe_db_cluster_parameter_groups(Marker=resp["Marker"]).get(
