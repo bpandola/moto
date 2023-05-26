@@ -158,3 +158,73 @@ def test_create_db_snapshot_with_invalid_identifier_fails():
     client.create_db_snapshot.when.called_with(
         DBInstanceIdentifier="db-primary-1", DBSnapshotIdentifier="rds:snapshot-1"
     ).should.throw(ClientError, "not a valid identifier")
+
+
+@mock_rds
+def test_describe_db_instance_automated_backups_lifecycle():
+    instance_id = "test-instance"
+    client = boto3.client("rds", region_name="us-west-2")
+    client.create_db_instance(
+        DBInstanceIdentifier=instance_id,
+        AllocatedStorage=10,
+        Engine="postgres",
+        DBName="staging-postgres",
+        DBInstanceClass="db.m1.small",
+        MasterUsername="root",
+        MasterUserPassword="pass",
+        StorageEncrypted=False,
+    )
+    resp = client.describe_db_instance_automated_backups(
+        DBInstanceIdentifier=instance_id,
+    )
+    automated_backups = resp["DBInstanceAutomatedBackups"]
+    assert len(automated_backups) == 1
+    automated_backup = automated_backups[0]
+    assert automated_backup["DBInstanceIdentifier"] == instance_id
+    assert automated_backup["Status"] == "active"
+
+    client.delete_db_instance(
+        DBInstanceIdentifier=instance_id,
+        DeleteAutomatedBackups=False,
+    )
+
+    resp = client.describe_db_instance_automated_backups(
+        DBInstanceIdentifier=instance_id,
+    )
+    automated_backups = resp["DBInstanceAutomatedBackups"]
+    assert len(automated_backups) == 1
+    automated_backup = automated_backups[0]
+    assert automated_backup["DBInstanceIdentifier"] == instance_id
+    assert automated_backup["Status"] == "retained"
+
+
+@mock_rds
+def test_delete_automated_backups_by_default():
+    instance_id = "test-instance"
+    client = boto3.client("rds", region_name="us-west-2")
+    client.create_db_instance(
+        DBInstanceIdentifier=instance_id,
+        AllocatedStorage=10,
+        Engine="postgres",
+        DBName="staging-postgres",
+        DBInstanceClass="db.m1.small",
+        MasterUsername="root",
+        MasterUserPassword="pass",
+        StorageEncrypted=False,
+    )
+    resp = client.describe_db_instance_automated_backups(
+        DBInstanceIdentifier=instance_id,
+    )
+    automated_backups = resp["DBInstanceAutomatedBackups"]
+    assert len(automated_backups) == 1
+    automated_backup = automated_backups[0]
+    assert automated_backup["DBInstanceIdentifier"] == instance_id
+    assert automated_backup["Status"] == "active"
+
+    client.delete_db_instance(DBInstanceIdentifier=instance_id)
+
+    resp = client.describe_db_instance_automated_backups(
+        DBInstanceIdentifier=instance_id,
+    )
+    automated_backups = resp["DBInstanceAutomatedBackups"]
+    assert len(automated_backups) == 0

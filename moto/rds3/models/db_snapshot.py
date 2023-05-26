@@ -3,7 +3,7 @@ import datetime
 import string
 import os
 
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 from moto.core.utils import iso_8601_datetime_with_milliseconds
 from .base import BaseRDSModel
 from .event import EventMixin
@@ -107,6 +107,24 @@ class DBSnapshot(TaggableRDSResource, EventMixin, BaseRDSModel):
         return self.created_at
 
 
+class DBInstanceAutomatedBackup:
+    def __init__(self, backend, db_instance_identifier, automated_snapshots):
+        self.backend = backend
+        self.db_instance_identifier = db_instance_identifier
+        self.automated_snapshots = automated_snapshots
+
+    @property
+    def resource_id(self):
+        return self.db_instance_identifier
+
+    @property
+    def status(self):
+        status = "active"
+        if self.db_instance_identifier not in self.backend.db_instances:
+            status = "retained"
+        return status
+
+
 class DBSnapshotBackend:
     def __init__(self):
         self.db_snapshots = OrderedDict()
@@ -191,3 +209,23 @@ class DBSnapshotBackend:
                         db_instance_snapshots.append(snapshot)
             return db_instance_snapshots
         return self.db_snapshots.values()
+
+    def describe_db_instance_automated_backups(
+        self,
+        db_instance_identifier=None,
+        **_,
+    ):
+        snapshots = self.db_snapshots.values()
+        if db_instance_identifier is not None:
+            snapshots = [
+                snap
+                for snap in self.db_snapshots.values()
+                if snap.db_instance_identifier == db_instance_identifier
+            ]
+        snapshots_grouped = defaultdict(list)
+        for snapshot in snapshots:
+            if snapshot.snapshot_type == "automated":
+                snapshots_grouped[snapshot.db_instance_identifier].append(snapshot)
+        return [
+            DBInstanceAutomatedBackup(self, k, v) for k, v in snapshots_grouped.items()
+        ]
