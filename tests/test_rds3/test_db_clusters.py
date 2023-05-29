@@ -369,7 +369,6 @@ def test_delete_db_cluster_with_deletion_protection():
         MasterUsername="root",
         MasterUserPassword="password",
         Port=1234,
-        DeletionProtection=True,
     )
     
     client.delete_db_cluster.when.called_with(DBClusterIdentifier="cluster-1").should.throw(ClientError,"Can't delete Cluster with protection enabled")
