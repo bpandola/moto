@@ -196,8 +196,7 @@ def test_delete_db_instance_wt_deletion_protection():
         MasterUsername="root",
         MasterUserPassword="hunter2",
         Port=1234,
-        DBSecurityGroups=["my_sg"],
-        DeletionProtection=True)
+        DBSecurityGroups=["my_sg"])
     with pytest.raises(ClientError) as exc:
         conn.delete_db_instance(
             DBInstanceIdentifier="db-primary-1",
@@ -221,6 +220,7 @@ def test_delete_db_instance_with_delete_automated_backups_param(
         MasterUserPassword="hunter2",
         Port=1234,
         DBSecurityGroups=["my_sg"],
+        DeletionProtection=False,
     )
     
     conn.delete_db_instance(

@@ -61,7 +61,7 @@ class DBInstance(TaggableRDSResource, EventMixin, BaseRDSModel):
         storage_encrypted=False,
         tags=None,
         vpc_security_group_ids=None,
-        deletion_protection=False,
+        deletion_protection=True,
         **kwargs,
     ):
         super().__init__(backend)
