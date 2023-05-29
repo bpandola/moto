@@ -186,6 +186,25 @@ def test_update_with_invalid_maintenance_window_fails(preferred_maintenance_wind
     err = exc.value.response["Error"]
     err["Code"].should.equal("InvalidParameterValue")
 
+@mock_rds
+def test_delete_db_instance_wt_deletion_protection():
+    conn = boto3.client("rds", region_name="us-west-2")
+    conn.create_db_instance(DBInstanceIdentifier="db-primary-1",
+        AllocatedStorage=10,
+        Engine="postgres",
+        DBInstanceClass="db.m1.small",
+        MasterUsername="root",
+        MasterUserPassword="hunter2",
+        Port=1234,
+        DBSecurityGroups=["my_sg"],
+        DeletionProtection=True)
+    with pytest.raises(ClientError) as exc:
+        conn.delete_db_instance(
+            DBInstanceIdentifier="db-primary-1",
+        )
+    err = exc.value.response["Error"]
+    err["Code"].should.equal("InvalidParameterValue")
+
 
 @mock_rds
 @pytest.mark.parametrize("delete_automated_backups", [False, True])
@@ -203,7 +222,7 @@ def test_delete_db_instance_with_delete_automated_backups_param(
         Port=1234,
         DBSecurityGroups=["my_sg"],
     )
-
+    
     conn.delete_db_instance(
         DBInstanceIdentifier="db-primary-1",
         DeleteAutomatedBackups=delete_automated_backups,

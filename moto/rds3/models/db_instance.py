@@ -61,6 +61,7 @@ class DBInstance(TaggableRDSResource, EventMixin, BaseRDSModel):
         storage_encrypted=False,
         tags=None,
         vpc_security_group_ids=None,
+        deletion_protection=False,
         **kwargs,
     ):
         super().__init__(backend)
@@ -109,6 +110,8 @@ class DBInstance(TaggableRDSResource, EventMixin, BaseRDSModel):
 
         self.option_group_name = option_group_name
         self._option_groups = [{"name": self.option_group_name, "status": "in-sync"}]
+
+        self.deletion_protection = deletion_protection
 
         self.copy_tags_to_snapshot = copy_tags_to_snapshot
         if tags:
@@ -327,7 +330,7 @@ class DBInstance(TaggableRDSResource, EventMixin, BaseRDSModel):
     def read_replicas(self):
         replicas = []
         from . import rds3_backends
-
+        
         for backend in rds3_backends[self.backend.account_id].values():
             for db_instance in backend.db_instances.values():
                 if backend.region_name == self.backend.region_name:
@@ -548,6 +551,19 @@ class DBInstanceBackend:
         delete_automated_backups=True,
     ):
         db_instance = self.get_db_instance(db_instance_identifier)
+        if db_instance.db_cluster_identifier is not None:
+            db_cluster = db_instance.cluster
+            if len(db_cluster.members)>1:
+                db_cluster.members.pop(
+                    db_cluster.members.index(db_instance)
+                )
+            elif db_cluster.deletion_protection:
+                raise InvalidParameterValue(
+                    "Can't delete Cluster with deletion protection enabled, disable and retry")
+
+        if db_instance.deletion_protection:
+            raise InvalidParameterValue(
+                    "Can't delete Instance with deletion protection enabled")
         if final_db_snapshot_identifier and not skip_final_snapshot:
             self.create_db_snapshot(
                 db_instance_identifier, final_db_snapshot_identifier
