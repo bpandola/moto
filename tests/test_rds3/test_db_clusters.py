@@ -357,7 +357,7 @@ def test_delete_db_cluster_with_active_members_fails():
 
 
 @mock_rds
-def test_delete_db_cluster_with_deletion_protection():
+def test_delete_db_cluster_deletion_protection_enabled():
     client = boto3.client("rds", region_name="us-west-2")
     client.create_db_cluster(
         DBClusterIdentifier="cluster-1",
@@ -375,7 +375,7 @@ def test_delete_db_cluster_with_deletion_protection():
 
 
 @mock_rds
-def test_delete_db_cluster_wtinstances_wo_deletion_protection():
+def test_delete_db_cluster_with_instances_deletion_protection_disabled():
     client = boto3.client("rds", region_name="us-west-2")
     client.create_db_cluster(
         DBClusterIdentifier="cluster-1",
@@ -410,7 +410,7 @@ def test_delete_db_cluster_wtinstances_wo_deletion_protection():
 
 
 @mock_rds
-def test_delete_db_cluster_wtinstances_with_deletion_protection():
+def test_delete_db_cluster_with_instances_deletion_protection_enabled():
     client = boto3.client("rds", region_name="us-west-2")
     client.create_db_cluster(
         DBClusterIdentifier="cluster-1",

@@ -555,10 +555,13 @@ class DBInstanceBackend:
             db_cluster = db_instance.cluster
             if len(db_cluster.members) > 1:
                 db_cluster.members.pop(db_cluster.members.index(db_instance))
-            elif db_cluster.deletion_protection:
-                raise InvalidParameterValue(
-                    "Can't delete Cluster with deletion protection enabled, disable and retry"
-                )
+            else:
+                if db_cluster.deletion_protection:
+                    raise InvalidParameterValue(
+                        "Can't delete Cluster with deletion protection enabled, disable and retry"
+                    )
+                else:
+                    db_cluster.members.pop(db_cluster.members.index(db_instance))
 
         if db_instance.deletion_protection:
             raise InvalidParameterValue(
