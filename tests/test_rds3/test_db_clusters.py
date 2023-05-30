@@ -389,13 +389,13 @@ def test_delete_db_cluster_with_instances_deletion_protection_disabled():
         Port=1234,
     )
     client.create_db_instance(
-        DBInstanceIdentifier="test-instance",
+        DBInstanceIdentifier="test-instance-1",
         DBInstanceClass="db.m1.small",
         Engine="aurora-postgresql",
         DBClusterIdentifier="cluster-1",
     )
     client.create_db_instance(
-        DBInstanceIdentifier="test-instance1",
+        DBInstanceIdentifier="test-instance-2",
         DBInstanceClass="db.m1.small",
         Engine="aurora-postgresql",
         DBClusterIdentifier="cluster-1",
@@ -404,8 +404,8 @@ def test_delete_db_cluster_with_instances_deletion_protection_disabled():
         "DBClusters"
     )[0]
     cluster["DBClusterMembers"].should.have.length_of(2)
-    client.delete_db_instance(DBInstanceIdentifier="test-instance")
-    client.delete_db_instance(DBInstanceIdentifier="test-instance1")
+    client.delete_db_instance(DBInstanceIdentifier="test-instance-1")
+    client.delete_db_instance(DBInstanceIdentifier="test-instance-2")
     cluster = client.describe_db_clusters(DBClusterIdentifier="cluster-1").get(
         "DBClusters"
     )[0]
@@ -425,13 +425,13 @@ def test_delete_db_cluster_with_instances_deletion_protection_enabled():
         DeletionProtection=True,
     )
     client.create_db_instance(
-        DBInstanceIdentifier="test-instance",
+        DBInstanceIdentifier="test-instance-1",
         DBInstanceClass="db.m1.small",
         Engine="aurora-postgresql",
         DBClusterIdentifier="cluster-1",
     )
     client.create_db_instance(
-        DBInstanceIdentifier="test-instance1",
+        DBInstanceIdentifier="test-instance-2",
         DBInstanceClass="db.m1.small",
         Engine="aurora-postgresql",
         DBClusterIdentifier="cluster-1",
@@ -440,9 +440,9 @@ def test_delete_db_cluster_with_instances_deletion_protection_enabled():
         "DBClusters"
     )[0]
     cluster["DBClusterMembers"].should.have.length_of(2)
-    client.delete_db_instance(DBInstanceIdentifier="test-instance")
+    client.delete_db_instance(DBInstanceIdentifier="test-instance-1")
     client.delete_db_instance.when.called_with(
-        DBInstanceIdentifier="test-instance1",
+        DBInstanceIdentifier="test-instance-2",
         SkipFinalSnapshot=True,
     ).should.throw(
         ClientError,
