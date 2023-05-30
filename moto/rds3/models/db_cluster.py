@@ -209,7 +209,9 @@ class DBClusterBackend:
             raise DBClusterToBeDeletedHasActiveMembers()
         cluster.delete_events()
         if cluster.deletion_protection:
-            raise InvalidParameterValue("Can't delete Cluster with protection enabled")
+            raise InvalidParameterValue(
+                "Cannot delete protected Cluster, please disable deletion protection and try again."
+            )
         return self.db_clusters.pop(db_cluster_identifier)
 
     def describe_db_clusters(self, db_cluster_identifier=None, **_):

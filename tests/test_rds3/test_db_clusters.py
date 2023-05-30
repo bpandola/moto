@@ -371,7 +371,10 @@ def test_delete_db_cluster_deletion_protection_enabled():
 
     client.delete_db_cluster.when.called_with(
         DBClusterIdentifier="cluster-1"
-    ).should.throw(ClientError, "Can't delete Cluster with protection enabled")
+    ).should.throw(
+        ClientError,
+        "Cannot delete protected Cluster, please disable deletion protection and try again.",
+    )
 
 
 @mock_rds

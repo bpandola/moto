@@ -207,6 +207,9 @@ def test_delete_db_instance_deletion_protection_enabled():
         )
     err = exc.value.response["Error"]
     err["Code"].should.equal("InvalidParameterValue")
+    err["Message"].should.equal(
+        "Cannot delete protected DB Instance, please disable deletion protection and try again."
+    )
 
 
 @mock_rds

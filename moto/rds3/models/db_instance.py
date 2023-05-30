@@ -560,7 +560,7 @@ class DBInstanceBackend:
 
         if db_instance.deletion_protection:
             raise InvalidParameterValue(
-                "Can't delete Instance with deletion protection enabled"
+                "Cannot delete protected DB Instance, please disable deletion protection and try again."
             )
         if final_db_snapshot_identifier and not skip_final_snapshot:
             self.create_db_snapshot(
