@@ -188,7 +188,7 @@ def test_update_with_invalid_maintenance_window_fails(preferred_maintenance_wind
 
 
 @mock_rds
-def test_delete_db_instance_wt_deletion_protection():
+def test_delete_db_instance_deletion_protection_enabled():
     conn = boto3.client("rds", region_name="us-west-2")
     conn.create_db_instance(
         DBInstanceIdentifier="db-primary-1",
