@@ -37,7 +37,7 @@ class DBCluster(TaggableRDSResource, EventMixin, BaseRDSModel):
         storage_encrypted=False,
         tags=None,
         vpc_security_group_ids=None,
-        deletion_protection=True,
+        deletion_protection=False,
         **kwargs,
     ):
         super().__init__(backend)
@@ -209,9 +209,7 @@ class DBClusterBackend:
             raise DBClusterToBeDeletedHasActiveMembers()
         cluster.delete_events()
         if cluster.deletion_protection:
-            raise InvalidParameterValue(
-                "Can't delete Cluster with protection enabled"
-            )
+            raise InvalidParameterValue("Can't delete Cluster with protection enabled")
         return self.db_clusters.pop(db_cluster_identifier)
 
     def describe_db_clusters(self, db_cluster_identifier=None, **_):

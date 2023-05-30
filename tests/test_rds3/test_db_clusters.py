@@ -168,7 +168,6 @@ def test_add_remove_db_instance_from_db_cluster():
         Engine="aurora-postgresql",
         MasterUsername="root",
         MasterUserPassword="password",
-        DeletionProtection=False
     ).get("DBCluster")
     cluster["DBClusterMembers"].should.have.length_of(0)
     client.create_db_instance(
@@ -321,7 +320,6 @@ def test_delete_db_cluster():
         MasterUsername="root",
         MasterUserPassword="password",
         Port=1234,
-        DeletionProtection=False,
     )
     cluster = client.delete_db_cluster(DBClusterIdentifier="cluster-1").get("DBCluster")
     cluster["DBClusterIdentifier"].should.equal("cluster-1")
@@ -346,7 +344,6 @@ def test_delete_db_cluster_with_active_members_fails():
         MasterUsername="root",
         MasterUserPassword="password",
         Port=1234,
-        DeletionProtection=False,
     )
     client.create_db_instance(
         DBInstanceIdentifier="test-instance",
@@ -369,9 +366,13 @@ def test_delete_db_cluster_with_deletion_protection():
         MasterUsername="root",
         MasterUserPassword="password",
         Port=1234,
+        DeletionProtection=True,
     )
-    
-    client.delete_db_cluster.when.called_with(DBClusterIdentifier="cluster-1").should.throw(ClientError,"Can't delete Cluster with protection enabled")
+
+    client.delete_db_cluster.when.called_with(
+        DBClusterIdentifier="cluster-1"
+    ).should.throw(ClientError, "Can't delete Cluster with protection enabled")
+
 
 @mock_rds
 def test_delete_db_cluster_wtinstances_wo_deletion_protection():
@@ -383,7 +384,6 @@ def test_delete_db_cluster_wtinstances_wo_deletion_protection():
         MasterUsername="root",
         MasterUserPassword="password",
         Port=1234,
-        DeletionProtection=False
     )
     client.create_db_instance(
         DBInstanceIdentifier="test-instance",
@@ -401,14 +401,13 @@ def test_delete_db_cluster_wtinstances_wo_deletion_protection():
         "DBClusters"
     )[0]
     cluster["DBClusterMembers"].should.have.length_of(2)
-    client.delete_db_instance(DBInstanceIdentifier="test-instance" 
-    )
-    client.delete_db_instance(DBInstanceIdentifier="test-instance1" 
-    )
+    client.delete_db_instance(DBInstanceIdentifier="test-instance")
+    client.delete_db_instance(DBInstanceIdentifier="test-instance1")
     cluster = client.describe_db_clusters(DBClusterIdentifier="cluster-1").get(
         "DBClusters"
     )[0]
     cluster["DBClusterMembers"].should.have.length_of(0)
+
 
 @mock_rds
 def test_delete_db_cluster_wtinstances_with_deletion_protection():
@@ -420,6 +419,7 @@ def test_delete_db_cluster_wtinstances_with_deletion_protection():
         MasterUsername="root",
         MasterUserPassword="password",
         Port=1234,
+        DeletionProtection=True,
     )
     client.create_db_instance(
         DBInstanceIdentifier="test-instance",
@@ -437,17 +437,19 @@ def test_delete_db_cluster_wtinstances_with_deletion_protection():
         "DBClusters"
     )[0]
     cluster["DBClusterMembers"].should.have.length_of(2)
-    client.delete_db_instance(DBInstanceIdentifier="test-instance" 
-    )
+    client.delete_db_instance(DBInstanceIdentifier="test-instance")
     client.delete_db_instance.when.called_with(
         DBInstanceIdentifier="test-instance1",
         SkipFinalSnapshot=True,
-    ).should.throw(ClientError, "Can't delete Instance with protection enabled")
+    ).should.throw(
+        ClientError,
+        "Can't delete Cluster with deletion protection enabled, disable and retry",
+    )
     cluster = client.describe_db_clusters(DBClusterIdentifier="cluster-1").get(
         "DBClusters"
     )[0]
     cluster["DBClusterMembers"].should.have.length_of(1)
-    
+
 
 @mock_rds
 def test_restore_db_cluster_from_snapshot():
