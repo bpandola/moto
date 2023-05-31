@@ -410,6 +410,8 @@ def test_delete_db_cluster_with_instances_deletion_protection_disabled():
         "DBClusters"
     )[0]
     cluster["DBClusterMembers"].should.have.length_of(0)
+    cluster = client.delete_db_cluster(DBClusterIdentifier="cluster-1").get("DBCluster")
+    cluster["DBClusterIdentifier"].should.equal("cluster-1")
 
 
 @mock_rds
@@ -441,17 +443,17 @@ def test_delete_db_cluster_with_instances_deletion_protection_enabled():
     )[0]
     cluster["DBClusterMembers"].should.have.length_of(2)
     client.delete_db_instance(DBInstanceIdentifier="test-instance-1")
-    client.delete_db_instance.when.called_with(
-        DBInstanceIdentifier="test-instance-2",
-        SkipFinalSnapshot=True,
-    ).should.throw(
-        ClientError,
-        "Can't delete Cluster with deletion protection enabled, disable and retry",
-    )
+    client.delete_db_instance(DBInstanceIdentifier="test-instance-2")
     cluster = client.describe_db_clusters(DBClusterIdentifier="cluster-1").get(
         "DBClusters"
     )[0]
-    cluster["DBClusterMembers"].should.have.length_of(1)
+    cluster["DBClusterMembers"].should.have.length_of(0)
+    client.delete_db_cluster.when.called_with(
+        DBClusterIdentifier="cluster-1"
+    ).should.throw(
+        ClientError,
+        "Cannot delete protected Cluster, please disable deletion protection and try again.",
+    )
 
 
 @mock_rds

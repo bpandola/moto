@@ -551,13 +551,6 @@ class DBInstanceBackend:
         delete_automated_backups=True,
     ):
         db_instance = self.get_db_instance(db_instance_identifier)
-        if db_instance.db_cluster_identifier is not None:
-            db_cluster = db_instance.cluster
-            if len(db_cluster.members) == 1 and db_cluster.deletion_protection:
-                raise InvalidParameterValue(
-                    "Can't delete Cluster with deletion protection enabled, disable and retry"
-                )
-
         if db_instance.deletion_protection:
             raise InvalidParameterValue(
                 "Cannot delete protected DB Instance, please disable deletion protection and try again."
