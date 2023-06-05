@@ -357,6 +357,106 @@ def test_delete_db_cluster_with_active_members_fails():
 
 
 @mock_rds
+def test_delete_db_cluster_deletion_protection_enabled():
+    client = boto3.client("rds", region_name="us-west-2")
+    client.create_db_cluster(
+        DBClusterIdentifier="cluster-1",
+        DatabaseName="db_name",
+        Engine="aurora-postgresql",
+        MasterUsername="root",
+        MasterUserPassword="password",
+        Port=1234,
+        DeletionProtection=True,
+    )
+
+    client.delete_db_cluster.when.called_with(
+        DBClusterIdentifier="cluster-1"
+    ).should.throw(
+        ClientError,
+        "Cannot delete protected Cluster, please disable deletion protection and try again.",
+    )
+
+
+@mock_rds
+def test_delete_db_cluster_with_instances_deletion_protection_disabled():
+    client = boto3.client("rds", region_name="us-west-2")
+    client.create_db_cluster(
+        DBClusterIdentifier="cluster-1",
+        DatabaseName="db_name",
+        Engine="aurora-postgresql",
+        MasterUsername="root",
+        MasterUserPassword="password",
+        Port=1234,
+    )
+    client.create_db_instance(
+        DBInstanceIdentifier="test-instance-1",
+        DBInstanceClass="db.m1.small",
+        Engine="aurora-postgresql",
+        DBClusterIdentifier="cluster-1",
+    )
+    client.create_db_instance(
+        DBInstanceIdentifier="test-instance-2",
+        DBInstanceClass="db.m1.small",
+        Engine="aurora-postgresql",
+        DBClusterIdentifier="cluster-1",
+    )
+    cluster = client.describe_db_clusters(DBClusterIdentifier="cluster-1").get(
+        "DBClusters"
+    )[0]
+    cluster["DBClusterMembers"].should.have.length_of(2)
+    client.delete_db_instance(DBInstanceIdentifier="test-instance-1")
+    client.delete_db_instance(DBInstanceIdentifier="test-instance-2")
+    cluster = client.describe_db_clusters(DBClusterIdentifier="cluster-1").get(
+        "DBClusters"
+    )[0]
+    cluster["DBClusterMembers"].should.have.length_of(0)
+    cluster = client.delete_db_cluster(DBClusterIdentifier="cluster-1").get("DBCluster")
+    cluster["DBClusterIdentifier"].should.equal("cluster-1")
+
+
+@mock_rds
+def test_delete_db_cluster_with_instances_deletion_protection_enabled():
+    client = boto3.client("rds", region_name="us-west-2")
+    client.create_db_cluster(
+        DBClusterIdentifier="cluster-1",
+        DatabaseName="db_name",
+        Engine="aurora-postgresql",
+        MasterUsername="root",
+        MasterUserPassword="password",
+        Port=1234,
+        DeletionProtection=True,
+    )
+    client.create_db_instance(
+        DBInstanceIdentifier="test-instance-1",
+        DBInstanceClass="db.m1.small",
+        Engine="aurora-postgresql",
+        DBClusterIdentifier="cluster-1",
+    )
+    client.create_db_instance(
+        DBInstanceIdentifier="test-instance-2",
+        DBInstanceClass="db.m1.small",
+        Engine="aurora-postgresql",
+        DBClusterIdentifier="cluster-1",
+    )
+    cluster = client.describe_db_clusters(DBClusterIdentifier="cluster-1").get(
+        "DBClusters"
+    )[0]
+    cluster["DBClusterMembers"].should.have.length_of(2)
+    client.delete_db_instance(DBInstanceIdentifier="test-instance-1")
+    client.delete_db_instance(DBInstanceIdentifier="test-instance-2")
+    cluster = client.describe_db_clusters(DBClusterIdentifier="cluster-1").get(
+        "DBClusters"
+    )[0]
+    cluster["DBClusterMembers"].should.have.length_of(0)
+    client.delete_db_cluster.when.called_with(
+        DBClusterIdentifier="cluster-1"
+    ).should.throw(
+        ClientError,
+        "Cannot delete protected Cluster, please disable deletion protection and try again.",
+    )
+
+
+@mock_rds
 def test_restore_db_cluster_from_snapshot():
     client = boto3.client("rds", region_name="us-west-2")
     client.create_db_cluster(

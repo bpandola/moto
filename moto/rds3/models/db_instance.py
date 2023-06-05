@@ -61,6 +61,7 @@ class DBInstance(TaggableRDSResource, EventMixin, BaseRDSModel):
         storage_encrypted=False,
         tags=None,
         vpc_security_group_ids=None,
+        deletion_protection=False,
         **kwargs,
     ):
         super().__init__(backend)
@@ -109,6 +110,8 @@ class DBInstance(TaggableRDSResource, EventMixin, BaseRDSModel):
 
         self.option_group_name = option_group_name
         self._option_groups = [{"name": self.option_group_name, "status": "in-sync"}]
+
+        self.deletion_protection = deletion_protection
 
         self.copy_tags_to_snapshot = copy_tags_to_snapshot
         if tags:
@@ -548,6 +551,10 @@ class DBInstanceBackend:
         delete_automated_backups=True,
     ):
         db_instance = self.get_db_instance(db_instance_identifier)
+        if db_instance.deletion_protection:
+            raise InvalidParameterValue(
+                "Cannot delete protected DB Instance, please disable deletion protection and try again."
+            )
         if final_db_snapshot_identifier and not skip_final_snapshot:
             self.create_db_snapshot(
                 db_instance_identifier, final_db_snapshot_identifier
