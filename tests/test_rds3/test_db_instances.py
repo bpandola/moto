@@ -206,7 +206,7 @@ def test_delete_db_instance_deletion_protection_enabled():
             DBInstanceIdentifier="db-primary-1",
         )
     err = exc.value.response["Error"]
-    err["Code"].should.equal("InvalidParameterValue")
+    err["Code"].should.equal("InvalidParameterCombination")
     err["Message"].should.equal(
         "Cannot delete protected DB Instance, please disable deletion protection and try again."
     )

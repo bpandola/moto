@@ -9,6 +9,7 @@ from ..exceptions import (
     DBClusterNotFound,
     DBClusterToBeDeletedHasActiveMembers,
     InvalidAvailabilityZones,
+    InvalidParameterCombination,
     InvalidParameterValue,
 )
 
@@ -209,7 +210,7 @@ class DBClusterBackend:
             raise DBClusterToBeDeletedHasActiveMembers()
         cluster.delete_events()
         if cluster.deletion_protection:
-            raise InvalidParameterValue(
+            raise InvalidParameterCombination(
                 "Cannot delete protected Cluster, please disable deletion protection and try again."
             )
         return self.db_clusters.pop(db_cluster_identifier)
