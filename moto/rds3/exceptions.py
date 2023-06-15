@@ -142,6 +142,16 @@ class SnapshotQuotaExceeded(RDSError):
     fmt = "The request cannot be processed because it would exceed the maximum number of snapshots."
 
 
+class SharedSnapshotQuotaExceeded(RDSError):
+
+    fmt = "The request cannot be processed because it would exceed the maximum number of snapshots."
+
+
+class InvalidDBClusterSnapshotStateFault(RDSError):
+
+    fmt = "automated snapshots cannot be modified."
+
+
 class InvalidParameterValue(RDSError):
 
     code = "InvalidParameterValue"

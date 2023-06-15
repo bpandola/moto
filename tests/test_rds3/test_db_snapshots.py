@@ -1,5 +1,6 @@
 from botocore.exceptions import ClientError
 import boto3
+import pytest
 from sure import this  # noqa
 from . import mock_rds
 
@@ -228,3 +229,253 @@ def test_delete_automated_backups_by_default():
     )
     automated_backups = resp["DBInstanceAutomatedBackups"]
     assert len(automated_backups) == 0
+
+
+@mock_rds
+def test_describe_and_modify_snapshot_attributes():
+    instance_id = "test-instance"
+    client = boto3.client("rds", region_name="us-west-2")
+    client.create_db_instance(
+        DBInstanceIdentifier=instance_id,
+        AllocatedStorage=10,
+        Engine="postgres",
+        DBName="staging-postgres",
+        DBInstanceClass="db.m1.small",
+        MasterUsername="root",
+        MasterUserPassword="pass",
+        StorageEncrypted=False,
+    )
+    snapshot = client.create_db_snapshot(
+        DBInstanceIdentifier=instance_id, DBSnapshotIdentifier="snapshot-1"
+    ).get("DBSnapshot")
+    snapshot["DBSnapshotIdentifier"].should.equal("snapshot-1")
+
+    # Describe snapshot that was created
+    snapshot_attribute_result = client.describe_db_snapshot_attributes(
+        DBSnapshotIdentifier=snapshot["DBSnapshotIdentifier"],
+    )
+    snapshot_attribute_result["DBSnapshotAttributesResult"][
+        "DBSnapshotIdentifier"
+    ].should.equal("snapshot-1")
+    len(
+        snapshot_attribute_result["DBSnapshotAttributesResult"]["DBSnapshotAttributes"]
+    ).should.equal(1)
+    snapshot_attribute_result["DBSnapshotAttributesResult"]["DBSnapshotAttributes"][0][
+        "AttributeName"
+    ].should.equal("restore")
+    len(
+        snapshot_attribute_result["DBSnapshotAttributesResult"]["DBSnapshotAttributes"][
+            0
+        ]["AttributeValues"]
+    ).should.equal(0)
+
+    # Modify the snapshot attribute (Add)
+    customer_accounts_add = ["123", "456"]
+    snapshot_attribute_result = client.modify_db_snapshot_attribute(
+        DBSnapshotIdentifier=snapshot["DBSnapshotIdentifier"],
+        AttributeName="restore",
+        ValuesToAdd=customer_accounts_add,
+    )
+    snapshot_attribute_result["DBSnapshotAttributesResult"][
+        "DBSnapshotIdentifier"
+    ].should.equal("snapshot-1")
+    len(
+        snapshot_attribute_result["DBSnapshotAttributesResult"]["DBSnapshotAttributes"]
+    ).should.equal(1)
+    snapshot_attribute_result["DBSnapshotAttributesResult"]["DBSnapshotAttributes"][0][
+        "AttributeName"
+    ].should.equal("restore")
+    len(
+        snapshot_attribute_result["DBSnapshotAttributesResult"]["DBSnapshotAttributes"][
+            0
+        ]["AttributeValues"]
+    ).should.equal(2)
+    snapshot_attribute_result["DBSnapshotAttributesResult"]["DBSnapshotAttributes"][0][
+        "AttributeValues"
+    ].should.equal(customer_accounts_add)
+
+    # Modify the snapshot attribute (Add + Remove)
+    customer_accounts_add = ["789"]
+    customer_accounts_remove = ["123", "456"]
+    snapshot_attribute_result = client.modify_db_snapshot_attribute(
+        DBSnapshotIdentifier=snapshot["DBSnapshotIdentifier"],
+        AttributeName="restore",
+        ValuesToAdd=customer_accounts_add,
+        ValuesToRemove=customer_accounts_remove,
+    )
+    snapshot_attribute_result["DBSnapshotAttributesResult"][
+        "DBSnapshotIdentifier"
+    ].should.equal("snapshot-1")
+    len(
+        snapshot_attribute_result["DBSnapshotAttributesResult"]["DBSnapshotAttributes"]
+    ).should.equal(1)
+    snapshot_attribute_result["DBSnapshotAttributesResult"]["DBSnapshotAttributes"][0][
+        "AttributeName"
+    ].should.equal("restore")
+    len(
+        snapshot_attribute_result["DBSnapshotAttributesResult"]["DBSnapshotAttributes"][
+            0
+        ]["AttributeValues"]
+    ).should.equal(1)
+    snapshot_attribute_result["DBSnapshotAttributesResult"]["DBSnapshotAttributes"][0][
+        "AttributeValues"
+    ].should.equal(customer_accounts_add)
+
+    # Modify the snapshot attribute (Remove)
+    customer_accounts_remove = ["789"]
+    snapshot_attribute_result = client.modify_db_snapshot_attribute(
+        DBSnapshotIdentifier=snapshot["DBSnapshotIdentifier"],
+        AttributeName="restore",
+        ValuesToRemove=customer_accounts_remove,
+    )
+    snapshot_attribute_result["DBSnapshotAttributesResult"][
+        "DBSnapshotIdentifier"
+    ].should.equal("snapshot-1")
+    len(
+        snapshot_attribute_result["DBSnapshotAttributesResult"]["DBSnapshotAttributes"]
+    ).should.equal(1)
+    snapshot_attribute_result["DBSnapshotAttributesResult"]["DBSnapshotAttributes"][0][
+        "AttributeName"
+    ].should.equal("restore")
+    len(
+        snapshot_attribute_result["DBSnapshotAttributesResult"]["DBSnapshotAttributes"][
+            0
+        ]["AttributeValues"]
+    ).should.equal(0)
+
+
+@mock_rds
+def test_describe_snapshot_attributes_with_invalid_snapshot_id():
+    client = boto3.client("rds", region_name="us-west-2")
+    with pytest.raises(ClientError) as ex:
+        client.describe_db_snapshot_attributes(
+            DBSnapshotIdentifier="invalid_snapshot_id",
+        )
+    ex.value.response["ResponseMetadata"]["HTTPStatusCode"].should.equal(404)
+    ex.value.response["Error"]["Code"].should.equal("DBSnapshotNotFound")
+
+
+@mock_rds
+def test_modify_snapshot_attributes_with_invalid_snapshot_id():
+    client = boto3.client("rds", region_name="us-west-2")
+    with pytest.raises(ClientError) as ex:
+        client.modify_db_snapshot_attribute(
+            DBSnapshotIdentifier="invalid_snapshot_id",
+            AttributeName="restore",
+            ValuesToRemove=["123"],
+        )
+    ex.value.response["ResponseMetadata"]["HTTPStatusCode"].should.equal(404)
+    ex.value.response["Error"]["Code"].should.equal("DBSnapshotNotFound")
+
+
+@mock_rds
+def test_modify_snapshot_attributes_with_invalid_attribute_name():
+    instance_id = "test-instance"
+    client = boto3.client("rds", region_name="us-west-2")
+    client.create_db_instance(
+        DBInstanceIdentifier=instance_id,
+        AllocatedStorage=10,
+        Engine="postgres",
+        DBName="staging-postgres",
+        DBInstanceClass="db.m1.small",
+        MasterUsername="root",
+        MasterUserPassword="pass",
+        StorageEncrypted=False,
+    )
+    snapshot = client.create_db_snapshot(
+        DBInstanceIdentifier=instance_id, DBSnapshotIdentifier="snapshot-1"
+    ).get("DBSnapshot")
+    snapshot["DBSnapshotIdentifier"].should.equal("snapshot-1")
+
+    with pytest.raises(ClientError) as ex:
+        client.modify_db_snapshot_attribute(
+            DBSnapshotIdentifier=snapshot["DBSnapshotIdentifier"],
+            AttributeName="invalid_name",
+            ValuesToAdd=["123"],
+        )
+    ex.value.response["ResponseMetadata"]["HTTPStatusCode"].should.equal(400)
+    ex.value.response["Error"]["Code"].should.equal("InvalidParameterValue")
+
+
+@mock_rds
+def test_modify_snapshot_attributes_with_invalid_parameter_combination():
+    instance_id = "test-instance"
+    client = boto3.client("rds", region_name="us-west-2")
+    client.create_db_instance(
+        DBInstanceIdentifier=instance_id,
+        AllocatedStorage=10,
+        Engine="postgres",
+        DBName="staging-postgres",
+        DBInstanceClass="db.m1.small",
+        MasterUsername="root",
+        MasterUserPassword="pass",
+        StorageEncrypted=False,
+    )
+    snapshot = client.create_db_snapshot(
+        DBInstanceIdentifier=instance_id, DBSnapshotIdentifier="snapshot-1"
+    ).get("DBSnapshot")
+    snapshot["DBSnapshotIdentifier"].should.equal("snapshot-1")
+
+    with pytest.raises(ClientError) as ex:
+        client.modify_db_snapshot_attribute(
+            DBSnapshotIdentifier=snapshot["DBSnapshotIdentifier"],
+            AttributeName="restore",
+            ValuesToAdd=["123", "456"],
+            ValuesToRemove=["456"],
+        )
+    ex.value.response["ResponseMetadata"]["HTTPStatusCode"].should.equal(400)
+    ex.value.response["Error"]["Code"].should.equal("InvalidParameterCombination")
+
+
+@mock_rds
+def test_modify_snapshot_attributes_exceeding_number_of_shared_accounts():
+    instance_id = "test-instance"
+    client = boto3.client("rds", region_name="us-west-2")
+    client.create_db_instance(
+        DBInstanceIdentifier=instance_id,
+        AllocatedStorage=10,
+        Engine="postgres",
+        DBName="staging-postgres",
+        DBInstanceClass="db.m1.small",
+        MasterUsername="root",
+        MasterUserPassword="pass",
+        StorageEncrypted=False,
+    )
+    snapshot = client.create_db_snapshot(
+        DBInstanceIdentifier=instance_id, DBSnapshotIdentifier="snapshot-1"
+    ).get("DBSnapshot")
+    snapshot["DBSnapshotIdentifier"].should.equal("snapshot-1")
+
+    customer_accounts_add = [str(x) for x in range(30)]
+    with pytest.raises(ClientError) as ex:
+        client.modify_db_snapshot_attribute(
+            DBSnapshotIdentifier=snapshot["DBSnapshotIdentifier"],
+            AttributeName="restore",
+            ValuesToAdd=customer_accounts_add,
+        )
+    ex.value.response["ResponseMetadata"]["HTTPStatusCode"].should.equal(400)
+    ex.value.response["Error"]["Code"].should.equal("SharedSnapshotQuotaExceeded")
+
+
+@mock_rds
+def test_modify_snapshot_attributes_for_automated_snapshot():
+    client = boto3.client("rds", region_name="us-west-2")
+    client.create_db_instance(
+        DBInstanceIdentifier="test-instance",
+        AllocatedStorage=10,
+        Engine="postgres",
+        DBName="staging-postgres",
+        DBInstanceClass="db.m1.small",
+        MasterUsername="root",
+        MasterUserPassword="pass",
+        StorageEncrypted=False,
+    )
+    # Automated snapshots
+    auto_snapshot = client.describe_db_snapshots(MaxRecords=20).get("DBSnapshots")[0]
+    with pytest.raises(ClientError) as ex:
+        client.modify_db_snapshot_attribute(
+            DBSnapshotIdentifier=auto_snapshot["DBSnapshotIdentifier"],
+            AttributeName="restore",
+        )
+    ex.value.response["ResponseMetadata"]["HTTPStatusCode"].should.equal(400)
+    ex.value.response["Error"]["Code"].should.equal("InvalidParameterValue")

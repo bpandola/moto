@@ -1,4 +1,5 @@
 import copy
+import os
 
 from collections import OrderedDict
 from .base import BaseRDSModel
@@ -6,6 +7,10 @@ from .tag import TaggableRDSResource
 from ..exceptions import (
     DBClusterSnapshotAlreadyExists,
     DBClusterSnapshotNotFound,
+    InvalidParameterValue,
+    InvalidParameterCombination,
+    SharedSnapshotQuotaExceeded,
+    InvalidDBClusterSnapshotStateFault,
 )
 
 
@@ -33,6 +38,9 @@ class DBClusterSnapshot(TaggableRDSResource, BaseRDSModel):
         self.master_username = self.cluster.master_username
         self.port = self.cluster.port
         self.storage_encrypted = self.cluster.storage_encrypted
+        self.snapshot_attributes = DBClusterSnapshotAttributeResult(
+            db_cluster_snapshot_identifier=self.db_cluster_snapshot_identifier
+        )
 
     @property
     def resource_id(self):
@@ -45,6 +53,46 @@ class DBClusterSnapshot(TaggableRDSResource, BaseRDSModel):
     @property
     def snapshot_create_time(self):
         return self.created
+
+
+class DBClusterSnapshotAttribute:
+    ALLOWED_ATTRIBUTE_NAMES = ["restore"]
+
+    def __init__(self, attribute_name, attribute_values):
+        self.attribute_name = attribute_name
+        self.attribute_values = attribute_values
+
+    @staticmethod
+    def build_from_values(
+        attribute_name, attribute_values, values_to_add, values_to_remove
+    ):
+        if not values_to_add:
+            values_to_add = []
+        if not values_to_remove:
+            values_to_remove = []
+        if attribute_name not in DBClusterSnapshotAttribute.ALLOWED_ATTRIBUTE_NAMES:
+            raise InvalidParameterValue(
+                f"Invalid cluster snapshot attribute {attribute_name}"
+            )
+        common_values = set(values_to_add).intersection(values_to_remove)
+        if common_values:
+            raise InvalidParameterCombination(
+                "A customer Id may not appear in both the add list and remove list. "
+                + f"{common_values}"
+            )
+        add = attribute_values + values_to_add
+        attribute_values = [value for value in add if value not in values_to_remove]
+        if len(attribute_values) > os.getenv("MAX_SHARED_ACCOUNTS", 20):
+            raise SharedSnapshotQuotaExceeded()
+        return DBClusterSnapshotAttribute(attribute_name, attribute_values)
+
+
+class DBClusterSnapshotAttributeResult:
+    def __init__(self, db_cluster_snapshot_identifier):
+        self.db_cluster_snapshot_identifier = db_cluster_snapshot_identifier
+        self.db_cluster_snapshot_attributes = [
+            DBClusterSnapshotAttribute(attribute_name="restore", attribute_values=[])
+        ]
 
 
 class DBClusterSnapshotBackend:
@@ -81,7 +129,7 @@ class DBClusterSnapshotBackend:
         db_cluster_identifier=None,
         db_cluster_snapshot_identifier=None,
         snapshot_type=None,
-        **_
+        **_,
     ):
         if db_cluster_snapshot_identifier:
             return [self.get_db_cluster_snapshot(db_cluster_snapshot_identifier)]
@@ -96,3 +144,37 @@ class DBClusterSnapshotBackend:
                         db_cluster_snapshots.append(snapshot)
             return db_cluster_snapshots
         return self.db_cluster_snapshots.values()
+
+    def describe_db_cluster_snapshot_attributes(
+        self,
+        db_cluster_snapshot_identifier,
+    ):
+        cluster_snapshot = self.get_db_cluster_snapshot(db_cluster_snapshot_identifier)
+        return cluster_snapshot.snapshot_attributes
+
+    def modify_db_cluster_snapshot_attribute(
+        self,
+        db_cluster_snapshot_identifier,
+        attribute_name,
+        values_to_add=None,
+        values_to_remove=None,
+    ):
+        cluster_snapshot = self.get_db_cluster_snapshot(db_cluster_snapshot_identifier)
+        if cluster_snapshot.snapshot_type != "manual":
+            raise InvalidDBClusterSnapshotStateFault()
+            pass
+        attribute_values = (
+            cluster_snapshot.snapshot_attributes.db_cluster_snapshot_attributes[
+                0
+            ].attribute_values
+        )
+        updated_attribute_values = DBClusterSnapshotAttribute.build_from_values(
+            attribute_name=attribute_name,
+            attribute_values=attribute_values,
+            values_to_add=values_to_add,
+            values_to_remove=values_to_remove,
+        )
+        cluster_snapshot.snapshot_attributes.db_cluster_snapshot_attributes[
+            0
+        ] = updated_attribute_values
+        return cluster_snapshot.snapshot_attributes
