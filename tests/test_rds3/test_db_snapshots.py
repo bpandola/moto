@@ -345,7 +345,7 @@ def test_describe_and_modify_snapshot_attributes():
 
 
 @mock_rds
-def test_describe_snapshot_attributes_with_invalid_snapshot_id():
+def test_describe_snapshot_attributes_fails_with_invalid_snapshot_identifier():
     client = boto3.client("rds", region_name="us-west-2")
     with pytest.raises(ClientError) as ex:
         client.describe_db_snapshot_attributes(
@@ -356,7 +356,7 @@ def test_describe_snapshot_attributes_with_invalid_snapshot_id():
 
 
 @mock_rds
-def test_modify_snapshot_attributes_with_invalid_snapshot_id():
+def test_modify_snapshot_attributes_fails_with_invalid_snapshot_id():
     client = boto3.client("rds", region_name="us-west-2")
     with pytest.raises(ClientError) as ex:
         client.modify_db_snapshot_attribute(
@@ -369,7 +369,7 @@ def test_modify_snapshot_attributes_with_invalid_snapshot_id():
 
 
 @mock_rds
-def test_modify_snapshot_attributes_with_invalid_attribute_name():
+def test_modify_snapshot_attributes_fails_with_invalid_attribute_name():
     instance_id = "test-instance"
     client = boto3.client("rds", region_name="us-west-2")
     client.create_db_instance(
@@ -398,7 +398,7 @@ def test_modify_snapshot_attributes_with_invalid_attribute_name():
 
 
 @mock_rds
-def test_modify_snapshot_attributes_with_invalid_parameter_combination():
+def test_modify_snapshot_attributes_fails_with_invalid_parameter_combination():
     instance_id = "test-instance"
     client = boto3.client("rds", region_name="us-west-2")
     client.create_db_instance(
@@ -428,7 +428,7 @@ def test_modify_snapshot_attributes_with_invalid_parameter_combination():
 
 
 @mock_rds
-def test_modify_snapshot_attributes_exceeding_number_of_shared_accounts():
+def test_modify_snapshot_attributes_fails_when_exceeding_number_of_shared_accounts():
     instance_id = "test-instance"
     client = boto3.client("rds", region_name="us-west-2")
     client.create_db_instance(
@@ -458,7 +458,7 @@ def test_modify_snapshot_attributes_exceeding_number_of_shared_accounts():
 
 
 @mock_rds
-def test_modify_snapshot_attributes_for_automated_snapshot():
+def test_modify_snapshot_attributes_fails_for_automated_snapshot():
     client = boto3.client("rds", region_name="us-west-2")
     client.create_db_instance(
         DBInstanceIdentifier="test-instance",

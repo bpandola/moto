@@ -1,4 +1,5 @@
 import boto3
+import os
 from botocore.exceptions import ClientError
 
 from . import mock_rds
@@ -228,7 +229,7 @@ def test_describe_and_modify_cluster_snapshot_attributes():
 
 
 @mock_rds
-def test_describe_snapshot_attributes_with_invalid_cluster_snapshot_id():
+def test_describe_snapshot_attributes_fails_with_invalid_cluster_snapshot_identifier():
     client = boto3.client("rds", region_name="us-west-2")
     with pytest.raises(ClientError) as ex:
         client.describe_db_cluster_snapshot_attributes(
@@ -239,7 +240,7 @@ def test_describe_snapshot_attributes_with_invalid_cluster_snapshot_id():
 
 
 @mock_rds
-def test_modify_snapshot_attributes_with_invalid_cluster_snapshot_id():
+def test_modify_snapshot_attributes_with_fails_invalid_cluster_snapshot_identifier():
     client = boto3.client("rds", region_name="us-west-2")
     with pytest.raises(ClientError) as ex:
         client.modify_db_cluster_snapshot_attribute(
@@ -252,7 +253,7 @@ def test_modify_snapshot_attributes_with_invalid_cluster_snapshot_id():
 
 
 @mock_rds
-def test_modify_snapshot_attributes_with_invalid_attribute_name():
+def test_modify_snapshot_attributes_fails_with_invalid_attribute_name():
     client = boto3.client("rds", region_name="us-west-2")
     client.create_db_cluster(
         DBClusterIdentifier="cluster-1",
@@ -278,7 +279,7 @@ def test_modify_snapshot_attributes_with_invalid_attribute_name():
 
 
 @mock_rds
-def test_modify_snapshot_attributes_with_invalid_parameter_combination():
+def test_modify_snapshot_attributes_with_fails_invalid_parameter_combination():
     client = boto3.client("rds", region_name="us-west-2")
     client.create_db_cluster(
         DBClusterIdentifier="cluster-1",
@@ -305,7 +306,7 @@ def test_modify_snapshot_attributes_with_invalid_parameter_combination():
 
 
 @mock_rds
-def test_modify_snapshot_attributes_exceeding_number_of_shared_accounts():
+def test_modify_snapshot_attributes_fails_when_exceeding_number_of_shared_accounts():
     client = boto3.client("rds", region_name="us-west-2")
     client.create_db_cluster(
         DBClusterIdentifier="cluster-1",
@@ -332,7 +333,7 @@ def test_modify_snapshot_attributes_exceeding_number_of_shared_accounts():
 
 
 @mock_rds
-def test_modify_snapshot_attributes_for_automated_snapshot():
+def test_modify_snapshot_attributes_fails_for_automated_snapshot():
     client = boto3.client("rds", region_name="us-west-2")
     client.create_db_cluster(
         DBClusterIdentifier="cluster-1",
@@ -355,3 +356,114 @@ def test_modify_snapshot_attributes_for_automated_snapshot():
     ex.value.response["Error"]["Code"].should.equal(
         "InvalidDBClusterSnapshotStateFault"
     )
+
+
+@mock_rds
+def test_copy_unencrypted_db_cluster_snapshot_to_encrypted_db_cluster_snapshot():
+    client = boto3.client("rds", region_name="us-west-2")
+    client.create_db_cluster(
+        DBClusterIdentifier="unencrypted-cluster-1",
+        DatabaseName="db_name",
+        Engine="aurora-postgresql",
+        MasterUsername="root",
+        MasterUserPassword="password",
+        Port=1234,
+    )
+    snapshot = client.create_db_cluster_snapshot(
+        DBClusterIdentifier="unencrypted-cluster-1",
+        DBClusterSnapshotIdentifier="unencrypted-db-cluster-snapshot",
+    ).get("DBClusterSnapshot")
+    snapshot["StorageEncrypted"].should.equal(False)
+
+    client.copy_db_cluster_snapshot(
+        SourceDBClusterSnapshotIdentifier="unencrypted-db-cluster-snapshot",
+        TargetDBClusterSnapshotIdentifier="encrypted-db-cluster-snapshot",
+        KmsKeyId="alias/aws/rds",
+    )
+    snapshot = client.describe_db_cluster_snapshots(
+        DBClusterSnapshotIdentifier="encrypted-db-cluster-snapshot"
+    ).get("DBClusterSnapshots")[0]
+    snapshot["Engine"].should.equal("aurora-postgresql")
+    snapshot["DBClusterSnapshotIdentifier"].should.equal(
+        "encrypted-db-cluster-snapshot"
+    )
+    snapshot["StorageEncrypted"].should.equal(True)
+
+
+@mock_rds
+def test_copy_db_cluster_snapshot_fails_for_unknown_snapshot():
+    client = boto3.client("rds", region_name="us-west-2")
+
+    with pytest.raises(ClientError) as exc:
+        client.copy_db_cluster_snapshot(
+            SourceDBClusterSnapshotIdentifier="snapshot-1",
+            TargetDBClusterSnapshotIdentifier="snapshot-2",
+        )
+
+    err = exc.value.response["Error"]
+    err["Message"].should.equal("DBClusterSnapshot snapshot-1 not found.")
+
+
+@mock_rds
+def test_copy_db_cluster_snapshot_fails_for_existing_target_snapshot():
+    client = boto3.client("rds", region_name="us-west-2")
+
+    client.create_db_cluster(
+        DBClusterIdentifier="cluster-1",
+        DatabaseName="db_name",
+        Engine="aurora-postgresql",
+        MasterUsername="root",
+        MasterUserPassword="password",
+        Port=1234,
+    )
+
+    client.create_db_cluster_snapshot(
+        DBClusterIdentifier="cluster-1", DBClusterSnapshotIdentifier="source-snapshot"
+    ).get("DBClusterSnapshot")
+
+    client.create_db_cluster_snapshot(
+        DBClusterIdentifier="cluster-1", DBClusterSnapshotIdentifier="target-snapshot"
+    ).get("DBClusterSnapshot")
+
+    with pytest.raises(ClientError) as exc:
+        client.copy_db_cluster_snapshot(
+            SourceDBClusterSnapshotIdentifier="source-snapshot",
+            TargetDBClusterSnapshotIdentifier="target-snapshot",
+        )
+
+    err = exc.value.response["Error"]
+    err["Code"].should.equal("DBClusterSnapshotAlreadyExists")
+    err["Message"].should.equal("DB Cluster Snapshot already exists")
+
+
+@mock_rds
+def test_copy_db_cluster_snapshot_fails_when_limit_exceeded():
+    client = boto3.client("rds", region_name="us-west-2")
+
+    client.create_db_cluster(
+        DBClusterIdentifier="cluster-1",
+        DatabaseName="db_name",
+        Engine="aurora-postgresql",
+        MasterUsername="root",
+        MasterUserPassword="password",
+        Port=1234,
+    )
+
+    os.environ["MOTO_RDS_SNAPSHOT_LIMIT"] = "1"
+
+    client.create_db_cluster_snapshot(
+        DBClusterIdentifier="cluster-1", DBClusterSnapshotIdentifier="source-snapshot"
+    ).get("DBClusterSnapshot")
+
+    with pytest.raises(ClientError) as exc:
+        client.copy_db_cluster_snapshot(
+            SourceDBClusterSnapshotIdentifier="source-snapshot",
+            TargetDBClusterSnapshotIdentifier="target-snapshot",
+        )
+
+    err = exc.value.response["Error"]
+    err["Code"].should.equal("SnapshotQuotaExceeded")
+    err["Message"].should.equal(
+        "The request cannot be processed because it would exceed the maximum number of snapshots."
+    )
+    del os.environ["MOTO_RDS_SNAPSHOT_LIMIT"]

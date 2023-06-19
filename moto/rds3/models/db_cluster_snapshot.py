@@ -10,6 +10,7 @@ from ..exceptions import (
     InvalidParameterValue,
     InvalidParameterCombination,
     SharedSnapshotQuotaExceeded,
+    SnapshotQuotaExceeded,
     InvalidDBClusterSnapshotStateFault,
 )
 
@@ -19,7 +20,13 @@ class DBClusterSnapshot(TaggableRDSResource, BaseRDSModel):
     resource_type = "cluster-snapshot"
 
     def __init__(
-        self, backend, identifier, db_cluster, snapshot_type="manual", tags=None
+        self,
+        backend,
+        identifier,
+        db_cluster,
+        snapshot_type="manual",
+        tags=None,
+        kms_key_id=None,
     ):
         super().__init__(backend)
         self.db_cluster_snapshot_identifier = identifier
@@ -32,6 +39,12 @@ class DBClusterSnapshot(TaggableRDSResource, BaseRDSModel):
         self.allocated_storage = self.cluster.allocated_storage
         self.cluster_create_time = self.cluster.created
         self.db_cluster_identifier = self.cluster.resource_id
+        if kms_key_id is not None:
+            self.kms_key_id = self.cluster.kms_key_id = kms_key_id
+            self.encrypted = self.cluster.storage_encrypted = True
+        else:
+            self.kms_key_id = self.cluster.kms_key_id
+            self.encrypted = self.cluster.storage_encrypted
         self.encrypted = self.cluster.storage_encrypted
         self.engine = self.cluster.engine
         self.engine_version = self.cluster.engine_version
@@ -120,6 +133,41 @@ class DBClusterSnapshotBackend:
         self.db_cluster_snapshots[db_cluster_snapshot_identifier] = snapshot
         return snapshot
 
+    def copy_db_cluster_snapshot(
+        self,
+        source_db_cluster_snapshot_identifier,
+        target_db_cluster_snapshot_identifier,
+        kms_key_id=None,
+        tags=None,
+    ):
+        if source_db_cluster_snapshot_identifier not in self.db_cluster_snapshots:
+            raise DBClusterSnapshotNotFound(source_db_cluster_snapshot_identifier)
+        if target_db_cluster_snapshot_identifier in self.db_cluster_snapshots:
+            raise DBClusterSnapshotAlreadyExists(target_db_cluster_snapshot_identifier)
+
+        if len(self.db_cluster_snapshots) >= int(
+            os.environ.get("MOTO_RDS_SNAPSHOT_LIMIT", "100")
+        ):
+            raise SnapshotQuotaExceeded()
+        if kms_key_id is not None:
+            key = self.kms.describe_key(str(kms_key_id))
+            # We do this in case an alias was passed in.
+            kms_key_id = key.id
+        source_db_cluster_snapshot = self.get_db_cluster_snapshot(
+            source_db_cluster_snapshot_identifier
+        )
+        target_db_cluster_snapshot = DBClusterSnapshot(
+            self,
+            target_db_cluster_snapshot_identifier,
+            source_db_cluster_snapshot.cluster,
+            tags=tags,
+            kms_key_id=kms_key_id,
+        )
+        self.db_cluster_snapshots[
+            target_db_cluster_snapshot_identifier
+        ] = target_db_cluster_snapshot
+        return target_db_cluster_snapshot
+
     def delete_db_cluster_snapshot(self, db_cluster_snapshot_identifier):
         snapshot = self.get_db_cluster_snapshot(db_cluster_snapshot_identifier)
         return self.db_cluster_snapshots.pop(snapshot.resource_id)
@@ -162,7 +210,6 @@ class DBClusterSnapshotBackend:
         cluster_snapshot = self.get_db_cluster_snapshot(db_cluster_snapshot_identifier)
         if cluster_snapshot.snapshot_type != "manual":
             raise InvalidDBClusterSnapshotStateFault()
-            pass
         attribute_values = (
             cluster_snapshot.snapshot_attributes.db_cluster_snapshot_attributes[
                 0
