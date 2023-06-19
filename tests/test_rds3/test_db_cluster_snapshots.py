@@ -467,3 +467,55 @@ def test_copy_db_cluster_snapshot_fails_when_limit_exceeded():
         "The request cannot be processed because it would exceed the maximum number of snapshots."
     )
     del os.environ["MOTO_RDS_SNAPSHOT_LIMIT"]
+
+
+@mock_rds
+def test_create_db_cluster_snapshot_copy_tags():
+    client = boto3.client("rds", region_name="us-west-2")
+    client.create_db_cluster(
+        DBClusterIdentifier="cluster-1",
+        DatabaseName="db_name",
+        Engine="aurora-postgresql",
+        MasterUsername="root",
+        MasterUserPassword="password",
+        Port=1234,
+        CopyTagsToSnapshot=True,
+        Tags=test_tags,
+    )
+    snapshot = client.create_db_cluster_snapshot(
+        DBClusterSnapshotIdentifier="cluster-snap", DBClusterIdentifier="cluster-1"
+    ).get("DBClusterSnapshot")
+    tag_list = client.list_tags_for_resource(
+        ResourceName=snapshot["DBClusterSnapshotArn"]
+    ).get("TagList")
+    tag_list.should.equal(test_tags)
+
+
+@mock_rds
+def test_create_db_cluster_snapshot_with_tags_overrides_copy_snapshot_tags():
+    client = boto3.client("rds", region_name="us-west-2")
+    client.create_db_cluster(
+        DBClusterIdentifier="cluster-1",
+        DatabaseName="db_name",
+        Engine="aurora-postgresql",
+        MasterUsername="root",
+        MasterUserPassword="password",
+        Port=1234,
+        CopyTagsToSnapshot=True,
+        Tags=test_tags,
+    )
+    new_snapshot_tags = [
+        {
+            "Key": "foo",
+            "Value": "baz",
+        },
+    ]
+    snapshot = client.create_db_cluster_snapshot(
+        DBClusterSnapshotIdentifier="cluster-snap",
+        DBClusterIdentifier="cluster-1",
+        Tags=new_snapshot_tags,
+    ).get("DBClusterSnapshot")
+    tag_list = client.list_tags_for_resource(
+        ResourceName=snapshot["DBClusterSnapshotArn"]
+    ).get("TagList")
+    tag_list.should.equal(new_snapshot_tags)

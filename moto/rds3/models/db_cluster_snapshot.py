@@ -33,8 +33,12 @@ class DBClusterSnapshot(TaggableRDSResource, BaseRDSModel):
         self.snapshot_type = snapshot_type
         self.percent_progress = 100
         self.status = "available"
+        # If tags are provided at creation, AWS does *not* copy tags from the
+        # db_cluster (even if copy_tags_to_snapshot is True).
         if tags:
             self.add_tags(tags)
+        elif db_cluster.copy_tags_to_snapshot:
+            self.add_tags(db_cluster.tags)
         self.cluster = copy.copy(db_cluster)
         self.allocated_storage = self.cluster.allocated_storage
         self.cluster_create_time = self.cluster.created
