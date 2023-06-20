@@ -479,3 +479,36 @@ def test_modify_snapshot_attributes_fails_for_automated_snapshot():
         )
     ex.value.response["ResponseMetadata"]["HTTPStatusCode"].should.equal(400)
     ex.value.response["Error"]["Code"].should.equal("InvalidParameterValue")
+
+
+@mock_rds
+def test_copy_db_snapshot_fails_for_inaccessible_kms_key_arn():
+    client = boto3.client("rds", region_name="us-west-2")
+    client.create_db_instance(
+        DBInstanceIdentifier="test-instance",
+        AllocatedStorage=10,
+        Engine="postgres",
+        DBName="staging-postgres",
+        DBInstanceClass="db.m1.small",
+        MasterUsername="root",
+        MasterUserPassword="pass",
+        StorageEncrypted=True,
+    )
+    snapshot = client.create_db_snapshot(
+        DBInstanceIdentifier="test-instance", DBSnapshotIdentifier="snapshot-1"
+    ).get("DBSnapshot")
+    snapshot["DBSnapshotIdentifier"].should.equal("snapshot-1")
+
+    kms_key_id = (
+        "arn:aws:kms:us-east-1:123456789012:key/6e551f00-8a97-4e3b-b620-1a59080bd1be"
+    )
+    with pytest.raises(ClientError) as ex:
+        client.copy_db_snapshot(
+            SourceDBSnapshotIdentifier="snapshot-1",
+            TargetDBSnapshotIdentifier="snapshot-1-copy",
+            KmsKeyId=kms_key_id,
+        )
+    message = f"Specified KMS key [{kms_key_id}] does not exist, is not enabled or you do not have permissions to access it."
+    ex.value.response["ResponseMetadata"]["HTTPStatusCode"].should.equal(400)
+    ex.value.response["Error"]["Code"].should.equal("KMSKeyNotAccessibleFault")
+    ex.value.response["Error"]["Message"].should.contain(message)

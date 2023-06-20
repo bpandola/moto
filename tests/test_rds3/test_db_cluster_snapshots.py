@@ -519,3 +519,35 @@ def test_create_db_cluster_snapshot_with_tags_overrides_copy_snapshot_tags():
         ResourceName=snapshot["DBClusterSnapshotArn"]
     ).get("TagList")
     tag_list.should.equal(new_snapshot_tags)
+
+
+@mock_rds
+def test_copy_db_cluster_snapshot_fails_for_inaccessible_kms_key_arn():
+    client = boto3.client("rds", region_name="us-west-2")
+    client.create_db_cluster(
+        DBClusterIdentifier="cluster-1",
+        DatabaseName="db_name",
+        Engine="aurora-postgresql",
+        MasterUsername="root",
+        MasterUserPassword="password",
+        Port=1234,
+        StorageEncrypted=True,
+    )
+    snapshot = client.create_db_cluster_snapshot(
+        DBClusterIdentifier="cluster-1", DBClusterSnapshotIdentifier="snapshot-1"
+    ).get("DBClusterSnapshot")
+    snapshot["DBClusterSnapshotIdentifier"].should.equal("snapshot-1")
+
+    kms_key_id = (
+        "arn:aws:kms:us-east-1:123456789012:key/6e551f00-8a97-4e3b-b620-1a59080bd1be"
+    )
+    with pytest.raises(ClientError) as ex:
+        client.copy_db_cluster_snapshot(
+            SourceDBClusterSnapshotIdentifier="snapshot-1",
+            TargetDBClusterSnapshotIdentifier="snapshot-1-copy",
+            KmsKeyId=kms_key_id,
+        )
+    message = f"Specified KMS key [{kms_key_id}] does not exist, is not enabled or you do not have permissions to access it."
+    ex.value.response["ResponseMetadata"]["HTTPStatusCode"].should.equal(400)
+    ex.value.response["Error"]["Code"].should.equal("KMSKeyNotAccessibleFault")
+    ex.value.response["Error"]["Message"].should.contain(message)

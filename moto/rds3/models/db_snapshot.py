@@ -16,6 +16,7 @@ from ..exceptions import (
     InvalidParameterValue,
     InvalidParameterCombination,
     SharedSnapshotQuotaExceeded,
+    KMSKeyNotAccessibleFault,
 )
 
 
@@ -191,10 +192,13 @@ class DBSnapshotBackend:
             os.environ.get("MOTO_RDS_SNAPSHOT_LIMIT", "100")
         ):
             raise SnapshotQuotaExceeded()
-        if kms_key_id is not None:
-            key = self.kms.describe_key(str(kms_key_id))
-            # We do this in case an alias was passed in.
-            kms_key_id = key.id
+        try:
+            if kms_key_id is not None:
+                key = self.kms.describe_key(str(kms_key_id))
+                # We do this in case an alias was passed in.
+                kms_key_id = key.id
+        except Exception:
+            raise KMSKeyNotAccessibleFault(str(kms_key_id))
         source_snapshot = self.get_db_snapshot(source_db_snapshot_identifier)
         target_snapshot = DBSnapshot(
             self,
