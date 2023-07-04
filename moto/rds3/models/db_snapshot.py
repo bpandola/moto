@@ -185,6 +185,7 @@ class DBSnapshotBackend:
         target_db_snapshot_identifier,
         kms_key_id=None,
         tags=None,
+        copy_tags=False,
     ):
         if target_db_snapshot_identifier in self.db_snapshots:
             raise DBSnapshotAlreadyExists(target_db_snapshot_identifier)
@@ -200,6 +201,9 @@ class DBSnapshotBackend:
         except Exception:
             raise KMSKeyNotAccessibleFault(str(kms_key_id))
         source_snapshot = self.get_db_snapshot(source_db_snapshot_identifier)
+        # If tags are present, copy_tags is ignored
+        if copy_tags and not tags:
+            tags = source_snapshot.tags
         target_snapshot = DBSnapshot(
             self,
             target_db_snapshot_identifier,

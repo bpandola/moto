@@ -512,3 +512,74 @@ def test_copy_db_snapshot_fails_for_inaccessible_kms_key_arn():
     ex.value.response["ResponseMetadata"]["HTTPStatusCode"].should.equal(400)
     ex.value.response["Error"]["Code"].should.equal("KMSKeyNotAccessibleFault")
     ex.value.response["Error"]["Message"].should.contain(message)
+
+
+@mock_rds
+def test_copy_db_snapshot_copy_tags_from_source_snapshot():
+    client = boto3.client("rds", region_name="us-west-2")
+    client.create_db_instance(
+        DBInstanceIdentifier="instance-1",
+        AllocatedStorage=10,
+        Engine="postgres",
+        DBName="staging-postgres",
+        DBInstanceClass="db.m1.small",
+        MasterUsername="root",
+        MasterUserPassword="pass",
+    )
+    snapshot = client.create_db_snapshot(
+        DBSnapshotIdentifier="snap-1",
+        DBInstanceIdentifier="instance-1",
+        Tags=test_tags,
+    ).get("DBSnapshot")
+    tag_list = client.list_tags_for_resource(
+        ResourceName=snapshot["DBSnapshotArn"]
+    ).get("TagList")
+    tag_list.should.equal(test_tags)
+    copied_snapshot = client.copy_db_snapshot(
+        SourceDBSnapshotIdentifier="snap-1",
+        TargetDBSnapshotIdentifier="snap-1-copy",
+        CopyTags=True,
+    ).get("DBSnapshot")
+    tag_list = client.list_tags_for_resource(
+        ResourceName=copied_snapshot["DBSnapshotArn"]
+    ).get("TagList")
+    tag_list.should.equal(test_tags)
+
+
+@mock_rds
+def test_copy_db_snapshot_tags_in_request():
+    client = boto3.client("rds", region_name="us-west-2")
+    client.create_db_instance(
+        DBInstanceIdentifier="instance-1",
+        AllocatedStorage=10,
+        Engine="postgres",
+        DBName="staging-postgres",
+        DBInstanceClass="db.m1.small",
+        MasterUsername="root",
+        MasterUserPassword="pass",
+    )
+    snapshot = client.create_db_snapshot(
+        DBSnapshotIdentifier="snap-1",
+        DBInstanceIdentifier="instance-1",
+        Tags=test_tags,
+    ).get("DBSnapshot")
+    tag_list = client.list_tags_for_resource(
+        ResourceName=snapshot["DBSnapshotArn"]
+    ).get("TagList")
+    tag_list.should.equal(test_tags)
+    new_snapshot_tags = [
+        {
+            "Key": "foo",
+            "Value": "baz",
+        },
+    ]
+    copied_snapshot = client.copy_db_snapshot(
+        SourceDBSnapshotIdentifier="snap-1",
+        TargetDBSnapshotIdentifier="snap-1-copy",
+        Tags=new_snapshot_tags,
+        CopyTags=True,
+    ).get("DBSnapshot")
+    tag_list = client.list_tags_for_resource(
+        ResourceName=copied_snapshot["DBSnapshotArn"]
+    ).get("TagList")
+    tag_list.should.equal(new_snapshot_tags)

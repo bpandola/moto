@@ -144,6 +144,7 @@ class DBClusterSnapshotBackend:
         target_db_cluster_snapshot_identifier,
         kms_key_id=None,
         tags=None,
+        copy_tags=False,
     ):
         if source_db_cluster_snapshot_identifier not in self.db_cluster_snapshots:
             raise DBClusterSnapshotNotFound(source_db_cluster_snapshot_identifier)
@@ -164,6 +165,9 @@ class DBClusterSnapshotBackend:
         source_db_cluster_snapshot = self.get_db_cluster_snapshot(
             source_db_cluster_snapshot_identifier
         )
+        # If tags are present, copy_tags is ignored
+        if copy_tags and not tags:
+            tags = source_db_cluster_snapshot.tags
         target_db_cluster_snapshot = DBClusterSnapshot(
             self,
             target_db_cluster_snapshot_identifier,

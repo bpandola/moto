@@ -551,3 +551,72 @@ def test_copy_db_cluster_snapshot_fails_for_inaccessible_kms_key_arn():
     ex.value.response["ResponseMetadata"]["HTTPStatusCode"].should.equal(400)
     ex.value.response["Error"]["Code"].should.equal("KMSKeyNotAccessibleFault")
     ex.value.response["Error"]["Message"].should.contain(message)
+
+
+@mock_rds
+def test_copy_db_cluster_snapshot_copy_tags_from_source_snapshot():
+    client = boto3.client("rds", region_name="us-west-2")
+    client.create_db_cluster(
+        DBClusterIdentifier="cluster-1",
+        DatabaseName="db_name",
+        Engine="aurora-postgresql",
+        MasterUsername="root",
+        MasterUserPassword="password",
+        Port=1234,
+    )
+    snapshot = client.create_db_cluster_snapshot(
+        DBClusterSnapshotIdentifier="cluster-snap",
+        DBClusterIdentifier="cluster-1",
+        Tags=test_tags,
+    ).get("DBClusterSnapshot")
+    tag_list = client.list_tags_for_resource(
+        ResourceName=snapshot["DBClusterSnapshotArn"]
+    ).get("TagList")
+    tag_list.should.equal(test_tags)
+    copied_snapshot = client.copy_db_cluster_snapshot(
+        SourceDBClusterSnapshotIdentifier="cluster-snap",
+        TargetDBClusterSnapshotIdentifier="cluster-snap-copy",
+        CopyTags=True,
+    ).get("DBClusterSnapshot")
+    tag_list = client.list_tags_for_resource(
+        ResourceName=copied_snapshot["DBClusterSnapshotArn"]
+    ).get("TagList")
+    tag_list.should.equal(test_tags)
+
+
+@mock_rds
+def test_copy_db_cluster_snapshot_tags_in_request():
+    client = boto3.client("rds", region_name="us-west-2")
+    client.create_db_cluster(
+        DBClusterIdentifier="cluster-1",
+        DatabaseName="db_name",
+        Engine="aurora-postgresql",
+        MasterUsername="root",
+        MasterUserPassword="password",
+        Port=1234,
+    )
+    snapshot = client.create_db_cluster_snapshot(
+        DBClusterSnapshotIdentifier="cluster-snap",
+        DBClusterIdentifier="cluster-1",
+        Tags=test_tags,
+    ).get("DBClusterSnapshot")
+    tag_list = client.list_tags_for_resource(
+        ResourceName=snapshot["DBClusterSnapshotArn"]
+    ).get("TagList")
+    tag_list.should.equal(test_tags)
+    new_snapshot_tags = [
+        {
+            "Key": "foo",
+            "Value": "baz",
+        },
+    ]
+    copied_snapshot = client.copy_db_cluster_snapshot(
+        SourceDBClusterSnapshotIdentifier="cluster-snap",
+        TargetDBClusterSnapshotIdentifier="cluster-snap-copy",
+        Tags=new_snapshot_tags,
+        CopyTags=True,
+    ).get("DBClusterSnapshot")
+    tag_list = client.list_tags_for_resource(
+        ResourceName=copied_snapshot["DBClusterSnapshotArn"]
+    ).get("TagList")
+    tag_list.should.equal(new_snapshot_tags)
