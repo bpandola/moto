@@ -13,6 +13,10 @@ from ..exceptions import (
     DBSnapshotNotFound,
     InvalidDBSnapshotIdentifierValue,
     SnapshotQuotaExceeded,
+    InvalidParameterValue,
+    InvalidParameterCombination,
+    SharedSnapshotQuotaExceeded,
+    KMSKeyNotAccessibleFault,
 )
 
 
@@ -93,6 +97,9 @@ class DBSnapshot(TaggableRDSResource, EventMixin, BaseRDSModel):
         self.master_username = self.db_instance.master_username
         self.storage_type = self.db_instance.storage_type
         self.iops = self.db_instance.iops
+        self.snapshot_attributes = DBSnapshotAttributeResult(
+            db_snapshot_identifier=self.db_snapshot_identifier
+        )
 
     @property
     def resource_id(self):
@@ -125,6 +132,44 @@ class DBInstanceAutomatedBackup:
         return status
 
 
+class DBSnapshotAttribute:
+    ALLOWED_ATTRIBUTE_NAMES = ["restore"]
+
+    def __init__(self, attribute_name, attribute_values):
+        self.attribute_name = attribute_name
+        self.attribute_values = attribute_values
+
+    @staticmethod
+    def build_from_values(
+        attribute_name, attribute_values, values_to_add, values_to_remove
+    ):
+        if not values_to_add:
+            values_to_add = []
+        if not values_to_remove:
+            values_to_remove = []
+        if attribute_name not in DBSnapshotAttribute.ALLOWED_ATTRIBUTE_NAMES:
+            raise InvalidParameterValue(f"Invalid snapshot attribute {attribute_name}")
+        common_values = set(values_to_add).intersection(values_to_remove)
+        if common_values:
+            raise InvalidParameterCombination(
+                "A customer Id may not appear in both the add list and remove list. "
+                + f"{common_values}"
+            )
+        add = attribute_values + values_to_add
+        attribute_values = [value for value in add if value not in values_to_remove]
+        if len(attribute_values) > os.getenv("MAX_SHARED_ACCOUNTS", 20):
+            raise SharedSnapshotQuotaExceeded()
+        return DBSnapshotAttribute(attribute_name, attribute_values)
+
+
+class DBSnapshotAttributeResult:
+    def __init__(self, db_snapshot_identifier):
+        self.db_snapshot_identifier = db_snapshot_identifier
+        self.db_snapshot_attributes = [
+            DBSnapshotAttribute(attribute_name="restore", attribute_values=[])
+        ]
+
+
 class DBSnapshotBackend:
     def __init__(self):
         self.db_snapshots = OrderedDict()
@@ -140,6 +185,7 @@ class DBSnapshotBackend:
         target_db_snapshot_identifier,
         kms_key_id=None,
         tags=None,
+        copy_tags=False,
     ):
         if target_db_snapshot_identifier in self.db_snapshots:
             raise DBSnapshotAlreadyExists(target_db_snapshot_identifier)
@@ -147,11 +193,17 @@ class DBSnapshotBackend:
             os.environ.get("MOTO_RDS_SNAPSHOT_LIMIT", "100")
         ):
             raise SnapshotQuotaExceeded()
-        if kms_key_id is not None:
-            key = self.kms.describe_key(str(kms_key_id))
-            # We do this in case an alias was passed in.
-            kms_key_id = key.id
+        try:
+            if kms_key_id is not None:
+                key = self.kms.describe_key(str(kms_key_id))
+                # We do this in case an alias was passed in.
+                kms_key_id = key.id
+        except Exception:
+            raise KMSKeyNotAccessibleFault(str(kms_key_id))
         source_snapshot = self.get_db_snapshot(source_db_snapshot_identifier)
+        # If tags are present, copy_tags is ignored
+        if copy_tags and not tags:
+            tags = source_snapshot.tags
         target_snapshot = DBSnapshot(
             self,
             target_db_snapshot_identifier,
@@ -229,3 +281,34 @@ class DBSnapshotBackend:
         return [
             DBInstanceAutomatedBackup(self, k, v) for k, v in snapshots_grouped.items()
         ]
+
+    def describe_db_snapshot_attributes(
+        self,
+        db_snapshot_identifier,
+    ):
+        snapshot = self.get_db_snapshot(db_snapshot_identifier)
+        return snapshot.snapshot_attributes
+
+    def modify_db_snapshot_attribute(
+        self,
+        db_snapshot_identifier,
+        attribute_name,
+        values_to_add=None,
+        values_to_remove=None,
+    ):
+        snapshot = self.get_db_snapshot(db_snapshot_identifier)
+        if snapshot.snapshot_type != "manual":
+            raise InvalidDBSnapshotIdentifierValue(db_snapshot_identifier)
+        attribute_values = snapshot.snapshot_attributes.db_snapshot_attributes[
+            0
+        ].attribute_values
+        updated_attribute_values = DBSnapshotAttribute.build_from_values(
+            attribute_name=attribute_name,
+            attribute_values=attribute_values,
+            values_to_add=values_to_add,
+            values_to_remove=values_to_remove,
+        )
+        snapshot.snapshot_attributes.db_snapshot_attributes[
+            0
+        ] = updated_attribute_values
+        return snapshot.snapshot_attributes

@@ -4900,7 +4900,7 @@
 - [ ] backtrack_db_cluster
 - [X] cancel_export_task
 - [ ] copy_db_cluster_parameter_group
-- [ ] copy_db_cluster_snapshot
+- [X] copy_db_cluster_snapshot
 - [ ] copy_db_parameter_group
 - [ ] copy_db_snapshot
 - [ ] copy_option_group
@@ -4946,7 +4946,7 @@
 - [ ] describe_db_cluster_endpoints
 - [ ] describe_db_cluster_parameter_groups
 - [ ] describe_db_cluster_parameters
-- [ ] describe_db_cluster_snapshot_attributes
+- [X] describe_db_cluster_snapshot_attributes
 - [X] describe_db_cluster_snapshots
 - [X] describe_db_clusters
 - [ ] describe_db_engine_versions
@@ -4960,7 +4960,7 @@
 - [ ] describe_db_proxy_target_groups
 - [ ] describe_db_proxy_targets
 - [ ] describe_db_security_groups
-- [ ] describe_db_snapshot_attributes
+- [X] describe_db_snapshot_attributes
 - [ ] describe_db_snapshots
 - [ ] describe_db_subnet_groups
 - [ ] describe_engine_default_cluster_parameters
@@ -4989,14 +4989,14 @@
 - [X] modify_db_cluster
 - [ ] modify_db_cluster_endpoint
 - [ ] modify_db_cluster_parameter_group
-- [ ] modify_db_cluster_snapshot_attribute
+- [X] modify_db_cluster_snapshot_attribute
 - [X] modify_db_instance
 - [X] modify_db_parameter_group
 - [ ] modify_db_proxy
 - [ ] modify_db_proxy_endpoint
 - [ ] modify_db_proxy_target_group
 - [ ] modify_db_snapshot
-- [ ] modify_db_snapshot_attribute
+- [X] modify_db_snapshot_attribute
 - [X] modify_db_subnet_group
 - [ ] modify_event_subscription
 - [ ] modify_global_cluster

@@ -142,6 +142,24 @@ class SnapshotQuotaExceeded(RDSError):
     fmt = "The request cannot be processed because it would exceed the maximum number of snapshots."
 
 
+class SharedSnapshotQuotaExceeded(RDSError):
+
+    fmt = "The request cannot be processed because it would exceed the maximum number of snapshots."
+
+
+class KMSKeyNotAccessibleFault(RDSError):
+
+    fmt = "Specified KMS key [{key_id}] does not exist, is not enabled or you do not have permissions to access it."
+
+    def __init__(self, key_id):
+        super().__init__(key_id=key_id)
+
+
+class InvalidDBClusterSnapshotStateFault(RDSError):
+
+    fmt = "automated snapshots cannot be modified."
+
+
 class InvalidParameterValue(RDSError):
 
     code = "InvalidParameterValue"
