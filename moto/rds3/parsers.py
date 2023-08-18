@@ -148,4 +148,6 @@ class QueryStringParametersParser(object):
         return key_name
 
     def _has_member(self, value, member_prefix):
-        return any(i for i in value if i.startswith(member_prefix))
+        return any(
+            i for i in value if i == member_prefix or i.startswith(f"{member_prefix}.")
+        )
