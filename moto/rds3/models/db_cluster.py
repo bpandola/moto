@@ -132,6 +132,11 @@ class DBCluster(TaggableRDSResource, EventMixin, BaseRDSModel):
         return self.created
 
     @property
+    def latest_restorable_time(self):
+        from moto.core.utils import iso_8601_datetime_with_milliseconds
+        return iso_8601_datetime_with_milliseconds(datetime.datetime.now())
+
+    @property
     def status(self):
         return "available"
 
