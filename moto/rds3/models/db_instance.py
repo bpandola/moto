@@ -234,15 +234,14 @@ class DBInstance(TaggableRDSResource, EventMixin, BaseRDSModel):
     def address(self):
         return f"{self.resource_id}.aaaaaaaaaa.{self.backend.region_name}.rds.amazonaws.com"
 
-    # Commenting this out for now because it breaks the stupid GraphQL snapshottests in the RDS Broker...
-    # @property
-    # def instance_create_time(self):
-    #     return self.created
-    #
-    # @property
-    # def latest_restorable_time(self):
-    #     from moto.core.utils import iso_8601_datetime_with_milliseconds
-    #     return iso_8601_datetime_with_milliseconds(datetime.datetime.now())
+    @property
+    def instance_create_time(self):
+        return self.created
+
+    @property
+    def latest_restorable_time(self):
+        from moto.core.utils import iso_8601_datetime_with_milliseconds
+        return iso_8601_datetime_with_milliseconds(datetime.datetime.now())
 
     def update(self, db_kwargs):
         # TODO: This is all horrible.  Must fix.
