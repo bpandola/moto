@@ -123,6 +123,26 @@ def test_max_allocated_storage():
 
 
 @mock_rds
+def test_ca_certificate_identifier():
+    client = boto3.client("rds", region_name="us-west-2")
+    # Check for CACertificateIdentifier default value
+    _, details = create_db_instance(client)
+    details["CACertificateIdentifier"].should.equal("rds-ca-default")
+    # Set at creation time.
+    identifier, _ = create_db_instance(client, CACertificateIdentifier="rds-ca-2019")
+    # Get the value using describe_db_instances
+    details = client.describe_db_instances(DBInstanceIdentifier=identifier)[
+        "DBInstances"
+    ][0]
+    details["CACertificateIdentifier"].should.equal("rds-ca-2019")
+    # Update the value
+    details = client.modify_db_instance(
+        DBInstanceIdentifier=identifier, CACertificateIdentifier="rds-ca-2024"
+    )["DBInstance"]
+    details["CACertificateIdentifier"].should.equal("rds-ca-2024")
+
+
+@mock_rds
 def test_restore_db_instance_to_point_in_time():
     client = boto3.client("rds", region_name="us-west-2")
     source_identifier, details_source = create_db_instance(
