@@ -62,6 +62,7 @@ class DBInstance(TaggableRDSResource, EventMixin, BaseRDSModel):
         tags=None,
         vpc_security_group_ids=None,
         deletion_protection=False,
+        ca_certificate_identifier="rds-ca-default",
         **kwargs,
     ):
         super().__init__(backend)
@@ -105,6 +106,7 @@ class DBInstance(TaggableRDSResource, EventMixin, BaseRDSModel):
         self._db_parameter_groups = [
             {"name": self.db_parameter_group_name, "status": "in-sync"}
         ]
+        self.ca_certificate_identifier = ca_certificate_identifier
 
         self.license_model = license_model
 
@@ -241,6 +243,7 @@ class DBInstance(TaggableRDSResource, EventMixin, BaseRDSModel):
     @property
     def latest_restorable_time(self):
         from moto.core.utils import iso_8601_datetime_with_milliseconds
+
         return iso_8601_datetime_with_milliseconds(datetime.datetime.now())
 
     def update(self, db_kwargs):
