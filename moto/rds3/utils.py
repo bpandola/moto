@@ -1,23 +1,29 @@
 import json
-
+from importlib import resources
 import boto3
-from pkg_resources import resource_filename
 
 from .parsers import CloudFormationPropertiesParser, QueryStringParametersParser
 
 
-metadata = json.load(open(resource_filename(__name__, "resources/metadata.json"), "r"))
+def _load_db_engine_metadata(resource_path="rds3/resources/metadata.json"):
+    resource = resources.files("moto") / resource_path
+    with resource.open("r") as data_file:
+        metadata = json.load(data_file)
+        return metadata
 
-VALID_DB_ENGINES = [e for e in metadata["db_engines"]]
-VALID_DB_CLUSTER_ENGINES = [e for e in metadata["db_engines"] if e.startswith("aurora")]
-VALID_DB_INSTANCE_ENGINES = [e for e in metadata["db_engines"]]
 
-db_engine_data = metadata["db_engine_data"]
-db_engine_defaults = metadata["db_engine_defaults"]
-default_db_cluster_parameter_groups = metadata["default_db_cluster_parameter_groups"]
-default_db_parameter_groups = metadata["default_db_parameter_groups"]
-default_option_groups = metadata["default_option_groups"]
-option_group_options = metadata["option_group_options"]
+METADATA = _load_db_engine_metadata()
+
+VALID_DB_ENGINES = [e for e in METADATA["db_engines"]]
+VALID_DB_CLUSTER_ENGINES = [e for e in METADATA["db_engines"] if e.startswith("aurora")]
+VALID_DB_INSTANCE_ENGINES = [e for e in METADATA["db_engines"]]
+
+db_engine_data = METADATA["db_engine_data"]
+db_engine_defaults = METADATA["db_engine_defaults"]
+default_db_cluster_parameter_groups = METADATA["default_db_cluster_parameter_groups"]
+default_db_parameter_groups = METADATA["default_db_parameter_groups"]
+default_option_groups = METADATA["default_option_groups"]
+option_group_options = METADATA["option_group_options"]
 
 
 def create_backends(service, backend_cls):
