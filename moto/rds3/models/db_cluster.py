@@ -204,7 +204,7 @@ class DBClusterBackend:
         cluster = DBCluster(self, db_cluster_identifier, **cluster_kwargs)
         self.db_clusters[db_cluster_identifier] = cluster
         formatted_time = datetime.datetime.utcnow().strftime("%Y-%m-%d-%H-%M")
-        snapshot_id = f"{db_cluster_identifier}-{formatted_time}"
+        snapshot_id = f"rds:{db_cluster_identifier}-{formatted_time}"
         self.create_db_cluster_snapshot(
             db_cluster_identifier, snapshot_id, snapshot_type="automated"
         )
