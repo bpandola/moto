@@ -2,7 +2,6 @@ import datetime
 import random
 from re import compile as re_compile
 
-from moto.cloudformation.exceptions import UnformattedGetAttTemplateException
 from collections import OrderedDict
 from moto.moto_api._internal import mock_random
 from ..exceptions import (
@@ -294,6 +293,8 @@ class DBInstance(TaggableRDSResource, EventMixin, BaseRDSModel):
                 param_group["status"] = "in-sync"
 
     def get_cfn_attribute(self, attribute_name):
+        from moto.cloudformation.exceptions import UnformattedGetAttTemplateException
+
         if attribute_name == "Endpoint.Address":
             return self.address
         elif attribute_name == "Endpoint.Port":
