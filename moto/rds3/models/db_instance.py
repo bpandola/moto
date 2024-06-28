@@ -435,6 +435,11 @@ class DBInstanceBackend:
         ]
         for param in params_to_remove:
             db_args.pop(param, None)
+        if "allocated_storage" in kwargs:
+            if kwargs["allocated_storage"] < snapshot.allocated_storage:
+                raise InvalidParameterValue(
+                    "The allocated storage size can't be less than the source snapshot or backup size."
+                )
         # Use our backend and update with any user-provided parameters.
         db_args.update(backend=self, **kwargs)
         db_args = self._validate_create_instance_args(db_args)
@@ -456,6 +461,11 @@ class DBInstanceBackend:
         ]
         for attr in attrs_to_remove:
             db_args.pop(attr, None)
+        if "allocated_storage" in kwargs:
+            if kwargs["allocated_storage"] < source.allocated_storage:
+                raise InvalidParameterValue(
+                    "Allocated storage size can't be less than the source instance size."
+                )
         # Use our backend and update with any user-provided parameters.
         db_args.update(backend=self, **kwargs)
         db_args = self._validate_create_instance_args(db_args)
