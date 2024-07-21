@@ -595,6 +595,8 @@ class BaseResponse(_TemplateEnvironmentMixin, ActionAuthenticatorMixin):
                 )
                 response_headers["status"] = http_error.code  # type: ignore[assignment]
                 response = http_error.description, response_headers  # type: ignore[assignment]
+                # serialized = self.serializer.serialize_to_response(http_error, self.operation_model, {})
+                # return serialized["status_code"], serialized["headers"], serialized["body"]
 
             if isinstance(response, str):
                 status = 200
