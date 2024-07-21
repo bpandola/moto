@@ -13,6 +13,50 @@ class RDSResponse(BaseResponse):
     def backend(self) -> RDSBackend:
         return rds_backends[self.current_account][self.region]
 
+    def _dispatch(self, request: Any, full_url: str, headers: Any) -> TYPE_RESPONSE:
+        # Because some requests are send through to Neptune, we have to prepare the NeptuneResponse-class
+        self.neptune.setup_class(request, full_url, headers)
+        #return super()._dispatch(request, full_url, headers)
+        self.setup_class(request, full_url, headers)
+
+        from motocore.parsers import QueryParser
+        from motocore.serialize import QuerySerializer
+        from motocore.utils import create_request_dict, get_service_model, xform_dict, ValuePicker
+
+        from .viewmodels import SERIALIZATION_ALIASES
+
+        request_dict = create_request_dict(self)
+        service_model = get_service_model(self.service_name)
+        # parser = QueryParser()
+        # parsed = parser.parse(request_dict, service_model)
+        # self.parameters = xform_dict(parsed["kwargs"])
+        # self.action = parsed["action"]
+        action = self.querystring['Action'][0]
+        self.operation_model = service_model.operation_model(action)
+        value_picker = ValuePicker(SERIALIZATION_ALIASES)
+        self.serializer = QuerySerializer(value_picker=value_picker,pretty_print=True)
+        return self.call_action()
+
+    def response_template(self, source):
+        # We're (cleverly) overriding the method that gets the Jinja response
+        # template to just return self, and then we also override render so
+        # instead of rendering the template we hook into our custom serializer.
+        return self
+
+    def render(self, **kwargs):
+        from .viewmodels import transform_view_args
+
+        tfargs = transform_view_args(self.operation_model.name, **kwargs)
+        serialized = self.serializer.serialize_to_response(
+            tfargs, self.operation_model, {}
+        )
+        return serialized["status_code"], serialized["headers"], serialized["body"]
+
+    def __getattribute__(self, name: str) -> Any:
+        if name in ["create_db_cluster", "create_global_cluster"]:
+            if self._get_param("Engine") == "neptune":
+                return object.__getattribute__(self.neptune, name)
+        return object.__getattribute__(self, name)
     @property
     def global_backend(self) -> RDSBackend:
         """Return backend instance of the region that stores Global Clusters"""
