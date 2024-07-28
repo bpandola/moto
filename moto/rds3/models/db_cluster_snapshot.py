@@ -1,5 +1,6 @@
 import copy
 import os
+import re
 
 from collections import OrderedDict
 from .base import BaseRDSModel
@@ -13,6 +14,10 @@ from ..exceptions import (
     SnapshotQuotaExceeded,
     InvalidDBClusterSnapshotStateFault,
     KMSKeyNotAccessibleFault,
+)
+
+KMS_ARN_PATTERN = re.compile(
+    r"^arn:(aws|aws-us-gov|aws-cn):kms:(?P<region>\w+(?:-\w+)+):(?P<account_id>\d{12}):key\/(?P<key>[A-Za-z0-9]+(?:-[A-Za-z0-9]+)+)$"
 )
 
 
@@ -117,7 +122,18 @@ class DBClusterSnapshotBackend:
     def __init__(self):
         self.db_cluster_snapshots = OrderedDict()
 
+    def get_db_cluster_snapshot_from_arn(self, snapshot_arn):
+        # Quick hack...
+        region = snapshot_arn.split(":")[3]
+        identifier = snapshot_arn.split(":")[-1]
+        backend = self.get_regional_backend(region)
+        if identifier not in backend.db_cluster_snapshots:
+            raise DBClusterSnapshotNotFound(identifier)
+        return backend.db_cluster_snapshots[identifier]
+
     def get_db_cluster_snapshot(self, db_cluster_snapshot_identifier):
+        if db_cluster_snapshot_identifier.startswith("arn"):
+            return self.get_db_cluster_snapshot_from_arn(db_cluster_snapshot_identifier)
         if db_cluster_snapshot_identifier in self.db_cluster_snapshots:
             return self.db_cluster_snapshots[db_cluster_snapshot_identifier]
         raise DBClusterSnapshotNotFound(db_cluster_snapshot_identifier)
@@ -145,9 +161,8 @@ class DBClusterSnapshotBackend:
         kms_key_id=None,
         tags=None,
         copy_tags=False,
+        **_,
     ):
-        if source_db_cluster_snapshot_identifier not in self.db_cluster_snapshots:
-            raise DBClusterSnapshotNotFound(source_db_cluster_snapshot_identifier)
         if target_db_cluster_snapshot_identifier in self.db_cluster_snapshots:
             raise DBClusterSnapshotAlreadyExists(target_db_cluster_snapshot_identifier)
 
@@ -155,13 +170,23 @@ class DBClusterSnapshotBackend:
             os.environ.get("MOTO_RDS_SNAPSHOT_LIMIT", "100")
         ):
             raise SnapshotQuotaExceeded()
-        try:
-            if kms_key_id is not None:
-                key = self.kms.describe_key(str(kms_key_id))
+        if kms_key_id is not None:
+            kms_backend = self.kms
+            key = kms_key_id
+            if re.fullmatch(KMS_ARN_PATTERN, kms_key_id):
+                match = re.match(KMS_ARN_PATTERN, kms_key_id)
+                region = match.group("region")
+                if region != self.region_name:
+                    raise KMSKeyNotAccessibleFault(kms_key_id)
+                account = match.group("account_id")
+                key = match.group("key")
+                kms_backend = self.get_backend("kms", region, account)
+            try:
+                kms_key = kms_backend.describe_key(key)
                 # We do this in case an alias was passed in.
-                kms_key_id = key.id
-        except Exception:
-            raise KMSKeyNotAccessibleFault(str(kms_key_id))
+                # kms_key_id = kms_key.id
+            except Exception:
+                raise KMSKeyNotAccessibleFault(str(kms_key_id))
         source_db_cluster_snapshot = self.get_db_cluster_snapshot(
             source_db_cluster_snapshot_identifier
         )
@@ -193,6 +218,25 @@ class DBClusterSnapshotBackend:
     ):
         if db_cluster_snapshot_identifier:
             return [self.get_db_cluster_snapshot(db_cluster_snapshot_identifier)]
+        if snapshot_type == "shared":
+            from . import rds3_backends
+
+            db_cluster_snapshots = []
+            for backend_container in rds3_backends.values():
+                for backend in backend_container.values():
+                    if backend.region_name != self.region_name:
+                        continue
+                    for snapshot in backend.db_cluster_snapshots.values():
+                        for (
+                            attribute
+                        ) in (
+                            snapshot.snapshot_attributes.db_cluster_snapshot_attributes
+                        ):
+                            if attribute.attribute_name != "restore":
+                                continue
+                            if self.account_id in attribute.attribute_values:
+                                db_cluster_snapshots.append(snapshot)
+            return db_cluster_snapshots
         snapshot_types = (
             ["automated", "manual"] if snapshot_type is None else [snapshot_type]
         )

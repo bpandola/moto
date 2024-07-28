@@ -81,6 +81,17 @@ class RDS3Backend(
         """
         return kms_backends[self.account_id][self.region_name]
 
+    def get_backend(self, service, region=None, account_id=None):
+        from moto.backends import get_backend as get_moto_backend
+
+        if region is None:
+            region = self.region_name
+
+        if account_id is None:
+            account_id = self.account_id
+
+        return get_moto_backend(service)[account_id][region]
+
     def get_regional_backend(self, region):
         """
         :return: RDS Backend
