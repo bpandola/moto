@@ -1,15 +1,15 @@
 from typing import Any, List
 
 from .models import (
-    Cluster,
-    ClusterSnapshot,
-    Database,
-    DatabaseSnapshot,
+    DBCluster,
+    DBClusterSnapshot,
+    DBInstance,
+    DBInstanceSnapshot,
     DBProxy,
     EventSubscription,
     GlobalCluster,
-    SecurityGroup,
-    SubnetGroup,
+    DBSecurityGroup,
+    DBSubnetGroup,
 )
 
 # TOTAL HACK
@@ -74,6 +74,7 @@ SERIALIZATION_ALIASES = {
     "DatabaseName": "db_name",
     "DbClusterResourceId": "resource_id",
     "DBClusterParameterGroup": "parameter_group",
+    "DBProxyArn": "arn",
 }
 
 
@@ -98,7 +99,7 @@ class DBProxyDTO:
 
 
 class DBSubnetGroupDTO:
-    def __init__(self, subnet_group: SubnetGroup):
+    def __init__(self, subnet_group: DBSubnetGroup):
         self.subnet_group = subnet_group
 
     @property
@@ -125,7 +126,7 @@ class DBSubnetGroupDTO:
 
 
 class DBSecurityGroupDTO:
-    def __init__(self, security_group: SecurityGroup):
+    def __init__(self, security_group: DBSecurityGroup):
         self.security_group = security_group
 
     @property
@@ -148,7 +149,7 @@ class DBSecurityGroupDTO:
 
 
 class DBInstanceDTO:
-    def __init__(self, instance: Database):
+    def __init__(self, instance: DBInstance):
         self.instance = instance
 
     @property
@@ -211,7 +212,7 @@ class DBInstanceDTO:
 
 
 class DBSnapshotDTO:
-    def __init__(self, snapshot: DatabaseSnapshot):
+    def __init__(self, snapshot: DBInstanceSnapshot):
         self.snapshot = snapshot
         self.instance = DBInstanceDTO(snapshot.database)
 
@@ -268,7 +269,7 @@ class GlobalClusterDTO:
 
 
 class DBClusterDTO:
-    def __init__(self, cluster: Cluster, creating: bool = False):
+    def __init__(self, cluster: DBCluster, creating: bool = False):
         self.cluster = cluster
         self.creating = creating
 
@@ -339,7 +340,7 @@ class DBClusterDTO:
 
 
 class DBClusterSnapshotDTO:
-    def __init__(self, snapshot: ClusterSnapshot):
+    def __init__(self, snapshot: DBClusterSnapshot):
         self.snapshot = snapshot
         self.cluster = DBClusterDTO(snapshot.cluster)
 
@@ -356,13 +357,13 @@ class DBClusterSnapshotDTO:
 
 
 MODEL_TO_VIEW = {
-    Database: DBInstanceDTO,
-    DatabaseSnapshot: DBSnapshotDTO,
-    Cluster: DBClusterDTO,
-    ClusterSnapshot: DBClusterSnapshotDTO,
+    DBInstance: DBInstanceDTO,
+    DBInstanceSnapshot: DBSnapshotDTO,
+    DBCluster: DBClusterDTO,
+    DBClusterSnapshot: DBClusterSnapshotDTO,
     GlobalCluster: GlobalClusterDTO,
-    SecurityGroup: DBSecurityGroupDTO,
-    SubnetGroup: DBSubnetGroupDTO,
+    DBSecurityGroup: DBSecurityGroupDTO,
+    DBSubnetGroup: DBSubnetGroupDTO,
     DBProxy: DBProxyDTO,
 }
 
