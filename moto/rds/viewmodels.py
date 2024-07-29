@@ -4,7 +4,7 @@ from .models import (
     DBCluster,
     DBClusterSnapshot,
     DBInstance,
-    DBInstanceSnapshot,
+    DBSnapshot,
     DBProxy,
     EventSubscription,
     GlobalCluster,
@@ -212,7 +212,7 @@ class DBInstanceDTO:
 
 
 class DBSnapshotDTO:
-    def __init__(self, snapshot: DBInstanceSnapshot):
+    def __init__(self, snapshot: DBSnapshot):
         self.snapshot = snapshot
         self.instance = DBInstanceDTO(snapshot.database)
 
@@ -358,7 +358,7 @@ class DBClusterSnapshotDTO:
 
 MODEL_TO_VIEW = {
     DBInstance: DBInstanceDTO,
-    DBInstanceSnapshot: DBSnapshotDTO,
+    DBSnapshot: DBSnapshotDTO,
     DBCluster: DBClusterDTO,
     DBClusterSnapshot: DBClusterSnapshotDTO,
     GlobalCluster: GlobalClusterDTO,
