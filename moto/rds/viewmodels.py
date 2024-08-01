@@ -18,6 +18,9 @@ from .models import (
 # can be picked up by the Serializer using the Service Model.
 # For example: the create_db_instance method returns a `cluster` key
 # while the serializer is looking for `DBCluster` or `db_cluster`
+# These aliases are only necessary because we are still hacking the
+# template render method.  Once we fix up the response methods to use
+# the serializer, we can format the result dict as needed
 SERIALIZATION_ALIASES = {
     "DBCluster": "cluster",
     "DBClusterParameterGroups": "db_parameter_groups",
@@ -53,10 +56,10 @@ SERIALIZATION_ALIASES = {
     "SourceIdsList": "source_ids",
     "TagList": "tags",
     # Also works to alias AWS model attributes to Moto RDS model attributes
-    "DBSecurityGroupDescription": "description",
-    "EventSubscriptionArn": "es_arn",
-    "DBSubnetGroupDescription": "description",
-    "DBParameterGroupName": "name",
+    #"DBSecurityGroupDescription": "description",
+    #"EventSubscriptionArn": "es_arn",
+    #"DBSubnetGroupDescription": "description",
+    #"DBParameterGroupName": "name",
     "DBParameterGroupFamily": "family",
     "CustSubscriptionId": "subscription_name",
     "S3Bucket": "s3_bucket_name",
@@ -67,14 +70,24 @@ SERIALIZATION_ALIASES = {
         "enable_iam_database_authentication",
         "iam_auth",
     ],
-    "DBInstanceStatus": "status",
+    #"DBInstanceStatus": "status",
     "DbInstancePort": "port",
     "MultiAZ": "is_multi_az",
     "HttpEndpointEnabled": "enable_http_endpoint",
     "DatabaseName": "db_name",
     "DbClusterResourceId": "resource_id",
-    "DBClusterParameterGroup": "parameter_group",
-    "DBProxyArn": "arn",
+    # second one is for neptune
+    "DBClusterParameterGroup": ["parameter_group", "db_cluster_parameter_group_name"],
+    #"DBProxyArn": "arn",
+    # Alias our DTO classes so DBInstanceDTO can still be DBInstance..,
+    "DBSubnetGroupDTO":"DBSubnetGroup",
+    "DBParameterGroupDTO": "DBParameterGroup",
+    "DBInstanceDTO":"DBInstance",
+    "DBSecurityGroupDTO":"DBSecurityGroup",
+    "DBProxyDTO":"DBProxy",
+    #neptune
+    "OrderableDBInstanceOptions": "options",
+
 }
 
 
