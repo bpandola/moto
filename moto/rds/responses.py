@@ -1,11 +1,30 @@
 from collections import defaultdict
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
+from botocore.awsrequest import AWSPreparedRequest
+from werkzeug.wrappers import Request
+
+from moto.core.common_types import TYPE_RESPONSE
 from moto.core.responses import BaseResponse
 from moto.ec2.models import ec2_backends
 
 from .exceptions import DBParameterGroupNotFoundError
 from .models import RDSBackend, rds_backends
+
+
+def convert_request(request: AWSPreparedRequest) -> Request:
+    from urllib.parse import urlparse
+
+    parsed_url = urlparse(request.url)
+    converted_request = Request.from_values(
+        method=request.method,
+        base_url=f"{parsed_url.scheme}://{parsed_url.netloc}",
+        path=parsed_url.path,
+        query_string=parsed_url.query,
+        data=request.body,
+        headers=[(k, v) for k, v in request.headers.items()],
+    )
+    return converted_request
 
 
 class RDSResponse(BaseResponse):
@@ -16,25 +35,34 @@ class RDSResponse(BaseResponse):
     def _dispatch(self, request: Any, full_url: str, headers: Any) -> TYPE_RESPONSE:
         # Because some requests are send through to Neptune, we have to prepare the NeptuneResponse-class
         self.neptune.setup_class(request, full_url, headers)
-        #return super()._dispatch(request, full_url, headers)
+        # return super()._dispatch(request, full_url, headers)
         self.setup_class(request, full_url, headers)
 
+        if isinstance(request, AWSPreparedRequest):
+            request = convert_request(request)
         from motocore.parsers import QueryParser
         from motocore.serialize import QuerySerializer
-        from motocore.utils import create_request_dict, get_service_model, xform_dict, ValuePicker
+        from motocore.utils import (
+            ValuePicker,
+            get_service_model,
+            xform_dict,
+        )
 
         from .viewmodels import SERIALIZATION_ALIASES
 
-        request_dict = create_request_dict(self)
+        self.action = request.values["Action"]
+
         service_model = get_service_model(self.service_name)
-        # parser = QueryParser()
-        # parsed = parser.parse(request_dict, service_model)
-        # self.parameters = xform_dict(parsed["kwargs"])
-        # self.action = parsed["action"]
-        action = self.querystring['Action'][0]
-        self.operation_model = service_model.operation_model(action)
+        self.operation_model = service_model.operation_model(self.action)
+
+        parser = QueryParser()
+        parsed = parser.get_parameters(
+            {"query_params": request.values}, self.operation_model
+        )
+        self.parameters = xform_dict(parsed)
+
         value_picker = ValuePicker(SERIALIZATION_ALIASES)
-        self.serializer = QuerySerializer(value_picker=value_picker,pretty_print=True)
+        self.serializer = QuerySerializer(value_picker=value_picker, pretty_print=True)
         return self.call_action()
 
     def response_template(self, source):
@@ -47,8 +75,14 @@ class RDSResponse(BaseResponse):
         from .viewmodels import transform_view_args
 
         tfargs = transform_view_args(self.operation_model.name, **kwargs)
+        # If we don't send the request-id, the element will get shortened
+        # If shortened, it won't be found by core.response._enrich_response
+        # So we set it to a dummy value and let it get overwritten after
+        # will also get put in the headers by enrich response
+        # Also, it's fine that we are string for body, it's better for debugging,
+        # and it also will get utf-8 encoded in core.response
         serialized = self.serializer.serialize_to_response(
-            tfargs, self.operation_model, {}
+            tfargs, self.operation_model, {"request_id": "request-id"}
         )
         return serialized["status_code"], serialized["headers"], serialized["body"]
 
