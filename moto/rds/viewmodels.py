@@ -4,12 +4,11 @@ from .models import (
     DBCluster,
     DBClusterSnapshot,
     DBInstance,
-    DBSnapshot,
     DBProxy,
-    EventSubscription,
-    GlobalCluster,
     DBSecurityGroup,
+    DBSnapshot,
     DBSubnetGroup,
+    GlobalCluster,
 )
 
 # TOTAL HACK
@@ -56,10 +55,10 @@ SERIALIZATION_ALIASES = {
     "SourceIdsList": "source_ids",
     "TagList": "tags",
     # Also works to alias AWS model attributes to Moto RDS model attributes
-    #"DBSecurityGroupDescription": "description",
-    #"EventSubscriptionArn": "es_arn",
-    #"DBSubnetGroupDescription": "description",
-    #"DBParameterGroupName": "name",
+    # "DBSecurityGroupDescription": "description",
+    # "EventSubscriptionArn": "es_arn",
+    # "DBSubnetGroupDescription": "description",
+    # "DBParameterGroupName": "name",
     "DBParameterGroupFamily": "family",
     "CustSubscriptionId": "subscription_name",
     "S3Bucket": "s3_bucket_name",
@@ -70,7 +69,7 @@ SERIALIZATION_ALIASES = {
         "enable_iam_database_authentication",
         "iam_auth",
     ],
-    #"DBInstanceStatus": "status",
+    # "DBInstanceStatus": "status",
     "DbInstancePort": "port",
     "MultiAZ": "is_multi_az",
     "HttpEndpointEnabled": "enable_http_endpoint",
@@ -78,16 +77,15 @@ SERIALIZATION_ALIASES = {
     "DbClusterResourceId": "resource_id",
     # second one is for neptune
     "DBClusterParameterGroup": ["parameter_group", "db_cluster_parameter_group_name"],
-    #"DBProxyArn": "arn",
+    # "DBProxyArn": "arn",
     # Alias our DTO classes so DBInstanceDTO can still be DBInstance..,
-    "DBSubnetGroupDTO":"DBSubnetGroup",
+    "DBSubnetGroupDTO": "DBSubnetGroup",
     "DBParameterGroupDTO": "DBParameterGroup",
-    "DBInstanceDTO":"DBInstance",
-    "DBSecurityGroupDTO":"DBSecurityGroup",
-    "DBProxyDTO":"DBProxy",
-    #neptune
+    "DBInstanceDTO": "DBInstance",
+    "DBSecurityGroupDTO": "DBSecurityGroup",
+    "DBProxyDTO": "DBProxy",
+    # neptune
     "OrderableDBInstanceOptions": "options",
-
 }
 
 
