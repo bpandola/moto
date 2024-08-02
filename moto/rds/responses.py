@@ -32,9 +32,12 @@ class RDSResponse(BaseResponse):
     def backend(self) -> RDSBackend:
         return rds_backends[self.current_account][self.region]
 
+    @property
+    def global_backend(self) -> RDSBackend:
+        """Return backend instance of the region that stores Global Clusters"""
+        return rds_backends[self.current_account]["us-east-1"]
+
     def _dispatch(self, request: Any, full_url: str, headers: Any) -> TYPE_RESPONSE:
-        # Because some requests are send through to Neptune, we have to prepare the NeptuneResponse-class
-        self.neptune.setup_class(request, full_url, headers)
         # return super()._dispatch(request, full_url, headers)
         self.setup_class(request, full_url, headers)
 
@@ -85,16 +88,6 @@ class RDSResponse(BaseResponse):
             tfargs, self.operation_model, {"request_id": "request-id"}
         )
         return serialized["status_code"], serialized["headers"], serialized["body"]
-
-    def __getattribute__(self, name: str) -> Any:
-        if name in ["create_db_cluster", "create_global_cluster"]:
-            if self._get_param("Engine") == "neptune":
-                return object.__getattribute__(self.neptune, name)
-        return object.__getattribute__(self, name)
-    @property
-    def global_backend(self) -> RDSBackend:
-        """Return backend instance of the region that stores Global Clusters"""
-        return rds_backends[self.current_account]["us-east-1"]
 
     def _get_db_kwargs(self) -> Dict[str, Any]:
         args = {
