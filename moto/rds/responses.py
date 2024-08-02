@@ -28,6 +28,9 @@ def convert_request(request: AWSPreparedRequest) -> Request:
 
 
 class RDSResponse(BaseResponse):
+    def __init__(self) -> None:
+        super().__init__(service_name="rds")
+
     @property
     def backend(self) -> RDSBackend:
         return rds_backends[self.current_account][self.region]
