@@ -71,13 +71,19 @@ class RDSResponse(BaseResponse):
         self.serializer = QuerySerializer(value_picker=value_picker, pretty_print=True)
         return self.call_action()
 
-    def response_template(self, source):
+    def response_template2(self, source):
         # We're (cleverly) overriding the method that gets the Jinja response
         # template to just return self, and then we also override render so
         # instead of rendering the template we hook into our custom serializer.
         return self
 
-    def render(self, **kwargs):
+    def serialized(self, result) -> Tuple[int, dict, str]:
+        serialized = self.serializer.serialize_to_response(
+            result, self.operation_model, {"request_id": "request-id"}
+        )
+        return serialized["status_code"], serialized["headers"], serialized["body"]
+
+    def render2(self, **kwargs):
         from .viewmodels import transform_view_args
 
         tfargs = transform_view_args(self.operation_model.name, **kwargs)
@@ -332,11 +338,11 @@ class RDSResponse(BaseResponse):
         root = self._get_multi_param_dict(label) or {}
         return root.get(child_label, [])
 
-    def create_db_instance(self) -> str:
+    def create_db_instance(self) -> Tuple[int, dict, str]:
         db_kwargs = self._get_db_kwargs()
         database = self.backend.create_db_instance(db_kwargs)
-        template = self.response_template(CREATE_DATABASE_TEMPLATE)
-        return template.render(database=database)
+        result = {"DBInstance": database}
+        return self.serialized(result)
 
     def create_db_instance_read_replica(self) -> str:
         db_kwargs = self._get_db_replica_kwargs()
