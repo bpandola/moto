@@ -9,6 +9,7 @@ from .models import (
     DBSnapshot,
     DBSubnetGroup,
     GlobalCluster,
+    OptionGroup,
 )
 
 # TOTAL HACK
@@ -84,9 +85,38 @@ SERIALIZATION_ALIASES = {
     "DBInstanceDTO": "DBInstance",
     "DBSecurityGroupDTO": "DBSecurityGroup",
     "DBProxyDTO": "DBProxy",
+    "OptionGroupDTO": "OptionGroup",
     # neptune
     "OrderableDBInstanceOptions": "options",
 }
+
+
+class OptionGroupDTO:
+    def __init__(self, group: OptionGroup):
+        self.group = group
+
+    @property
+    def options(self):
+        return [
+            {
+                "OptionName": name,
+                "OptionSettings": [
+                    {
+                        "Name": setting.get("Name"),
+                        "Value": setting.get("Value"),
+                    }
+                    for setting in option_settings
+                ],
+            }
+            for name, option_settings in self.group.options.items()
+        ]
+
+    def __getattribute__(self, name: str) -> Any:
+        try:
+            return super().__getattribute__(name)
+        except AttributeError:
+            pass
+        return self.group.__getattribute__(name)
 
 
 class DBProxyDTO:

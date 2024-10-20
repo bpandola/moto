@@ -19,6 +19,7 @@ from .viewmodels import (
     DBSnapshotDTO,
     DBSubnetGroupDTO,
     GlobalClusterDTO,
+    OptionGroupDTO,
 )
 
 
@@ -452,19 +453,17 @@ class RDSResponse(BaseResponse):
         tags = self.backend.list_tags_for_resource(arn)
         return template.render(tags=tags)
 
-    def add_tags_to_resource(self) -> str:
+    def add_tags_to_resource(self) -> TYPE_RESPONSE:
         arn = self._get_param("ResourceName")
         tags = self.unpack_list_params("Tags", "Tag")
-        tags = self.backend.add_tags_to_resource(arn, tags)
-        template = self.response_template(ADD_TAGS_TO_RESOURCE_TEMPLATE)
-        return template.render(tags=tags)
+        self.backend.add_tags_to_resource(arn, tags)
+        return self.serialize({})
 
-    def remove_tags_from_resource(self) -> str:
+    def remove_tags_from_resource(self) -> TYPE_RESPONSE:
         arn = self._get_param("ResourceName")
         tag_keys = self.unpack_list_params("TagKeys", "member")
         self.backend.remove_tags_from_resource(arn, tag_keys)  # type: ignore
-        template = self.response_template(REMOVE_TAGS_FROM_RESOURCE_TEMPLATE)
-        return template.render()
+        return self.serialize({})
 
     def stop_db_instance(self) -> TYPE_RESPONSE:
         db_instance_identifier = self._get_param("DBInstanceIdentifier")
@@ -557,24 +556,27 @@ class RDSResponse(BaseResponse):
         result = {"DBSubnetGroup": DBSubnetGroupDTO(subnet_group)}
         return self.serialize(result)
 
-    def create_option_group(self) -> str:
+    def create_option_group(self) -> TYPE_RESPONSE:
         kwargs = self._get_option_group_kwargs()
         option_group = self.backend.create_option_group(kwargs)
-        template = self.response_template(CREATE_OPTION_GROUP_TEMPLATE)
-        return template.render(option_group=option_group)
+        result = {"OptionGroup": OptionGroupDTO(option_group)}
+        return self.serialize(result)
 
-    def delete_option_group(self) -> str:
+    def delete_option_group(self) -> TYPE_RESPONSE:
         kwargs = self._get_option_group_kwargs()
         option_group = self.backend.delete_option_group(kwargs["name"])
-        template = self.response_template(DELETE_OPTION_GROUP_TEMPLATE)
-        return template.render(option_group=option_group)
+        result = {"OptionGroup": OptionGroupDTO(option_group)}
+        return self.serialize(result)
 
-    def describe_option_groups(self) -> str:
+    def describe_option_groups(self) -> TYPE_RESPONSE:
         kwargs = self._get_option_group_kwargs()
         option_groups = self.backend.describe_option_groups(kwargs)
-        option_groups, _ = self._paginate(option_groups)
-        template = self.response_template(DESCRIBE_OPTION_GROUP_TEMPLATE)
-        return template.render(option_groups=option_groups)
+        option_groups, marker = self._paginate(option_groups)
+        result = {
+            "OptionGroupsList": [OptionGroupDTO(group) for group in option_groups],
+            "Marker": marker,
+        }
+        return self.serialize(result)
 
     def describe_option_group_options(self) -> str:
         engine_name = self._get_param("EngineName")
@@ -583,7 +585,7 @@ class RDSResponse(BaseResponse):
             engine_name, major_engine_version
         )
 
-    def modify_option_group(self) -> str:
+    def modify_option_group(self) -> TYPE_RESPONSE:
         option_group_name = self._get_param("OptionGroupName")
         options_to_include = (self._get_multi_param_dict("OptionsToInclude") or {}).get(
             "OptionConfiguration", []
@@ -593,30 +595,30 @@ class RDSResponse(BaseResponse):
         option_group = self.backend.modify_option_group(
             option_group_name, options_to_include, options_to_remove
         )
-        template = self.response_template(MODIFY_OPTION_GROUP_TEMPLATE)
-        return template.render(option_group=option_group)
+        result = {"OptionGroup": OptionGroupDTO(option_group)}
+        return self.serialize(result)
 
-    def create_db_parameter_group(self) -> str:
+    def create_db_parameter_group(self) -> TYPE_RESPONSE:
         kwargs = self._get_db_parameter_group_kwargs()
         db_parameter_group = self.backend.create_db_parameter_group(kwargs)
-        template = self.response_template(CREATE_DB_PARAMETER_GROUP_TEMPLATE)
-        return template.render(db_parameter_group=db_parameter_group)
+        result = {"DBParameterGroup": db_parameter_group}
+        return self.serialize(result)
 
-    def describe_db_parameter_groups(self) -> str:
+    def describe_db_parameter_groups(self) -> TYPE_RESPONSE:
         kwargs = self._get_db_parameter_group_kwargs()
         db_parameter_groups = self.backend.describe_db_parameter_groups(kwargs)
         db_parameter_groups, _ = self._paginate(db_parameter_groups)
-        template = self.response_template(DESCRIBE_DB_PARAMETER_GROUPS_TEMPLATE)
-        return template.render(db_parameter_groups=db_parameter_groups)
+        result = {"DBParameterGroups": db_parameter_groups}
+        return self.serialize(result)
 
-    def modify_db_parameter_group(self) -> str:
+    def modify_db_parameter_group(self) -> TYPE_RESPONSE:
         db_parameter_group_name = self._get_param("DBParameterGroupName")
         db_parameter_group_parameters = self._get_db_parameter_group_parameters()
         db_parameter_group = self.backend.modify_db_parameter_group(
             db_parameter_group_name, db_parameter_group_parameters
         )
-        template = self.response_template(MODIFY_DB_PARAMETER_GROUP_TEMPLATE)
-        return template.render(db_parameter_group=db_parameter_group)
+        result = {"DBParameterGroupName": db_parameter_group.name}
+        return self.serialize(result)
 
     def _get_db_parameter_group_parameters(self) -> Iterable[Dict[str, Any]]:
         parameter_group_parameters: Dict[str, Any] = defaultdict(dict)
@@ -643,11 +645,10 @@ class RDSResponse(BaseResponse):
         template = self.response_template(DESCRIBE_DB_PARAMETERS_TEMPLATE)
         return template.render(db_parameter_group=db_parameter_groups[0])
 
-    def delete_db_parameter_group(self) -> str:
+    def delete_db_parameter_group(self) -> TYPE_RESPONSE:
         kwargs = self._get_db_parameter_group_kwargs()
         db_parameter_group = self.backend.delete_db_parameter_group(kwargs["name"])
-        template = self.response_template(DELETE_DB_PARAMETER_GROUP_TEMPLATE)
-        return template.render(db_parameter_group=db_parameter_group)
+        return self.serialize(db_parameter_group)
 
     def describe_db_cluster_parameters(self) -> str:
         db_parameter_group_name = self._get_param("DBParameterGroupName")
@@ -755,50 +756,48 @@ class RDSResponse(BaseResponse):
         result = {"DBCluster": DBClusterDTO(new_cluster)}
         return self.serialize(result)
 
-    def start_export_task(self) -> str:
+    def start_export_task(self) -> TYPE_RESPONSE:
         kwargs = self._get_export_task_kwargs()
         export_task = self.backend.start_export_task(kwargs)
-        template = self.response_template(START_EXPORT_TASK_TEMPLATE)
-        return template.render(task=export_task)
+        return self.serialize(export_task)
 
-    def cancel_export_task(self) -> str:
+    def cancel_export_task(self) -> TYPE_RESPONSE:
         export_task_identifier = self._get_param("ExportTaskIdentifier")
         export_task = self.backend.cancel_export_task(export_task_identifier)
-        template = self.response_template(CANCEL_EXPORT_TASK_TEMPLATE)
-        return template.render(task=export_task)
+        return self.serialize(export_task)
 
-    def describe_export_tasks(self) -> str:
+    def describe_export_tasks(self) -> TYPE_RESPONSE:
         export_task_identifier = self._get_param("ExportTaskIdentifier")
         tasks = self.backend.describe_export_tasks(export_task_identifier)
-        template = self.response_template(DESCRIBE_EXPORT_TASKS_TEMPLATE)
-        return template.render(tasks=tasks)
+        result = {"ExportTasks": tasks}
+        return self.serialize(result)
 
-    def create_event_subscription(self) -> str:
+    def create_event_subscription(self) -> TYPE_RESPONSE:
         kwargs = self._get_event_subscription_kwargs()
         subscription = self.backend.create_event_subscription(kwargs)
-        template = self.response_template(CREATE_EVENT_SUBSCRIPTION_TEMPLATE)
-        return template.render(subscription=subscription)
+        result = {"EventSubscription": subscription}
+        return self.serialize(result)
 
-    def delete_event_subscription(self) -> str:
+    def delete_event_subscription(self) -> TYPE_RESPONSE:
         subscription_name = self._get_param("SubscriptionName")
         subscription = self.backend.delete_event_subscription(subscription_name)
-        template = self.response_template(DELETE_EVENT_SUBSCRIPTION_TEMPLATE)
-        return template.render(subscription=subscription)
+        result = {"EventSubscription": subscription}
+        return self.serialize(result)
 
-    def describe_event_subscriptions(self) -> str:
+    def describe_event_subscriptions(self) -> TYPE_RESPONSE:
         subscription_name = self._get_param("SubscriptionName")
         subscriptions = self.backend.describe_event_subscriptions(subscription_name)
-        template = self.response_template(DESCRIBE_EVENT_SUBSCRIPTIONS_TEMPLATE)
-        return template.render(subscriptions=subscriptions)
+        result = {"EventSubscriptionsList": subscriptions}
+        return self.serialize(result)
 
-    def describe_orderable_db_instance_options(self) -> str:
+    def describe_orderable_db_instance_options(self) -> TYPE_RESPONSE:
         engine = self._get_param("Engine")
         engine_version = self._get_param("EngineVersion")
         options = self.backend.describe_orderable_db_instance_options(
             engine, engine_version
         )
-        template = self.response_template(DESCRIBE_ORDERABLE_CLUSTER_OPTIONS)
-        return template.render(options=options, marker=None)
+        result = {"OrderableDBInstanceOptions": options}
+        return self.serialize(result)
 
     def describe_global_clusters(self) -> TYPE_RESPONSE:
         clusters = self.global_backend.describe_global_clusters()
@@ -839,7 +838,7 @@ class RDSResponse(BaseResponse):
         }
         return self.serialize(result)
 
-    def create_db_cluster_parameter_group(self) -> str:
+    def create_db_cluster_parameter_group(self) -> TYPE_RESPONSE:
         group_name = self._get_param("DBClusterParameterGroupName")
         family = self._get_param("DBParameterGroupFamily")
         desc = self._get_param("Description")
@@ -848,24 +847,23 @@ class RDSResponse(BaseResponse):
             family=family,
             description=desc,
         )
-        template = self.response_template(CREATE_DB_CLUSTER_PARAMETER_GROUP_TEMPLATE)
-        return template.render(db_cluster_parameter_group=db_cluster_parameter_group)
+        result = {"DBClusterParameterGroup": db_cluster_parameter_group}
+        return self.serialize(result)
 
-    def describe_db_cluster_parameter_groups(self) -> str:
+    def describe_db_cluster_parameter_groups(self) -> TYPE_RESPONSE:
         group_name = self._get_param("DBClusterParameterGroupName")
         db_parameter_groups = self.backend.describe_db_cluster_parameter_groups(
             group_name=group_name,
         )
-        template = self.response_template(DESCRIBE_DB_CLUSTER_PARAMETER_GROUPS_TEMPLATE)
-        return template.render(db_parameter_groups=db_parameter_groups)
+        result = {"DBClusterParameterGroups": db_parameter_groups}
+        return self.serialize(result)
 
-    def delete_db_cluster_parameter_group(self) -> str:
+    def delete_db_cluster_parameter_group(self) -> TYPE_RESPONSE:
         group_name = self._get_param("DBClusterParameterGroupName")
         self.backend.delete_db_cluster_parameter_group(
             group_name=group_name,
         )
-        template = self.response_template(DELETE_DB_CLUSTER_PARAMETER_GROUP_TEMPLATE)
-        return template.render()
+        return self.serialize({})
 
     def promote_read_replica_db_cluster(self) -> TYPE_RESPONSE:
         db_cluster_identifier = self._get_param("DBClusterIdentifier")
@@ -1056,93 +1054,6 @@ class RDSResponse(BaseResponse):
         return paginated_resources, next_marker
 
 
-CREATE_OPTION_GROUP_TEMPLATE = """<CreateOptionGroupResponse xmlns="http://rds.amazonaws.com/doc/2014-09-01/">
-  <CreateOptionGroupResult>
-  {{ option_group.to_xml() }}
-  </CreateOptionGroupResult>
-  <ResponseMetadata>
-    <RequestId>1e38dad4-9f50-11e4-87ea-a31c60ed2e36</RequestId>
-  </ResponseMetadata>
-</CreateOptionGroupResponse>"""
-
-DELETE_OPTION_GROUP_TEMPLATE = """<DeleteOptionGroupResponse xmlns="http://rds.amazonaws.com/doc/2014-09-01/">
-  <ResponseMetadata>
-    <RequestId>e2590367-9fa2-11e4-99cf-55e92d41c60e</RequestId>
-  </ResponseMetadata>
-</DeleteOptionGroupResponse>"""
-
-DESCRIBE_OPTION_GROUP_TEMPLATE = """<DescribeOptionGroupsResponse xmlns="http://rds.amazonaws.com/doc/2014-09-01/">
-  <DescribeOptionGroupsResult>
-    <OptionGroupsList>
-    {%- for option_group in option_groups -%}
-      {{ option_group.to_xml() }}
-    {%- endfor -%}
-    </OptionGroupsList>
-  </DescribeOptionGroupsResult>
-  <ResponseMetadata>
-    <RequestId>4caf445d-9fbc-11e4-87ea-a31c60ed2e36</RequestId>
-  </ResponseMetadata>
-</DescribeOptionGroupsResponse>"""
-
-DESCRIBE_OPTION_GROUP_OPTIONS_TEMPLATE = """<DescribeOptionGroupOptionsResponse xmlns="http://rds.amazonaws.com/doc/2014-09-01/">
-  <DescribeOptionGroupOptionsResult>
-    <OptionGroupOptions>
-    {%- for option_group_option in option_group_options -%}
-      {{ option_group_option.to_xml() }}
-    {%- endfor -%}
-    </OptionGroupOptions>
-  </DescribeOptionGroupOptionsResult>
-  <ResponseMetadata>
-    <RequestId>457f7bb8-9fbf-11e4-9084-5754f80d5144</RequestId>
-  </ResponseMetadata>
-</DescribeOptionGroupOptionsResponse>"""
-
-MODIFY_OPTION_GROUP_TEMPLATE = """<ModifyOptionGroupResponse xmlns="http://rds.amazonaws.com/doc/2014-09-01/">
-  <ModifyOptionGroupResult>
-    {{ option_group.to_xml() }}
-  </ModifyOptionGroupResult>
-  <ResponseMetadata>
-    <RequestId>ce9284a5-a0de-11e4-b984-a11a53e1f328</RequestId>
-  </ResponseMetadata>
-</ModifyOptionGroupResponse>"""
-
-CREATE_DB_PARAMETER_GROUP_TEMPLATE = """<CreateDBParameterGroupResponse xmlns="http://rds.amazonaws.com/doc/2014-09-01/">
-  <CreateDBParameterGroupResult>
-    {{ db_parameter_group.to_xml() }}
-  </CreateDBParameterGroupResult>
-  <ResponseMetadata>
-    <RequestId>7805c127-af22-11c3-96ac-6999cc5f7e72</RequestId>
-  </ResponseMetadata>
-</CreateDBParameterGroupResponse>"""
-
-DESCRIBE_DB_PARAMETER_GROUPS_TEMPLATE = """<DescribeDBParameterGroupsResponse xmlns="http://rds.amazonaws.com/doc/2014-09-01/">
-  <DescribeDBParameterGroupsResult>
-    <DBParameterGroups>
-    {%- for db_parameter_group in db_parameter_groups -%}
-      {{ db_parameter_group.to_xml() }}
-    {%- endfor -%}
-    </DBParameterGroups>
-  </DescribeDBParameterGroupsResult>
-  <ResponseMetadata>
-    <RequestId>b75d527a-b98c-11d3-f272-7cd6cce12cc5</RequestId>
-  </ResponseMetadata>
-</DescribeDBParameterGroupsResponse>"""
-
-MODIFY_DB_PARAMETER_GROUP_TEMPLATE = """<ModifyDBParameterGroupResponse xmlns="http://rds.amazonaws.com/doc/2014-09-01/">
-  <ModifyDBParameterGroupResult>
-    <DBParameterGroupName>{{ db_parameter_group.name }}</DBParameterGroupName>
-  </ModifyDBParameterGroupResult>
-  <ResponseMetadata>
-    <RequestId>12d7435e-bba0-11d3-fe11-33d33a9bb7e3</RequestId>
-  </ResponseMetadata>
-</ModifyDBParameterGroupResponse>"""
-
-DELETE_DB_PARAMETER_GROUP_TEMPLATE = """<DeleteDBParameterGroupResponse xmlns="http://rds.amazonaws.com/doc/2014-09-01/">
-  <ResponseMetadata>
-    <RequestId>cad6c267-ba25-11d3-fe11-33d33a9bb7e3</RequestId>
-  </ResponseMetadata>
-</DeleteDBParameterGroupResponse>"""
-
 DESCRIBE_DB_PARAMETERS_TEMPLATE = """<DescribeDBParametersResponse xmlns="http://rds.amazonaws.com/doc/2014-09-01/">
   <DescribeDBParametersResult>
     <Parameters>
@@ -1194,171 +1105,6 @@ LIST_TAGS_FOR_RESOURCE_TEMPLATE = """<ListTagsForResourceResponse xmlns="http://
     <RequestId>8c21ba39-a598-11e4-b688-194eaf8658fa</RequestId>
   </ResponseMetadata>
 </ListTagsForResourceResponse>"""
-
-ADD_TAGS_TO_RESOURCE_TEMPLATE = """<AddTagsToResourceResponse xmlns="http://rds.amazonaws.com/doc/2014-10-31/">
-  <ResponseMetadata>
-    <RequestId>b194d9ca-a664-11e4-b688-194eaf8658fa</RequestId>
-  </ResponseMetadata>
-</AddTagsToResourceResponse>"""
-
-REMOVE_TAGS_FROM_RESOURCE_TEMPLATE = """<RemoveTagsFromResourceResponse xmlns="http://rds.amazonaws.com/doc/2014-10-31/">
-  <ResponseMetadata>
-    <RequestId>b194d9ca-a664-11e4-b688-194eaf8658fa</RequestId>
-  </ResponseMetadata>
-</RemoveTagsFromResourceResponse>"""
-
-
-START_EXPORT_TASK_TEMPLATE = """<StartExportTaskResponse xmlns="http://rds.amazonaws.com/doc/2014-09-01/">
-  <StartExportTaskResult>
-  {{ task.to_xml() }}
-  </StartExportTaskResult>
-  <ResponseMetadata>
-    <RequestId>523e3218-afc7-11c3-90f5-f90431260ab4</RequestId>
-  </ResponseMetadata>
-</StartExportTaskResponse>
-"""
-
-CANCEL_EXPORT_TASK_TEMPLATE = """<CancelExportTaskResponse xmlns="http://rds.amazonaws.com/doc/2014-09-01/">
-  <CancelExportTaskResult>
-  {{ task.to_xml() }}
-  </CancelExportTaskResult>
-  <ResponseMetadata>
-    <RequestId>523e3218-afc7-11c3-90f5-f90431260ab4</RequestId>
-  </ResponseMetadata>
-</CancelExportTaskResponse>
-"""
-
-DESCRIBE_EXPORT_TASKS_TEMPLATE = """<DescribeExportTasksResponse xmlns="http://rds.amazonaws.com/doc/2014-09-01/">
-  <DescribeExportTasksResult>
-    <ExportTasks>
-    {%- for task in tasks -%}
-      <ExportTask>{{ task.to_xml() }}</ExportTask>
-    {%- endfor -%}
-    </ExportTasks>
-    {% if marker %}
-    <Marker>{{ marker }}</Marker>
-    {% endif %}
-  </DescribeExportTasksResult>
-  <ResponseMetadata>
-    <RequestId>523e3218-afc7-11c3-90f5-f90431260ab4</RequestId>
-  </ResponseMetadata>
-</DescribeExportTasksResponse>
-"""
-
-CREATE_EVENT_SUBSCRIPTION_TEMPLATE = """<CreateEventSubscriptionResponse xmlns="http://rds.amazonaws.com/doc/2014-09-01/">
-  <CreateEventSubscriptionResult>
-  {{ subscription.to_xml() }}
-  </CreateEventSubscriptionResult>
-  <ResponseMetadata>
-    <RequestId>523e3218-afc7-11c3-90f5-f90431260ab4</RequestId>
-  </ResponseMetadata>
-</CreateEventSubscriptionResponse>
-"""
-
-DELETE_EVENT_SUBSCRIPTION_TEMPLATE = """<DeleteEventSubscriptionResponse xmlns="http://rds.amazonaws.com/doc/2014-09-01/">
-  <DeleteEventSubscriptionResult>
-  {{ subscription.to_xml() }}
-  </DeleteEventSubscriptionResult>
-  <ResponseMetadata>
-    <RequestId>523e3218-afc7-11c3-90f5-f90431260ab4</RequestId>
-  </ResponseMetadata>
-</DeleteEventSubscriptionResponse>
-"""
-
-DESCRIBE_EVENT_SUBSCRIPTIONS_TEMPLATE = """<DescribeEventSubscriptionsResponse xmlns="http://rds.amazonaws.com/doc/2014-09-01/">
-  <DescribeEventSubscriptionsResult>
-    <EventSubscriptionsList>
-      {%- for subscription in subscriptions -%}
-        {{ subscription.to_xml() }}
-      {%- endfor -%}
-    </EventSubscriptionsList>
-  </DescribeEventSubscriptionsResult>
-  <ResponseMetadata>
-    <RequestId>523e3218-afc7-11c3-90f5-f90431260ab4</RequestId>
-  </ResponseMetadata>
-</DescribeEventSubscriptionsResponse>
-"""
-
-
-DESCRIBE_ORDERABLE_CLUSTER_OPTIONS = """<DescribeOrderableDBInstanceOptionsResponse xmlns="http://rds.amazonaws.com/doc/2014-10-31/">
-  <DescribeOrderableDBInstanceOptionsResult>
-    <OrderableDBInstanceOptions>
-    {% for option in options %}
-      <OrderableDBInstanceOption>
-        <OutpostCapable>false</OutpostCapable>
-        <AvailabilityZones>
-          {% for zone in option["AvailabilityZones"] %}
-          <AvailabilityZone>
-            <Name>{{ zone["Name"] }}</Name>
-          </AvailabilityZone>
-          {% endfor %}
-        </AvailabilityZones>
-        <SupportsStorageThroughput>{{ option["SupportsStorageThroughput"] }}</SupportsStorageThroughput>
-        <SupportedEngineModes>
-          <member>provisioned</member>
-        </SupportedEngineModes>
-        <SupportsGlobalDatabases>{{ option["SupportsGlobalDatabases"] }}</SupportsGlobalDatabases>
-        <SupportsClusters>{{ option["SupportsClusters"] }}</SupportsClusters>
-        <Engine>{{ option["Engine"] }}</Engine>
-        <SupportedActivityStreamModes/>
-        <SupportsEnhancedMonitoring>false</SupportsEnhancedMonitoring>
-        <EngineVersion>{{ option["EngineVersion"] }}</EngineVersion>
-        <ReadReplicaCapable>false</ReadReplicaCapable>
-        <Vpc>true</Vpc>
-        <DBInstanceClass>{{ option["DBInstanceClass"] }}</DBInstanceClass>
-        <SupportsStorageEncryption>{{ option["SupportsStorageEncryption"] }}</SupportsStorageEncryption>
-        <SupportsKerberosAuthentication>{{ option["SupportsKerberosAuthentication"] }}</SupportsKerberosAuthentication>
-        <SupportedNetworkTypes>
-          <member>IPV4</member>
-        </SupportedNetworkTypes>
-        <AvailableProcessorFeatures/>
-        <SupportsPerformanceInsights>{{ option["SupportsPerformanceInsights"] }}</SupportsPerformanceInsights>
-        <LicenseModel>{{ option["LicenseModel"] }}</LicenseModel>
-        <MultiAZCapable>{{ option["MultiAZCapable"] }}</MultiAZCapable>
-        <RequiresCustomProcessorFeatures>{{ option["RequiresCustomProcessorFeatures"] }}</RequiresCustomProcessorFeatures>
-        <StorageType>{{ option["StorageType"] }}</StorageType>
-        <SupportsIops>{{ option["SupportsIops"] }}</SupportsIops>
-        <SupportsIAMDatabaseAuthentication>{{ option["SupportsIAMDatabaseAuthentication"] }}</SupportsIAMDatabaseAuthentication>
-      </OrderableDBInstanceOption>
-      {% endfor %}
-    </OrderableDBInstanceOptions>
-    {% if marker %}
-    <Marker>{{ marker }}</Marker>
-    {% endif %}
-  </DescribeOrderableDBInstanceOptionsResult>
-  <ResponseMetadata>
-    <RequestId>54212dc5-16c4-4eb8-a88e-448691e877ab</RequestId>
-  </ResponseMetadata>
-</DescribeOrderableDBInstanceOptionsResponse>"""
-
-CREATE_DB_CLUSTER_PARAMETER_GROUP_TEMPLATE = """<CreateDBClusterParameterGroupResponse xmlns="http://rds.amazonaws.com/doc/2014-09-01/">
-  <CreateDBClusterParameterGroupResult>
-    {{ db_cluster_parameter_group.to_xml() }}
-  </CreateDBClusterParameterGroupResult>
-  <ResponseMetadata>
-    <RequestId>7805c127-af22-11c3-96ac-6999cc5f7e72</RequestId>
-  </ResponseMetadata>
-</CreateDBClusterParameterGroupResponse>"""
-
-
-DESCRIBE_DB_CLUSTER_PARAMETER_GROUPS_TEMPLATE = """<DescribeDBClusterParameterGroupsResponse xmlns="http://rds.amazonaws.com/doc/2014-09-01/">
-  <DescribeDBClusterParameterGroupsResult>
-    <DBClusterParameterGroups>
-    {%- for db_parameter_group in db_parameter_groups -%}
-      {{ db_parameter_group.to_xml() }}
-    {%- endfor -%}
-    </DBClusterParameterGroups>
-  </DescribeDBClusterParameterGroupsResult>
-  <ResponseMetadata>
-    <RequestId>b75d527a-b98c-11d3-f272-7cd6cce12cc5</RequestId>
-  </ResponseMetadata>
-</DescribeDBClusterParameterGroupsResponse>"""
-
-DELETE_DB_CLUSTER_PARAMETER_GROUP_TEMPLATE = """<DeleteDBClusterParameterGroupResponse xmlns="http://rds.amazonaws.com/doc/2014-09-01/">
-  <ResponseMetadata>
-    <RequestId>cad6c267-ba25-11d3-fe11-33d33a9bb7e3</RequestId>
-  </ResponseMetadata>
-</DeleteDBClusterParameterGroupResponse>"""
 
 
 DESCRIBE_DB_SNAPSHOT_ATTRIBUTES_TEMPLATE = """<DescribeDBSnapshotAttributesResponse xmlns="http://rds.amazonaws.com/doc/2014-10-31/">
