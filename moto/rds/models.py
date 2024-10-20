@@ -1468,7 +1468,7 @@ class DBSecurityGroup(CloudFormationModel, RDSBaseModel):
         self.group_name = group_name
         self.description = description
         self.status = "authorized"
-        self._ip_ranges: List[Any] = []
+        self.ip_ranges: List[Any] = []
         self.ec2_security_groups: List[Any] = []
         self.tags = tags
         self.vpc_id = None
@@ -1476,17 +1476,6 @@ class DBSecurityGroup(CloudFormationModel, RDSBaseModel):
     @property
     def name(self) -> str:
         return self.group_name
-
-    @property
-    def ip_ranges(self) -> List[dict]:
-        ranges = [
-            {
-                "CIDRIP": ip_range,
-                "Status": "authorized",
-            }
-            for ip_range in self._ip_ranges
-        ]
-        return ranges
 
     def to_xml(self) -> str:
         template = Template(
@@ -1506,7 +1495,7 @@ class DBSecurityGroup(CloudFormationModel, RDSBaseModel):
             <IPRanges>
             {% for ip_range in security_group.ip_ranges %}
                 <IPRange>
-                    <CIDRIP>{{ ip_range["CIDR"] }}</CIDRIP>
+                    <CIDRIP>{{ ip_range }}</CIDRIP>
                     <Status>authorized</Status>
                 </IPRange>
             {% endfor %}
@@ -1519,7 +1508,7 @@ class DBSecurityGroup(CloudFormationModel, RDSBaseModel):
         return template.render(security_group=self)
 
     def authorize_cidr(self, cidr_ip: str) -> None:
-        self._ip_ranges.append(cidr_ip)
+        self.ip_ranges.append(cidr_ip)
 
     def authorize_security_group(self, security_group: str) -> None:
         self.ec2_security_groups.append(security_group)
@@ -1584,33 +1573,14 @@ class DBSubnetGroup(CloudFormationModel, RDSBaseModel):
         super().__init__(backend)
         self.subnet_name = subnet_name
         self.description = description
-        self._subnets = subnets
+        self.subnets = subnets
         self.status = "Complete"
         self.tags = tags
-        self.vpc_id = self._subnets[0].vpc_id
+        self.vpc_id = self.subnets[0].vpc_id
 
     @property
     def name(self) -> str:
         return self.subnet_name
-
-    @property
-    def subnets(self) -> list[dict]:
-        subnets = [
-            {
-                "SubnetStatus": "Active",
-                "SubnetIdentifier": subnet.id,
-                "SubnetAvailabilityZone": {
-                    "Name": subnet.availability_zone,
-                    "ProvisionedIopsCapable": False,
-                },
-            }
-            for subnet in self._subnets
-        ]
-        return subnets
-
-    @subnets.setter
-    def subnets(self, value: list) -> None:
-        self._subnets = value
 
     def to_xml(self) -> str:
         template = Template(
@@ -1623,10 +1593,10 @@ class DBSubnetGroup(CloudFormationModel, RDSBaseModel):
               <Subnets>
                 {% for subnet in subnet_group.subnets %}
                 <Subnet>
-                  <SubnetStatus>{{ subnet["SubnetSatus"] }}</SubnetStatus>
-                  <SubnetIdentifier>{{ subnet["SubnetIdentifier"] }}</SubnetIdentifier>
+                  <SubnetStatus>Active</SubnetStatus>
+                  <SubnetIdentifier>{{ subnet.id }}</SubnetIdentifier>
                   <SubnetAvailabilityZone>
-                    <Name>{{ subnet["SubnetAvailabilityZone"]["Name"] }}</Name>
+                    <Name>{{ subnet.availability_zone }}</Name>
                     <ProvisionedIopsCapable>false</ProvisionedIopsCapable>
                   </SubnetAvailabilityZone>
                 </Subnet>
