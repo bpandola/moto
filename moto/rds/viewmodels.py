@@ -1,15 +1,17 @@
-from typing import Any, List
+# mypy: disable-error-code="misc"
+from typing import Any, Dict, List
 
 from .models import (
     DBCluster,
     DBClusterSnapshot,
     DBInstance,
-    DBProxy,
     DBSecurityGroup,
     DBSnapshot,
     DBSubnetGroup,
     GlobalCluster,
     OptionGroup,
+    ProxyTarget,
+    ProxyTargetGroup,
 )
 
 # TOTAL HACK
@@ -76,6 +78,9 @@ SERIALIZATION_ALIASES = {
     "HttpEndpointEnabled": "enable_http_endpoint",
     "DatabaseName": "db_name",
     "DbClusterResourceId": "resource_id",
+    "TargetGroupArn": "arn",
+    "DBProxyName": "proxy_name",
+    "TargetGroupName": "group_name",
     # second one is for neptune
     "DBClusterParameterGroup": ["parameter_group", "db_cluster_parameter_group_name"],
     # "DBProxyArn": "arn",
@@ -91,12 +96,72 @@ SERIALIZATION_ALIASES = {
 }
 
 
-class OptionGroupDTO:
-    def __init__(self, group: OptionGroup):
+class DBProxyTargetGroupDTO:
+    def __init__(self, group: ProxyTargetGroup) -> None:
         self.group = group
 
     @property
-    def options(self):
+    def is_default(self) -> bool:
+        return True
+
+    @property
+    def status(self) -> str:
+        return "available"
+
+    @property
+    def connection_pool_config(self) -> Dict[str, Any]:
+        return {
+            "MaxConnectionsPercent": self.group.max_connections,
+            "MaxIdleConnectionsPercent": self.group.max_idle_connections,
+            "ConnectionBorrowTimeout": self.group.borrow_timeout,
+            "SessionPinningFilters": [
+                filter_ for filter_ in self.group.session_pinning_filters
+            ],
+        }
+
+    def __getattribute__(self, name: str) -> Any:
+        try:
+            return super().__getattribute__(name)
+        except AttributeError:
+            pass
+        return self.group.__getattribute__(name)
+
+
+class DBProxyTargetDTO:
+    def __init__(self, target: ProxyTarget, registering: bool = False) -> None:
+        self.target = target
+        self.registering = registering
+
+    @property
+    def role(self) -> None:
+        # We do this because the model right now sets it to "",
+        # which does get serialized...
+        return None
+
+    @property
+    def port(self) -> int:
+        return 5432
+
+    @property
+    def target_health(self) -> Dict[str, Any]:
+        return {
+            "State": "REGISTERING" if self.registering else "AVAILABLE",
+        }
+
+    def __getattribute__(self, name: str) -> Any:
+        try:
+            return super().__getattribute__(name)
+        except AttributeError:
+            pass
+        return self.target.__getattribute__(name)
+
+
+class OptionGroupDTO:
+    def __init__(self, group: OptionGroup) -> None:
+        self.group = group
+
+    @property
+    def options(self) -> List[Dict[str, Any]]:
         return [
             {
                 "OptionName": name,
@@ -119,32 +184,12 @@ class OptionGroupDTO:
         return self.group.__getattribute__(name)
 
 
-class DBProxyDTO:
-    def __init__(self, proxy: DBProxy):
-        self.proxy = proxy
-
-    @property
-    def vpc_security_group_ids(self) -> List[str]:
-        # TODO: this is not initialized properly in the DBProxy class...
-        ids = self.proxy.vpc_security_group_ids
-        if ids is None:
-            ids = []
-        return ids
-
-    def __getattribute__(self, name: str) -> Any:
-        try:
-            return super().__getattribute__(name)
-        except AttributeError:
-            pass
-        return self.proxy.__getattribute__(name)
-
-
 class DBSubnetGroupDTO:
-    def __init__(self, subnet_group: DBSubnetGroup):
+    def __init__(self, subnet_group: DBSubnetGroup) -> None:
         self.subnet_group = subnet_group
 
     @property
-    def subnets(self) -> list[dict]:
+    def subnets(self) -> List[Dict[str, Any]]:
         subnets = [
             {
                 "SubnetStatus": "Active",
@@ -167,11 +212,11 @@ class DBSubnetGroupDTO:
 
 
 class DBSecurityGroupDTO:
-    def __init__(self, security_group: DBSecurityGroup):
+    def __init__(self, security_group: DBSecurityGroup) -> None:
         self.security_group = security_group
 
     @property
-    def ip_ranges(self) -> List[dict]:
+    def ip_ranges(self) -> List[Dict[str, Any]]:
         ranges = [
             {
                 "CIDRIP": ip_range,
@@ -190,11 +235,11 @@ class DBSecurityGroupDTO:
 
 
 class DBInstanceDTO:
-    def __init__(self, instance: DBInstance):
+    def __init__(self, instance: DBInstance) -> None:
         self.instance = instance
 
     @property
-    def vpc_security_groups(self) -> list[dict]:
+    def vpc_security_groups(self) -> List[Dict[str, Any]]:
         groups = [
             {
                 "Status": "active",
@@ -213,7 +258,7 @@ class DBInstanceDTO:
         return groups
 
     @property
-    def db_security_groups(self) -> list[dict]:
+    def db_security_groups(self) -> List[Dict[str, Any]]:
         groups = [
             {
                 "Status": "active",
@@ -224,14 +269,14 @@ class DBInstanceDTO:
         return groups
 
     @property
-    def endpoint(self) -> dict:
+    def endpoint(self) -> Dict[str, Any]:
         return {
             "Address": self.address,
             "Port": self.port,
         }
 
     @property
-    def option_group_memberships(self) -> List[dict]:
+    def option_group_memberships(self) -> List[Dict[str, Any]]:
         groups = [
             {
                 "OptionGroupName": self.option_group_name,
@@ -241,7 +286,7 @@ class DBInstanceDTO:
         return groups
 
     @property
-    def read_replica_db_instance_identifiers(self) -> list[str]:
+    def read_replica_db_instance_identifiers(self) -> List[str]:
         return [replica for replica in self.replicas]
 
     def __getattribute__(self, name: str) -> Any:
@@ -253,7 +298,7 @@ class DBInstanceDTO:
 
 
 class DBSnapshotDTO:
-    def __init__(self, snapshot: DBSnapshot):
+    def __init__(self, snapshot: DBSnapshot) -> None:
         self.snapshot = snapshot
         self.instance = DBInstanceDTO(snapshot.database)
 
@@ -270,7 +315,7 @@ class DBSnapshotDTO:
 
 
 class GlobalClusterDTO:
-    def __init__(self, cluster: GlobalCluster):
+    def __init__(self, cluster: GlobalCluster) -> None:
         self.cluster = cluster
 
     @property
@@ -278,7 +323,7 @@ class GlobalClusterDTO:
         return "available"  # this is hardcoded in GlobalCluster.to_xml
 
     @property
-    def global_cluster_members(self):
+    def global_cluster_members(self) -> List[Dict[str, Any]]:
         readers = [
             reader.db_cluster_arn
             for reader in self.cluster.members
@@ -310,7 +355,7 @@ class GlobalClusterDTO:
 
 
 class DBClusterDTO:
-    def __init__(self, cluster: DBCluster, creating: bool = False):
+    def __init__(self, cluster: DBCluster, creating: bool = False) -> None:
         self.cluster = cluster
         self.creating = creating
 
@@ -319,27 +364,24 @@ class DBClusterDTO:
         return "creating" if self.creating else self.cluster.status
 
     @property
-    def associated_roles(self) -> List[dict]:
+    def associated_roles(self) -> List[Dict[str, Any]]:
         return []
 
     @property
-    def scaling_configuration_info(self) -> dict:
+    def scaling_configuration_info(self) -> Dict[str, Any]:
+        configuration = self.cluster.scaling_configuration or {}
         info = {
-            "MinCapacity": self.cluster.scaling_configuration.get("min_capacity"),
-            "MaxCapacity": self.cluster.scaling_configuration.get("max_capacity"),
-            "AutoPause": self.cluster.scaling_configuration.get("auto_pause"),
-            "SecondsUntilAutoPause": self.cluster.scaling_configuration.get(
-                "seconds_until_auto_pause"
-            ),
-            "TimeoutAction": self.cluster.scaling_configuration.get("timeout_action"),
-            "SecondsBeforeTimeout": self.cluster.scaling_configuration.get(
-                "seconds_before_timeout"
-            ),
+            "MinCapacity": configuration.get("min_capacity"),
+            "MaxCapacity": configuration.get("max_capacity"),
+            "AutoPause": configuration.get("auto_pause"),
+            "SecondsUntilAutoPause": configuration.get("seconds_until_auto_pause"),
+            "TimeoutAction": configuration.get("timeout_action"),
+            "SecondsBeforeTimeout": configuration.get("seconds_before_timeout"),
         }
         return info
 
     @property
-    def vpc_security_groups(self) -> List[dict]:
+    def vpc_security_groups(self) -> List[Dict[str, Any]]:
         groups = [
             {"VpcSecurityGroupId": sg_id, "Status": "active"}
             for sg_id in self.cluster.vpc_security_group_ids
@@ -347,7 +389,7 @@ class DBClusterDTO:
         return groups
 
     @property
-    def domain_memberships(self) -> list:
+    def domain_memberships(self) -> List[str]:
         return []
 
     @property
@@ -355,13 +397,13 @@ class DBClusterDTO:
         return False
 
     @property
-    def global_write_forwarding_requested(self):
+    def global_write_forwarding_requested(self) -> bool:
         # This does not appear to be in the standard response for any clusters
         # Docs say it's only for a secondary cluster in aurora global database...
         return True if self.cluster.global_write_forwarding_requested else False
 
     @property
-    def db_cluster_members(self):
+    def db_cluster_members(self) -> List[Dict[str, Any]]:
         members = [
             {
                 "DBInstanceIdentifier": member,
@@ -381,7 +423,7 @@ class DBClusterDTO:
 
 
 class DBClusterSnapshotDTO:
-    def __init__(self, snapshot: DBClusterSnapshot):
+    def __init__(self, snapshot: DBClusterSnapshot) -> None:
         self.snapshot = snapshot
         self.cluster = DBClusterDTO(snapshot.cluster)
 
@@ -395,75 +437,3 @@ class DBClusterSnapshotDTO:
         except AttributeError:
             pass
         return self.cluster.__getattribute__(name)
-
-
-MODEL_TO_VIEW = {
-    DBInstance: DBInstanceDTO,
-    DBSnapshot: DBSnapshotDTO,
-    DBCluster: DBClusterDTO,
-    DBClusterSnapshot: DBClusterSnapshotDTO,
-    GlobalCluster: GlobalClusterDTO,
-    DBSecurityGroup: DBSecurityGroupDTO,
-    DBSubnetGroup: DBSubnetGroupDTO,
-    DBProxy: DBProxyDTO,
-}
-
-
-def transform_view_args(operation, **kwargs):
-    transformed = {}
-    extra_args = {}
-    # HACKY BULLSHIT TO FIX MOTO SHORTCOMING WITHOUT TOUCHING MOTO CODE
-    if operation == "CreateDBCluster":
-        extra_args["creating"] = True
-    elif operation == "ModifyDBParameterGroup":
-        # Hack for this one-off...
-        group = kwargs.pop("db_parameter_group")
-        kwargs["DBParameterGroupName"] = group.name
-    elif operation == "DescribeDBParameters":
-        group = kwargs.pop("db_parameter_group")
-        kwargs["Parameters"] = group.parameters.values()
-    elif operation in ["StartExportTask", "CancelExportTask"]:
-        # SUPER HACK! Response expects object without kwargs dict wrapper
-        task = kwargs.pop("task")
-        return task
-    elif operation in ["DescribeDBSnapshotAttributes", "ModifyDBSnapshotAttribute"]:
-        new_kwargs = dict(
-            db_snapshot_attributes_result=dict(
-                db_snapshot_identifier=kwargs.pop("db_snapshot_identifier"),
-                db_snapshot_attributes=kwargs.pop("db_snapshot_attributes_result"),
-            )
-        )
-        kwargs.update(new_kwargs)
-    elif operation in [
-        "DescribeDBClusterSnapshotAttributes",
-        "ModifyDBClusterSnapshotAttribute",
-    ]:
-        new_kwargs = dict(
-            db_cluster_snapshot_attributes_result=dict(
-                db_cluster_snapshot_identifier=kwargs.pop(
-                    "db_cluster_snapshot_identifier"
-                ),
-                db_cluster_snapshot_attributes=kwargs.pop(
-                    "db_cluster_snapshot_attributes_result"
-                ),
-            )
-        )
-        kwargs.update(new_kwargs)
-    for k, v in kwargs.items():
-        is_list = isinstance(v, list)
-        if is_list:
-            if len(v):
-                entity = v[0].__class__
-            else:
-                entity = None
-        else:
-            entity = v.__class__
-        if entity in MODEL_TO_VIEW:
-            _class = MODEL_TO_VIEW[entity]
-            if is_list:
-                transformed[k] = [_class(r, **extra_args) for r in v]
-            else:
-                transformed[k] = _class(v, **extra_args)
-        else:
-            transformed[k] = v
-    return transformed
