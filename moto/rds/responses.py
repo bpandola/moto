@@ -8,7 +8,7 @@ from moto.core.common_types import TYPE_RESPONSE
 from moto.core.responses import BaseResponse
 from moto.ec2.models import ec2_backends
 
-from .exceptions import DBParameterGroupNotFoundError
+from .exceptions import DBParameterGroupNotFoundError, RDSClientError
 from .models import RDSBackend, rds_backends
 from .viewmodels import (
     DBClusterDTO,
@@ -81,7 +81,18 @@ class RDSResponse(BaseResponse):
 
         value_picker = ValuePicker(SERIALIZATION_ALIASES)
         self.serializer = QuerySerializer(value_picker=value_picker, pretty_print=True)
-        return self.call_action()
+        try:
+            response = self.call_action()
+        except RDSClientError as e:
+            serialized = self.serializer.serialize_to_response(
+                e, self.operation_model, {}
+            )
+            response = (
+                serialized["status_code"],
+                serialized["headers"],
+                serialized["body"],
+            )
+        return response
 
     def serialize(self, result: Any) -> TYPE_RESPONSE:
         serialized = self.serializer.serialize_to_response(
