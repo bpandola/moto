@@ -14,7 +14,8 @@ from .viewmodels import (
     DBClusterDTO,
     DBClusterSnapshotDTO,
     DBInstanceDTO,
-    DBProxyDTO,
+    DBProxyTargetDTO,
+    DBProxyTargetGroupDTO,
     DBSecurityGroupDTO,
     DBSnapshotDTO,
     DBSubnetGroupDTO,
@@ -81,27 +82,6 @@ class RDSResponse(BaseResponse):
         value_picker = ValuePicker(SERIALIZATION_ALIASES)
         self.serializer = QuerySerializer(value_picker=value_picker, pretty_print=True)
         return self.call_action()
-
-    def response_template2(self, source):
-        # We're (cleverly) overriding the method that gets the Jinja response
-        # template to just return self, and then we also override render so
-        # instead of rendering the template we hook into our custom serializer.
-        return self
-
-    def render2(self, **kwargs):
-        from .viewmodels import transform_view_args
-
-        tfargs = transform_view_args(self.operation_model.name, **kwargs)
-        # If we don't send the request-id, the element will get shortened
-        # If shortened, it won't be found by core.response._enrich_response
-        # So we set it to a dummy value and let it get overwritten after
-        # will also get put in the headers by enrich response
-        # Also, it's fine that we are string for body, it's better for debugging,
-        # and it also will get utf-8 encoded in core.response
-        serialized = self.serializer.serialize_to_response(
-            tfargs, self.operation_model, {"request_id": "request-id"}
-        )
-        return serialized["status_code"], serialized["headers"], serialized["body"]
 
     def serialize(self, result: Any) -> TYPE_RESPONSE:
         serialized = self.serializer.serialize_to_response(
@@ -447,11 +427,11 @@ class RDSResponse(BaseResponse):
         result = {"DBInstance": DBInstanceDTO(new_instance)}
         return self.serialize(result)
 
-    def list_tags_for_resource(self) -> str:
+    def list_tags_for_resource(self) -> TYPE_RESPONSE:
         arn = self._get_param("ResourceName")
-        template = self.response_template(LIST_TAGS_FOR_RESOURCE_TEMPLATE)
         tags = self.backend.list_tags_for_resource(arn)
-        return template.render(tags=tags)
+        result = {"TagList": tags}
+        return self.serialize(result)
 
     def add_tags_to_resource(self) -> TYPE_RESPONSE:
         arn = self._get_param("ResourceName")
@@ -634,30 +614,30 @@ class RDSResponse(BaseResponse):
 
         return parameter_group_parameters.values()
 
-    def describe_db_parameters(self) -> str:
+    def describe_db_parameters(self) -> TYPE_RESPONSE:
         db_parameter_group_name = self._get_param("DBParameterGroupName")
         db_parameter_groups = self.backend.describe_db_parameter_groups(
             {"name": db_parameter_group_name}
         )
         if not db_parameter_groups:
             raise DBParameterGroupNotFoundError(db_parameter_group_name)
-
-        template = self.response_template(DESCRIBE_DB_PARAMETERS_TEMPLATE)
-        return template.render(db_parameter_group=db_parameter_groups[0])
+        parameters = db_parameter_groups[0].parameters.values()
+        result = {"Parameters": parameters}
+        return self.serialize(result)
 
     def delete_db_parameter_group(self) -> TYPE_RESPONSE:
         kwargs = self._get_db_parameter_group_kwargs()
         db_parameter_group = self.backend.delete_db_parameter_group(kwargs["name"])
         return self.serialize(db_parameter_group)
 
-    def describe_db_cluster_parameters(self) -> str:
+    def describe_db_cluster_parameters(self) -> TYPE_RESPONSE:
+        # TODO: This never worked at all...
         db_parameter_group_name = self._get_param("DBParameterGroupName")
         db_parameter_groups = self.backend.describe_db_cluster_parameters()
         if db_parameter_groups is None:
             raise DBParameterGroupNotFoundError(db_parameter_group_name)
-
-        template = self.response_template(DESCRIBE_DB_CLUSTER_PARAMETERS_TEMPLATE)
-        return template.render(db_parameter_group=db_parameter_groups)
+        result = {"Parameters": db_parameter_groups}
+        return self.serialize(result)
 
     def create_db_cluster(self) -> TYPE_RESPONSE:
         kwargs = self._get_db_cluster_kwargs()
@@ -871,19 +851,21 @@ class RDSResponse(BaseResponse):
         result = {"DBCluster": DBClusterDTO(cluster)}
         return self.serialize(result)
 
-    def describe_db_snapshot_attributes(self) -> str:
+    def describe_db_snapshot_attributes(self) -> TYPE_RESPONSE:
         params = self._get_params()
         db_snapshot_identifier = params["DBSnapshotIdentifier"]
         db_snapshot_attributes_result = self.backend.describe_db_snapshot_attributes(
             db_snapshot_identifier=db_snapshot_identifier,
         )
-        template = self.response_template(DESCRIBE_DB_SNAPSHOT_ATTRIBUTES_TEMPLATE)
-        return template.render(
-            db_snapshot_attributes_result=db_snapshot_attributes_result,
-            db_snapshot_identifier=db_snapshot_identifier,
-        )
+        result = {
+            "DBSnapshotAttributesResult": {
+                "DBSnapshotIdentifier": db_snapshot_identifier,
+                "DBSnapshotAttributes": db_snapshot_attributes_result,
+            }
+        }
+        return self.serialize(result)
 
-    def modify_db_snapshot_attribute(self) -> str:
+    def modify_db_snapshot_attribute(self) -> TYPE_RESPONSE:
         params = self._get_params()
         db_snapshot_identifier = params["DBSnapshotIdentifier"]
         db_snapshot_attributes_result = self.backend.modify_db_snapshot_attribute(
@@ -892,13 +874,15 @@ class RDSResponse(BaseResponse):
             values_to_add=params.get("ValuesToAdd"),
             values_to_remove=params.get("ValuesToRemove"),
         )
-        template = self.response_template(MODIFY_DB_SNAPSHOT_ATTRIBUTE_TEMPLATE)
-        return template.render(
-            db_snapshot_attributes_result=db_snapshot_attributes_result,
-            db_snapshot_identifier=db_snapshot_identifier,
-        )
+        result = {
+            "DBSnapshotAttributesResult": {
+                "DBSnapshotIdentifier": db_snapshot_identifier,
+                "DBSnapshotAttributes": db_snapshot_attributes_result,
+            }
+        }
+        return self.serialize(result)
 
-    def describe_db_cluster_snapshot_attributes(self) -> str:
+    def describe_db_cluster_snapshot_attributes(self) -> TYPE_RESPONSE:
         params = self._get_params()
         db_cluster_snapshot_identifier = params["DBClusterSnapshotIdentifier"]
         db_cluster_snapshot_attributes_result = (
@@ -906,15 +890,15 @@ class RDSResponse(BaseResponse):
                 db_cluster_snapshot_identifier=db_cluster_snapshot_identifier,
             )
         )
-        template = self.response_template(
-            DESCRIBE_DB_CLUSTER_SNAPSHOT_ATTRIBUTES_TEMPLATE
-        )
-        return template.render(
-            db_cluster_snapshot_attributes_result=db_cluster_snapshot_attributes_result,
-            db_cluster_snapshot_identifier=db_cluster_snapshot_identifier,
-        )
+        result = {
+            "DBClusterSnapshotAttributesResult": {
+                "DBClusterSnapshotIdentifier": db_cluster_snapshot_identifier,
+                "DBClusterSnapshotAttributes": db_cluster_snapshot_attributes_result,
+            }
+        }
+        return self.serialize(result)
 
-    def modify_db_cluster_snapshot_attribute(self) -> str:
+    def modify_db_cluster_snapshot_attribute(self) -> TYPE_RESPONSE:
         params = self._get_params()
         db_cluster_snapshot_identifier = params["DBClusterSnapshotIdentifier"]
         db_cluster_snapshot_attributes_result = (
@@ -925,11 +909,13 @@ class RDSResponse(BaseResponse):
                 values_to_remove=params.get("ValuesToRemove"),
             )
         )
-        template = self.response_template(MODIFY_DB_CLUSTER_SNAPSHOT_ATTRIBUTE_TEMPLATE)
-        return template.render(
-            db_cluster_snapshot_attributes_result=db_cluster_snapshot_attributes_result,
-            db_cluster_snapshot_identifier=db_cluster_snapshot_identifier,
-        )
+        result = {
+            "DBClusterSnapshotAttributesResult": {
+                "DBClusterSnapshotIdentifier": db_cluster_snapshot_identifier,
+                "DBClusterSnapshotAttributes": db_cluster_snapshot_attributes_result,
+            }
+        }
+        return self.serialize(result)
 
     def describe_db_proxies(self) -> TYPE_RESPONSE:
         params = self._get_params()
@@ -941,7 +927,7 @@ class RDSResponse(BaseResponse):
             # filters=filters,
         )
         result = {
-            "DBProxies": [DBProxyDTO(proxy) for proxy in db_proxies],
+            "DBProxies": db_proxies,
             "Marker": marker,
         }
         return self.serialize(result)
@@ -970,10 +956,10 @@ class RDSResponse(BaseResponse):
             debug_logging=debug_logging,
             tags=tags,
         )
-        result = {"DBProxy": DBProxyDTO(db_proxy)}
+        result = {"DBProxy": db_proxy}
         return self.serialize(result)
 
-    def register_db_proxy_targets(self) -> str:
+    def register_db_proxy_targets(self) -> TYPE_RESPONSE:
         db_proxy_name = self._get_param("DBProxyName")
         target_group_name = self._get_param("TargetGroupName")
         db_cluster_identifiers = self._get_params().get("DBClusterIdentifiers", [])
@@ -984,11 +970,14 @@ class RDSResponse(BaseResponse):
             db_cluster_identifiers=db_cluster_identifiers,
             db_instance_identifiers=db_instance_identifiers,
         )
+        result = {
+            "DBProxyTargets": [
+                DBProxyTargetDTO(target, registering=True) for target in targets
+            ]
+        }
+        return self.serialize(result)
 
-        template = self.response_template(REGISTER_DB_PROXY_TARGET)
-        return template.render(targets=targets)
-
-    def deregister_db_proxy_targets(self) -> str:
+    def deregister_db_proxy_targets(self) -> TYPE_RESPONSE:
         db_proxy_name = self._get_param("DBProxyName")
         target_group_name = self._get_param("TargetGroupName")
         db_cluster_identifiers = self._get_params().get("DBClusterIdentifiers", [])
@@ -999,36 +988,34 @@ class RDSResponse(BaseResponse):
             db_cluster_identifiers=db_cluster_identifiers,
             db_instance_identifiers=db_instance_identifiers,
         )
+        return self.serialize({})
 
-        template = self.response_template(DEREGISTER_DB_PROXY_TARGET)
-        return template.render()
-
-    def describe_db_proxy_targets(self) -> str:
+    def describe_db_proxy_targets(self) -> TYPE_RESPONSE:
         proxy_name = self._get_param("DBProxyName")
         targets = self.backend.describe_db_proxy_targets(proxy_name=proxy_name)
-        template = self.response_template(DESCRIBE_DB_PROXY_TARGETS)
-        return template.render(targets=targets)
+        result = {"Targets": [DBProxyTargetDTO(target) for target in targets]}
+        return self.serialize(result)
 
-    def delete_db_proxy(self) -> str:
+    def delete_db_proxy(self) -> TYPE_RESPONSE:
         proxy_name = self._get_param("DBProxyName")
         proxy = self.backend.delete_db_proxy(proxy_name=proxy_name)
-        template = self.response_template(DELETE_DB_PROXY_TEMPLATE)
-        return template.render(dbproxy=proxy)
+        result = {"DBProxy": proxy}
+        return self.serialize(result)
 
-    def describe_db_proxy_target_groups(self) -> str:
+    def describe_db_proxy_target_groups(self) -> TYPE_RESPONSE:
         proxy_name = self._get_param("DBProxyName")
         groups = self.backend.describe_db_proxy_target_groups(proxy_name=proxy_name)
-        template = self.response_template(DESCRIBE_DB_PROXY_TARGET_GROUPS)
-        return template.render(groups=groups)
+        result = {"TargetGroups": [DBProxyTargetGroupDTO(group) for group in groups]}
+        return self.serialize(result)
 
-    def modify_db_proxy_target_group(self) -> str:
+    def modify_db_proxy_target_group(self) -> TYPE_RESPONSE:
         proxy_name = self._get_param("DBProxyName")
         config = self._get_params().get("ConnectionPoolConfig", {})
         group = self.backend.modify_db_proxy_target_group(
             proxy_name=proxy_name, config=config
         )
-        template = self.response_template(MODIFY_DB_PROXY_TARGET_GROUP)
-        return template.render(group=group)
+        result = {"DBProxyTargetGroup": DBProxyTargetGroupDTO(group)}
+        return self.serialize(result)
 
     def _paginate(self, resources: List[Any]) -> Tuple[List[Any], Optional[str]]:
         from moto.rds.exceptions import InvalidParameterValue
@@ -1052,225 +1039,3 @@ class RDSResponse(BaseResponse):
         if len(all_resources) > start + page_size:
             next_marker = paginated_resources[-1].name
         return paginated_resources, next_marker
-
-
-DESCRIBE_DB_PARAMETERS_TEMPLATE = """<DescribeDBParametersResponse xmlns="http://rds.amazonaws.com/doc/2014-09-01/">
-  <DescribeDBParametersResult>
-    <Parameters>
-      {%- for db_parameter_name, db_parameter in db_parameter_group.parameters.items() -%}
-      <Parameter>
-        {%- for parameter_name, parameter_value in db_parameter.items() -%}
-        <{{ parameter_name }}>{{ parameter_value }}</{{ parameter_name }}>
-        {%- endfor -%}
-      </Parameter>
-      {%- endfor -%}
-    </Parameters>
-  </DescribeDBParametersResult>
-  <ResponseMetadata>
-    <RequestId>8c40488f-b9ff-11d3-a15e-7ac49293f4fa</RequestId>
-  </ResponseMetadata>
-</DescribeDBParametersResponse>
-"""
-
-DESCRIBE_DB_CLUSTER_PARAMETERS_TEMPLATE = """<DescribeDBClusterParametersResponse xmlns="http://rds.amazonaws.com/doc/2014-09-01/">
-  <DescribeDBClusterParametersResult>
-    <Parameters>
-      {%- for param in db_parameter_group -%}
-      <Parameter>
-        {%- for parameter_name, parameter_value in db_parameter.items() -%}
-        <{{ parameter_name }}>{{ parameter_value }}</{{ parameter_name }}>
-        {%- endfor -%}
-      </Parameter>
-      {%- endfor -%}
-    </Parameters>
-  </DescribeDBClusterParametersResult>
-  <ResponseMetadata>
-    <RequestId>8c40488f-b9ff-11d3-a15e-7ac49293f4fa</RequestId>
-  </ResponseMetadata>
-</DescribeDBClusterParametersResponse>
-"""
-
-LIST_TAGS_FOR_RESOURCE_TEMPLATE = """<ListTagsForResourceResponse xmlns="http://rds.amazonaws.com/doc/2014-10-31/">
-  <ListTagsForResourceResult>
-    <TagList>
-    {%- for tag in tags -%}
-      <Tag>
-        <Key>{{ tag['Key'] }}</Key>
-        <Value>{{ tag['Value'] }}</Value>
-      </Tag>
-    {%- endfor -%}
-    </TagList>
-  </ListTagsForResourceResult>
-  <ResponseMetadata>
-    <RequestId>8c21ba39-a598-11e4-b688-194eaf8658fa</RequestId>
-  </ResponseMetadata>
-</ListTagsForResourceResponse>"""
-
-
-DESCRIBE_DB_SNAPSHOT_ATTRIBUTES_TEMPLATE = """<DescribeDBSnapshotAttributesResponse xmlns="http://rds.amazonaws.com/doc/2014-10-31/">
-  <DescribeDBSnapshotAttributesResult>
-    <DBSnapshotAttributesResult>
-      <DBSnapshotAttributes>
-        {%- for attribute in db_snapshot_attributes_result -%}
-          <DBSnapshotAttribute>
-            <AttributeName>{{ attribute["AttributeName"] }}</AttributeName>
-            <AttributeValues>
-              {%- for value in attribute["AttributeValues"] -%}
-                <AttributeValue>{{ value }}</AttributeValue>
-              {%- endfor -%}
-            </AttributeValues>
-          </DBSnapshotAttribute>
-        {%- endfor -%}
-      </DBSnapshotAttributes>
-      <DBSnapshotIdentifier>{{ db_snapshot_identifier }}</DBSnapshotIdentifier>
-    </DBSnapshotAttributesResult>
-  </DescribeDBSnapshotAttributesResult>
-  <ResponseMetadata>
-    <RequestId>1549581b-12b7-11e3-895e-1334a</RequestId>
-  </ResponseMetadata>
-</DescribeDBSnapshotAttributesResponse>"""
-
-MODIFY_DB_SNAPSHOT_ATTRIBUTE_TEMPLATE = """<ModifyDBSnapshotAttributeResponse xmlns="http://rds.amazonaws.com/doc/2014-10-31/">
-  <ModifyDBSnapshotAttributeResult>
-    <DBSnapshotAttributesResult>
-      <DBSnapshotAttributes>
-        {%- for attribute in db_snapshot_attributes_result -%}
-          <DBSnapshotAttribute>
-            <AttributeName>{{ attribute["AttributeName"] }}</AttributeName>
-            <AttributeValues>
-              {%- for value in attribute["AttributeValues"] -%}
-                <AttributeValue>{{ value }}</AttributeValue>
-              {%- endfor -%}
-            </AttributeValues>
-          </DBSnapshotAttribute>
-        {%- endfor -%}
-      </DBSnapshotAttributes>
-      <DBSnapshotIdentifier>{{ db_snapshot_identifier }}</DBSnapshotIdentifier>
-    </DBSnapshotAttributesResult>
-  </ModifyDBSnapshotAttributeResult>
-  <ResponseMetadata>
-    <RequestId>1549581b-12b7-11e3-895e-1334aEXAMPLE</RequestId>
-  </ResponseMetadata>
-</ModifyDBSnapshotAttributeResponse>"""
-
-MODIFY_DB_CLUSTER_SNAPSHOT_ATTRIBUTE_TEMPLATE = """<ModifyDBClusterSnapshotAttributeResponse xmlns="http://rds.amazonaws.com/doc/2014-10-31/">
-  <ModifyDBClusterSnapshotAttributeResult>
-    <DBClusterSnapshotAttributesResult>
-      <DBClusterSnapshotAttributes>
-        {%- for attribute in db_cluster_snapshot_attributes_result -%}
-          <DBClusterSnapshotAttribute>
-            <AttributeName>{{ attribute["AttributeName"] }}</AttributeName>
-            <AttributeValues>
-              {%- for value in attribute["AttributeValues"] -%}
-                <AttributeValue>{{ value }}</AttributeValue>
-              {%- endfor -%}
-            </AttributeValues>
-          </DBClusterSnapshotAttribute>
-        {%- endfor -%}
-      </DBClusterSnapshotAttributes>
-      <DBClusterSnapshotIdentifier>{{ db_cluster_snapshot_identifier }}</DBClusterSnapshotIdentifier>
-    </DBClusterSnapshotAttributesResult>
-  </ModifyDBClusterSnapshotAttributeResult>
-  <ResponseMetadata>
-    <RequestId>1549581b-12b7-11e3-895e-1334a</RequestId>
-  </ResponseMetadata>
-</ModifyDBClusterSnapshotAttributeResponse>"""
-
-DESCRIBE_DB_CLUSTER_SNAPSHOT_ATTRIBUTES_TEMPLATE = """<DescribeDBClusterSnapshotAttributesResponse xmlns="http://rds.amazonaws.com/doc/2014-10-31/">
-  <DescribeDBClusterSnapshotAttributesResult>
-    <DBClusterSnapshotAttributesResult>
-      <DBClusterSnapshotAttributes>
-        {%- for attribute in db_cluster_snapshot_attributes_result -%}
-          <DBClusterSnapshotAttribute>
-            <AttributeName>{{ attribute["AttributeName"] }}</AttributeName>
-            <AttributeValues>
-              {%- for value in attribute["AttributeValues"] -%}
-                <AttributeValue>{{ value }}</AttributeValue>
-              {%- endfor -%}
-            </AttributeValues>
-          </DBClusterSnapshotAttribute> 
-        {%- endfor -%}
-      </DBClusterSnapshotAttributes>
-      <DBClusterSnapshotIdentifier>{{ db_cluster_snapshot_identifier }}</DBClusterSnapshotIdentifier>
-    </DBClusterSnapshotAttributesResult>
-  </DescribeDBClusterSnapshotAttributesResult>
-  <ResponseMetadata>
-    <RequestId>1549581b-12b7-11e3-895e-1334a</RequestId>
-  </ResponseMetadata>
-</DescribeDBClusterSnapshotAttributesResponse>"""
-
-
-DEREGISTER_DB_PROXY_TARGET = """<DeregisterDBProxyTargetsResponse xmlns="http://rds.amazonaws.com/doc/2014-10-31/">
-<DeregisterDBProxyTargetsResult>
-</DeregisterDBProxyTargetsResult>
-</DeregisterDBProxyTargetsResponse>"""
-
-
-REGISTER_DB_PROXY_TARGET = """<RegisterDBProxyTargetsResponse xmlns="http://rds.amazonaws.com/doc/2014-10-31/">
-<RegisterDBProxyTargetsResult>
-<DBProxyTargets>
-  {% for target in targets %}
-  <member>
-    <RdsResourceId>{{ target.rds_resource_id }}</RdsResourceId>
-    <Port>5432</Port>
-    <Type>{{ target.type }}</Type>
-    <TargetHealth>
-        <State>REGISTERING</State>
-    </TargetHealth>
-    {% if target.endpoint %}<Endpoint>{{ target.endpoint }}</Endpoint>{% endif %}
-  </member>
-  {% endfor %}
-</DBProxyTargets>
-</RegisterDBProxyTargetsResult>
-</RegisterDBProxyTargetsResponse>"""
-
-
-DESCRIBE_DB_PROXY_TARGETS = """<DescribeDBProxyTargetsResponse xmlns="http://rds.amazonaws.com/doc/2014-10-31/">
-<DescribeDBProxyTargetsResult>
-  <Targets>
-    {% for target in targets %}
-      <member>
-        <RdsResourceId>{{ target.rds_resource_id }}</RdsResourceId>
-        <Port>5432</Port>
-        <Type>{{ target.type }}</Type>
-        <TargetHealth>
-            <State>AVAILABLE</State>
-        </TargetHealth>
-        {% if target.endpoint %}<Endpoint>{{ target.endpoint }}</Endpoint>{% endif %}
-      </member>
-    {% endfor %}
-  </Targets>
-</DescribeDBProxyTargetsResult>
-</DescribeDBProxyTargetsResponse>
-"""
-
-
-DELETE_DB_PROXY_TEMPLATE = """<DeleteDBProxyResponse>
-<DeleteDBProxyResult>
-  <DBProxy>
-    {{ dbproxy.to_xml() }}
-  </DBProxy>
-</DeleteDBProxyResult>
-</DeleteDBProxyResponse>"""
-
-
-DESCRIBE_DB_PROXY_TARGET_GROUPS = """<DescribeDBProxyTargetGroupsResponse>
-<DescribeDBProxyTargetGroupsResult>
-  <TargetGroups>
-  {% for group in groups %}
-    <member>
-      {{ group.to_xml() }}
-    </member>
-  {% endfor %}
-  </TargetGroups>
-</DescribeDBProxyTargetGroupsResult>
-</DescribeDBProxyTargetGroupsResponse>"""
-
-
-MODIFY_DB_PROXY_TARGET_GROUP = """<ModifyDBProxyTargetGroupResponse>
-<ModifyDBProxyTargetGroupResult>
-  <DBProxyTargetGroup>
-    {{ group.to_xml() }}
-  </DBProxyTargetGroup>
-</ModifyDBProxyTargetGroupResult>
-</ModifyDBProxyTargetGroupResponse>"""
