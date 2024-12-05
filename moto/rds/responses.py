@@ -80,13 +80,16 @@ class RDSResponse(BaseResponse):
         self.parameters = xform_dict(parsed)
 
         value_picker = ValuePicker(SERIALIZATION_ALIASES)
-        self.serializer = QuerySerializer(value_picker=value_picker, pretty_print=True)
+        self.serializer = QuerySerializer(
+            self.operation_model,
+            {"request-id": "request-id"},
+            value_picker=value_picker,
+            pretty_print=True,
+        )
         try:
             response = self.call_action()
         except RDSClientError as e:
-            serialized = self.serializer.serialize_to_response(
-                e, self.operation_model, {}
-            )
+            serialized = self.serializer.serialize_to_response(e)
             response = (
                 serialized["status_code"],
                 serialized["headers"],
@@ -95,9 +98,7 @@ class RDSResponse(BaseResponse):
         return response
 
     def serialize(self, result: Any) -> TYPE_RESPONSE:
-        serialized = self.serializer.serialize_to_response(
-            result, self.operation_model, {"request_id": "request-id"}
-        )
+        serialized = self.serializer.serialize_to_response(result)
         return serialized["status_code"], serialized["headers"], serialized["body"]
 
     def _get_db_kwargs(self) -> Dict[str, Any]:
