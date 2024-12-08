@@ -747,6 +747,15 @@ class DBInstance(CloudFormationModel, RDSBaseModel):
 
         return db_family, f"default.{db_family}"
 
+    def master_user_secret(self) -> Dict[str, Any]:
+        return {
+            "secret_arn": f"arn:{self.partition}:secretsmanager:{self.region}:{self.account_id}:secret:rds!{self.name}",
+            "secret_status": self.master_user_secret_status,
+            "kms_key_id": self.master_user_secret_kms_key_id
+            if self.master_user_secret_kms_key_id is not None
+            else f"arn:{self.partition}:kms:{self.region}:{self.account_id}:key/{self.name}",
+        }
+
     @property
     def address(self) -> str:
         return (
