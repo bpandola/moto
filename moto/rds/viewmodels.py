@@ -239,9 +239,9 @@ class DBInstanceDTO:
         self.instance = instance
 
     def master_user_secret(self) -> Optional[Dict[str, Any]]:
-        if not self.manage_master_user_password:
-            return None
-        return self.instance.master_user_secret
+        secret_dict = self.instance.master_user_secret()
+        manage_master_user_password = self.instance.manage_master_user_password
+        return secret_dict if manage_master_user_password else None
 
     @property
     def vpc_security_groups(self) -> List[Dict[str, Any]]:
@@ -365,9 +365,9 @@ class DBClusterDTO:
         self.creating = creating
 
     def master_user_secret(self) -> Optional[Dict[str, Any]]:
-        if not self.manage_master_user_password:
-            return None
-        return self.cluster.master_user_secret
+        secret_dict = self.cluster.master_user_secret()
+        manage_master_user_password = self.cluster.manage_master_user_password
+        return secret_dict if manage_master_user_password else None
 
     @property
     def status(self) -> str:
