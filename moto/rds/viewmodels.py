@@ -1,5 +1,5 @@
 # mypy: disable-error-code="misc"
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from .models import (
     DBCluster,
@@ -238,6 +238,11 @@ class DBInstanceDTO:
     def __init__(self, instance: DBInstance) -> None:
         self.instance = instance
 
+    def master_user_secret(self) -> Optional[Dict[str, Any]]:
+        if not self.manage_master_user_password:
+            return None
+        return self.instance.master_user_secret
+
     @property
     def vpc_security_groups(self) -> List[Dict[str, Any]]:
         groups = [
@@ -358,6 +363,11 @@ class DBClusterDTO:
     def __init__(self, cluster: DBCluster, creating: bool = False) -> None:
         self.cluster = cluster
         self.creating = creating
+
+    def master_user_secret(self) -> Optional[Dict[str, Any]]:
+        if not self.manage_master_user_password:
+            return None
+        return self.cluster.master_user_secret
 
     @property
     def status(self) -> str:
