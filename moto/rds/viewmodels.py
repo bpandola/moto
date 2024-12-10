@@ -1,4 +1,6 @@
 # mypy: disable-error-code="misc"
+from __future__ import annotations
+
 from typing import Any, Dict, List, Optional
 
 from .models import (
@@ -24,21 +26,8 @@ from .models import (
 # template render method.  Once we fix up the response methods to use
 # the serializer, we can format the result dict as needed
 SERIALIZATION_ALIASES = {
-    # "DBCluster": "cluster",
-    # "DBClusterParameterGroups": "db_parameter_groups",
-    # "DBClusters": "clusters",
-    # "DBClusterSnapshot": "snapshot",
     "DBClusterSnapshotArn": "snapshot_arn",
     "DBClusterSnapshotIdentifier": "snapshot_id",
-    # "DBClusterSnapshots": "snapshots",
-    # "DBInstance": "database",
-    # "DBInstances": "databases",
-    # "DBProxies": "dbproxies",
-    # "DBProxy": "dbproxy",
-    # "DBSecurityGroup": "security_group",
-    # "DBSecurityGroupName": "group_name",
-    # "DBSecurityGroups": "security_groups",
-    # "DBSnapshot": "snapshot",
     "DBSnapshotArn": "snapshot_arn",
     "DBSnapshotIdentifier": "snapshot_id",
     # "DBSnapshots": "snapshots",
@@ -88,11 +77,10 @@ SERIALIZATION_ALIASES = {
     "DBSubnetGroupDTO": "DBSubnetGroup",
     "DBParameterGroupDTO": "DBParameterGroup",
     "DBInstanceDTO": "DBInstance",
+    "DBSnapshotDTO": "DBSnapshot",
     "DBSecurityGroupDTO": "DBSecurityGroup",
     # "DBProxyDTO": "DBProxy",
     "OptionGroupDTO": "OptionGroup",
-    # neptune
-    "OrderableDBInstanceOptions": "options",
 }
 
 
@@ -131,6 +119,11 @@ class DBProxyTargetDTO:
     def __init__(self, target: ProxyTarget, registering: bool = False) -> None:
         self.target = target
         self.registering = registering
+
+    # terrible hack because get_value tries to pull arn and calls .name which isn't there
+    @property
+    def target_arn(self) -> str | None:
+        return None
 
     @property
     def role(self) -> None:
@@ -234,57 +227,70 @@ class DBSecurityGroupDTO:
         return self.security_group.__getattribute__(name)
 
 
+class Engine:
+    def __init__(self, name: str, version: str) -> None:
+        self.name = name
+        self.version = version
+
+    def __str__(self) -> str:
+        return self.name
+
+
 class DBInstanceDTO:
     def __init__(self, instance: DBInstance) -> None:
-        self.instance = instance
+        self.db_instance = instance
+
+    @property
+    def engine(self) -> Engine:
+        return Engine(self.db_instance.engine, self.db_instance.engine_version)
 
     def master_user_secret(self) -> Optional[Dict[str, Any]]:
-        secret_dict = self.instance.master_user_secret()
-        manage_master_user_password = self.instance.manage_master_user_password
+        secret_dict = self.db_instance.master_user_secret()
+        manage_master_user_password = self.db_instance.manage_master_user_password
         return secret_dict if manage_master_user_password else None
 
     @property
-    def vpc_security_groups(self) -> List[Dict[str, Any]]:
+    def vpc_security_group_membership_list(self) -> List[Dict[str, Any]]:
         groups = [
             {
                 "Status": "active",
                 "VpcSecurityGroupId": id_,
             }
-            for id_ in self.vpc_security_group_ids
+            for id_ in self.db_instance.vpc_security_group_ids
         ]
         return groups
 
     @property
     def db_parameter_groups(self) -> Any:
         # this is hideous
-        groups = self.instance.db_parameter_groups()
+        groups = self.db_instance.db_parameter_groups()
         for group in groups:
             setattr(group, "ParameterApplyStatus", "in-sync")
         return groups
 
     @property
-    def db_security_groups(self) -> List[Dict[str, Any]]:
+    def db_security_group_membership_list(self) -> List[Dict[str, Any]]:
         groups = [
             {
                 "Status": "active",
                 "DBSecurityGroupName": group,
             }
-            for group in self.security_groups
+            for group in self.db_instance.security_groups
         ]
         return groups
 
     @property
     def endpoint(self) -> Dict[str, Any]:
         return {
-            "Address": self.address,
-            "Port": self.port,
+            "Address": self.db_instance.address,
+            "Port": self.db_instance.port,
         }
 
     @property
     def option_group_memberships(self) -> List[Dict[str, Any]]:
         groups = [
             {
-                "OptionGroupName": self.option_group_name,
+                "OptionGroupName": self.db_instance.option_group_name,
                 "Status": "in-sync",
             }
         ]
@@ -292,31 +298,25 @@ class DBInstanceDTO:
 
     @property
     def read_replica_db_instance_identifiers(self) -> List[str]:
-        return [replica for replica in self.replicas]
-
-    def __getattribute__(self, name: str) -> Any:
-        try:
-            return super().__getattribute__(name)
-        except AttributeError:
-            pass
-        return self.instance.__getattribute__(name)
+        return [replica for replica in self.db_instance.replicas]
 
 
 class DBSnapshotDTO:
     def __init__(self, snapshot: DBSnapshot) -> None:
-        self.snapshot = snapshot
-        self.instance = DBInstanceDTO(snapshot.database)
+        self.db_snapshot = snapshot
+        self.db_instance = snapshot.database
 
-    def __getattribute__(self, name: str) -> Any:
-        try:
-            return super().__getattribute__(name)
-        except AttributeError:
-            pass
-        try:
-            return self.snapshot.__getattribute__(name)
-        except AttributeError:
-            pass
-        return self.instance.__getattribute__(name)
+    @property
+    def dbi_resource_id(self) -> str:
+        return self.db_instance.dbi_resource_id
+
+    @property
+    def engine(self) -> str:
+        return self.db_instance.engine
+
+    @property
+    def iam_database_authentication_enabled(self) -> bool:
+        return self.db_instance.enable_iam_database_authentication
 
 
 class GlobalClusterDTO:
