@@ -89,12 +89,7 @@ class RDSResponse(BaseResponse):
         try:
             response = self.call_action()
         except RDSClientError as e:
-            serialized = self.serializer.serialize_to_response(e)
-            response = (
-                serialized["status_code"],
-                serialized["headers"],
-                serialized["body"],
-            )
+            response = self.serialize(e)
         return response
 
     def serialize(self, result: Any) -> TYPE_RESPONSE:
