@@ -81,7 +81,89 @@ SERIALIZATION_ALIASES = {
     "DBSecurityGroupDTO": "DBSecurityGroup",
     # "DBProxyDTO": "DBProxy",
     "OptionGroupDTO": "OptionGroup",
+    # Dotted attrs
+    "AllocatedStorage": "db_instance.allocated_storage",
 }
+
+
+class Engine:
+    def __init__(self, name: str, version: str) -> None:
+        self.name = name
+        self.version = version
+
+    def __str__(self) -> str:
+        return self.name
+
+
+class DBInstanceDTO:
+    def __init__(self, instance: DBInstance) -> None:
+        self.db_instance = instance
+
+    # def __getattribute__(self, item):
+    #     return super().__getattribute__(item)
+    #
+    # def __getattr__(self, item):
+    #     return super().__getattribute__(item)
+    @property
+    def engine(self) -> Engine:
+        return Engine(self.db_instance.engine, self.db_instance.engine_version)
+
+    @property
+    def master_user_secret(self) -> Optional[Dict[str, Any]]:
+        secret_dict = self.db_instance.master_user_secret()
+        manage_master_user_password = self.db_instance.manage_master_user_password
+        return secret_dict if manage_master_user_password else None
+
+    @property
+    def vpc_security_group_membership_list(self) -> List[Dict[str, Any]]:
+        groups = [
+            {
+                "Status": "active",
+                "VpcSecurityGroupId": id_,
+            }
+            for id_ in self.db_instance.vpc_security_group_ids
+        ]
+        return groups
+
+    @property
+    def db_parameter_groups(self) -> Any:
+        # this is hideous
+        groups = self.db_instance.db_parameter_groups()
+        for group in groups:
+            setattr(group, "ParameterApplyStatus", "in-sync")
+        return groups
+
+    @property
+    def db_security_group_membership_list(self) -> List[Dict[str, Any]]:
+        groups = [
+            {
+                "Status": "active",
+                "DBSecurityGroupName": group,
+            }
+            for group in self.db_instance.security_groups
+        ]
+        return groups
+
+    @property
+    def endpoint(self) -> Dict[str, Any]:
+        return {
+            "Address": self.db_instance.address,
+            "Port": self.db_instance.port,
+        }
+
+    @property
+    def option_group_memberships(self) -> List[Dict[str, Any]]:
+        groups = [
+            {
+                "OptionGroupName": self.db_instance.option_group_name,
+                "Status": "in-sync",
+            }
+        ]
+        return groups
+
+    @property
+    def read_replica_db_instance_identifiers(self) -> List[str]:
+        return [replica for replica in self.db_instance.replicas]
 
 
 class DBProxyTargetGroupDTO:
@@ -225,80 +307,6 @@ class DBSecurityGroupDTO:
         except AttributeError:
             pass
         return self.security_group.__getattribute__(name)
-
-
-class Engine:
-    def __init__(self, name: str, version: str) -> None:
-        self.name = name
-        self.version = version
-
-    def __str__(self) -> str:
-        return self.name
-
-
-class DBInstanceDTO:
-    def __init__(self, instance: DBInstance) -> None:
-        self.db_instance = instance
-
-    @property
-    def engine(self) -> Engine:
-        return Engine(self.db_instance.engine, self.db_instance.engine_version)
-
-    def master_user_secret(self) -> Optional[Dict[str, Any]]:
-        secret_dict = self.db_instance.master_user_secret()
-        manage_master_user_password = self.db_instance.manage_master_user_password
-        return secret_dict if manage_master_user_password else None
-
-    @property
-    def vpc_security_group_membership_list(self) -> List[Dict[str, Any]]:
-        groups = [
-            {
-                "Status": "active",
-                "VpcSecurityGroupId": id_,
-            }
-            for id_ in self.db_instance.vpc_security_group_ids
-        ]
-        return groups
-
-    @property
-    def db_parameter_groups(self) -> Any:
-        # this is hideous
-        groups = self.db_instance.db_parameter_groups()
-        for group in groups:
-            setattr(group, "ParameterApplyStatus", "in-sync")
-        return groups
-
-    @property
-    def db_security_group_membership_list(self) -> List[Dict[str, Any]]:
-        groups = [
-            {
-                "Status": "active",
-                "DBSecurityGroupName": group,
-            }
-            for group in self.db_instance.security_groups
-        ]
-        return groups
-
-    @property
-    def endpoint(self) -> Dict[str, Any]:
-        return {
-            "Address": self.db_instance.address,
-            "Port": self.db_instance.port,
-        }
-
-    @property
-    def option_group_memberships(self) -> List[Dict[str, Any]]:
-        groups = [
-            {
-                "OptionGroupName": self.db_instance.option_group_name,
-                "Status": "in-sync",
-            }
-        ]
-        return groups
-
-    @property
-    def read_replica_db_instance_identifiers(self) -> List[str]:
-        return [replica for replica in self.db_instance.replicas]
 
 
 class DBSnapshotDTO:

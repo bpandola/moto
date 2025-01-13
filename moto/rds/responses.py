@@ -4,6 +4,7 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 from botocore.awsrequest import AWSPreparedRequest
 from werkzeug.wrappers import Request
 
+from moto import settings
 from moto.core.common_types import TYPE_RESPONSE
 from moto.core.responses import BaseResponse
 from moto.ec2.models import ec2_backends
@@ -61,7 +62,7 @@ class RDSResponse(BaseResponse):
         from motocore.parsers import QueryParser
         from motocore.serialize import QuerySerializer
         from motocore.utils import (
-            ValuePicker,
+            XFormedAttributePicker,
             get_service_model,
             xform_dict,
         )
@@ -79,12 +80,12 @@ class RDSResponse(BaseResponse):
         )
         self.parameters = xform_dict(parsed)
 
-        value_picker = ValuePicker(SERIALIZATION_ALIASES)
+        value_picker = XFormedAttributePicker(SERIALIZATION_ALIASES)
         self.serializer = QuerySerializer(
             self.operation_model,
             {"request-id": "request-id"},
             value_picker=value_picker,
-            pretty_print=True,
+            pretty_print=settings.PRETTIFY_RESPONSES,
         )
         try:
             response = self.call_action()
