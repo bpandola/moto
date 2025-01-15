@@ -368,6 +368,54 @@
   "Location": "eu-south-2a"
  },
  {
+  "InstanceType": "c8g.12xlarge",
+  "Location": "eu-south-2a"
+ },
+ {
+  "InstanceType": "c8g.16xlarge",
+  "Location": "eu-south-2a"
+ },
+ {
+  "InstanceType": "c8g.24xlarge",
+  "Location": "eu-south-2a"
+ },
+ {
+  "InstanceType": "c8g.2xlarge",
+  "Location": "eu-south-2a"
+ },
+ {
+  "InstanceType": "c8g.48xlarge",
+  "Location": "eu-south-2a"
+ },
+ {
+  "InstanceType": "c8g.4xlarge",
+  "Location": "eu-south-2a"
+ },
+ {
+  "InstanceType": "c8g.8xlarge",
+  "Location": "eu-south-2a"
+ },
+ {
+  "InstanceType": "c8g.large",
+  "Location": "eu-south-2a"
+ },
+ {
+  "InstanceType": "c8g.medium",
+  "Location": "eu-south-2a"
+ },
+ {
+  "InstanceType": "c8g.metal-24xl",
+  "Location": "eu-south-2a"
+ },
+ {
+  "InstanceType": "c8g.metal-48xl",
+  "Location": "eu-south-2a"
+ },
+ {
+  "InstanceType": "c8g.xlarge",
+  "Location": "eu-south-2a"
+ },
+ {
   "InstanceType": "g5g.16xlarge",
   "Location": "eu-south-2a"
  },
@@ -485,6 +533,30 @@
  },
  {
   "InstanceType": "i3en.xlarge",
+  "Location": "eu-south-2a"
+ },
+ {
+  "InstanceType": "im4gn.16xlarge",
+  "Location": "eu-south-2a"
+ },
+ {
+  "InstanceType": "im4gn.2xlarge",
+  "Location": "eu-south-2a"
+ },
+ {
+  "InstanceType": "im4gn.4xlarge",
+  "Location": "eu-south-2a"
+ },
+ {
+  "InstanceType": "im4gn.8xlarge",
+  "Location": "eu-south-2a"
+ },
+ {
+  "InstanceType": "im4gn.large",
+  "Location": "eu-south-2a"
+ },
+ {
+  "InstanceType": "im4gn.xlarge",
   "Location": "eu-south-2a"
  },
  {
@@ -1732,6 +1804,54 @@
   "Location": "eu-south-2b"
  },
  {
+  "InstanceType": "c8g.12xlarge",
+  "Location": "eu-south-2b"
+ },
+ {
+  "InstanceType": "c8g.16xlarge",
+  "Location": "eu-south-2b"
+ },
+ {
+  "InstanceType": "c8g.24xlarge",
+  "Location": "eu-south-2b"
+ },
+ {
+  "InstanceType": "c8g.2xlarge",
+  "Location": "eu-south-2b"
+ },
+ {
+  "InstanceType": "c8g.48xlarge",
+  "Location": "eu-south-2b"
+ },
+ {
+  "InstanceType": "c8g.4xlarge",
+  "Location": "eu-south-2b"
+ },
+ {
+  "InstanceType": "c8g.8xlarge",
+  "Location": "eu-south-2b"
+ },
+ {
+  "InstanceType": "c8g.large",
+  "Location": "eu-south-2b"
+ },
+ {
+  "InstanceType": "c8g.medium",
+  "Location": "eu-south-2b"
+ },
+ {
+  "InstanceType": "c8g.metal-24xl",
+  "Location": "eu-south-2b"
+ },
+ {
+  "InstanceType": "c8g.metal-48xl",
+  "Location": "eu-south-2b"
+ },
+ {
+  "InstanceType": "c8g.xlarge",
+  "Location": "eu-south-2b"
+ },
+ {
   "InstanceType": "g6.12xlarge",
   "Location": "eu-south-2b"
  },
@@ -1857,6 +1977,30 @@
  },
  {
   "InstanceType": "i3en.xlarge",
+  "Location": "eu-south-2b"
+ },
+ {
+  "InstanceType": "im4gn.16xlarge",
+  "Location": "eu-south-2b"
+ },
+ {
+  "InstanceType": "im4gn.2xlarge",
+  "Location": "eu-south-2b"
+ },
+ {
+  "InstanceType": "im4gn.4xlarge",
+  "Location": "eu-south-2b"
+ },
+ {
+  "InstanceType": "im4gn.8xlarge",
+  "Location": "eu-south-2b"
+ },
+ {
+  "InstanceType": "im4gn.large",
+  "Location": "eu-south-2b"
+ },
+ {
+  "InstanceType": "im4gn.xlarge",
   "Location": "eu-south-2b"
  },
  {
@@ -3068,6 +3212,54 @@
   "Location": "eu-south-2c"
  },
  {
+  "InstanceType": "c8g.12xlarge",
+  "Location": "eu-south-2c"
+ },
+ {
+  "InstanceType": "c8g.16xlarge",
+  "Location": "eu-south-2c"
+ },
+ {
+  "InstanceType": "c8g.24xlarge",
+  "Location": "eu-south-2c"
+ },
+ {
+  "InstanceType": "c8g.2xlarge",
+  "Location": "eu-south-2c"
+ },
+ {
+  "InstanceType": "c8g.48xlarge",
+  "Location": "eu-south-2c"
+ },
+ {
+  "InstanceType": "c8g.4xlarge",
+  "Location": "eu-south-2c"
+ },
+ {
+  "InstanceType": "c8g.8xlarge",
+  "Location": "eu-south-2c"
+ },
+ {
+  "InstanceType": "c8g.large",
+  "Location": "eu-south-2c"
+ },
+ {
+  "InstanceType": "c8g.medium",
+  "Location": "eu-south-2c"
+ },
+ {
+  "InstanceType": "c8g.metal-24xl",
+  "Location": "eu-south-2c"
+ },
+ {
+  "InstanceType": "c8g.metal-48xl",
+  "Location": "eu-south-2c"
+ },
+ {
+  "InstanceType": "c8g.xlarge",
+  "Location": "eu-south-2c"
+ },
+ {
   "InstanceType": "g6.12xlarge",
   "Location": "eu-south-2c"
  },
@@ -3193,6 +3385,30 @@
  },
  {
   "InstanceType": "i3en.xlarge",
+  "Location": "eu-south-2c"
+ },
+ {
+  "InstanceType": "im4gn.16xlarge",
+  "Location": "eu-south-2c"
+ },
+ {
+  "InstanceType": "im4gn.2xlarge",
+  "Location": "eu-south-2c"
+ },
+ {
+  "InstanceType": "im4gn.4xlarge",
+  "Location": "eu-south-2c"
+ },
+ {
+  "InstanceType": "im4gn.8xlarge",
+  "Location": "eu-south-2c"
+ },
+ {
+  "InstanceType": "im4gn.large",
+  "Location": "eu-south-2c"
+ },
+ {
+  "InstanceType": "im4gn.xlarge",
   "Location": "eu-south-2c"
  },
  {
