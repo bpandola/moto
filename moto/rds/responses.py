@@ -62,7 +62,7 @@ class RDSResponse(BaseResponse):
         from motocore.parsers import QueryParser
         from motocore.serialize import QuerySerializer
         from motocore.utils import (
-            XFormedAttributePicker,
+            ValuePicker,
             get_service_model,
             xform_dict,
         )
@@ -80,7 +80,7 @@ class RDSResponse(BaseResponse):
         )
         self.parameters = xform_dict(parsed)
 
-        value_picker = XFormedAttributePicker(SERIALIZATION_ALIASES)
+        value_picker = ValuePicker(SERIALIZATION_ALIASES)
         self.serializer = QuerySerializer(
             self.operation_model,
             {"request-id": "request-id"},
