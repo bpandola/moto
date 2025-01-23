@@ -127,9 +127,9 @@ class DBInstanceDTO:
 
     @property
     def db_parameter_groups(self) -> Any:
-        # this is hideous
         groups = self.db_instance.db_parameter_groups()
         for group in groups:
+            # this is hideous
             setattr(group, "ParameterApplyStatus", "in-sync")
         return groups
 
