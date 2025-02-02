@@ -25,11 +25,11 @@ from .viewmodels import (
 )
 
 
-def convert_request(request: AWSPreparedRequest) -> Request:
+def normalize_request(request: AWSPreparedRequest) -> Request:
     from urllib.parse import urlparse
 
     parsed_url = urlparse(request.url)
-    converted_request = Request.from_values(
+    normalized_request = Request.from_values(
         method=request.method,
         base_url=f"{parsed_url.scheme}://{parsed_url.netloc}",
         path=parsed_url.path,
@@ -37,7 +37,7 @@ def convert_request(request: AWSPreparedRequest) -> Request:
         data=request.body,
         headers=[(k, v) for k, v in request.headers.items()],
     )
-    return converted_request
+    return normalized_request
 
 
 class RDSResponse(BaseResponse):
@@ -58,7 +58,7 @@ class RDSResponse(BaseResponse):
         self.setup_class(request, full_url, headers)
 
         if isinstance(request, AWSPreparedRequest):
-            request = convert_request(request)
+            request = normalize_request(request)
         from motocore.parsers import QueryParser
         from motocore.serialize import QuerySerializer
         from motocore.utils import (

@@ -126,7 +126,7 @@ class DBInstanceDTO:
         return groups
 
     @property
-    def db_parameter_groups(self) -> Any:
+    def db_parameter_group_status_list(self) -> Any:
         groups = self.db_instance.db_parameter_groups()
         for group in groups:
             # this is hideous
