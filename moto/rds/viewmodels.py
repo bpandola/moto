@@ -16,73 +16,44 @@ from .models import (
     ProxyTargetGroup,
 )
 
-# TOTAL HACK
-# This is mainly used to alias the top-level parameters passed from the
-# RDS responses class to the Jinja template engine into something that
-# can be picked up by the Serializer using the Service Model.
-# For example: the create_db_instance method returns a `cluster` key
-# while the serializer is looking for `DBCluster` or `db_cluster`
-# These aliases are only necessary because we are still hacking the
-# template render method.  Once we fix up the response methods to use
-# the serializer, we can format the result dict as needed
+# We use this dict to alias AWS model attributes to Moto RDS model attributes
+# This is just temporary.  Eventually we will update the RDS model attributes
+# to match AWS.
 SERIALIZATION_ALIASES = {
-    "DBClusterSnapshotArn": "snapshot_arn",
-    "DBClusterSnapshotIdentifier": "snapshot_id",
-    "DBSnapshotArn": "snapshot_arn",
-    "DBSnapshotIdentifier": "snapshot_id",
-    # "DBSnapshots": "snapshots",
-    "DBSubnetGroup": "subnet_group",
-    # "DBSubnetGroupName": "subnet_name",
-    # "DBSubnetGroups": "subnet_groups",
-    "EventCategoriesList": "event_categories",
-    # "EventSubscription": "subscription",
-    # "EventSubscriptionsList": "subscriptions",
-    # "ExportTask": "task",
-    # "ExportTasks": "tasks",
-    # "GlobalCluster": "cluster",
-    # "GlobalClusters": "clusters",
-    # "OptionGroupsList": "option_groups",
-    # "Parameters": "db_parameter_group",  # Super fail in describe_db_cluster_parameters call
-    "ReadReplicaSourceDBInstanceIdentifier": "source_db_identifier",
-    "SourceIdsList": "source_ids",
-    "TagList": "tags",
-    # Also works to alias AWS model attributes to Moto RDS model attributes
-    # "DBSecurityGroupDescription": "description",
-    # "EventSubscriptionArn": "es_arn",
-    # "DBSubnetGroupDescription": "description",
-    # "DBParameterGroupName": "name",
-    "DBParameterGroupFamily": "family",
-    "CustSubscriptionId": "subscription_name",
-    "S3Bucket": "s3_bucket_name",
-    "EC2SecurityGroupId": "id",
-    "EC2SecurityGroupName": "name",
-    "EC2SubnetGroupOwnerId": "owner_id",
+    "CustSubscriptionId": ["subscription_name"],
+    "DatabaseName": ["db_name"],
+    "DbClusterResourceId": ["resource_id"],
+    "DBClusterSnapshotArn": ["snapshot_arn"],
+    "DBClusterSnapshotIdentifier": ["snapshot_id"],
+    "DBInstanceDTO": ["DBInstance"],
+    "DbInstancePort": ["port"],
+    "DBParameterGroupDTO": ["DBParameterGroup"],
+    "DBParameterGroupFamily": ["family"],
+    "DBProxyName": ["proxy_name"],
+    "DBSecurityGroupDTO": ["DBSecurityGroup"],
+    "DBSnapshotArn": ["snapshot_arn"],
+    "DBSnapshotDTO": ["DBSnapshot"],
+    "DBSnapshotIdentifier": ["snapshot_id"],
+    "DBSubnetGroup": ["subnet_group"],
+    "DBSubnetGroupName": ["subnet_name"],
+    "DBSubnetGroupDTO": ["DBSubnetGroup"],
+    "EC2SecurityGroupId": ["id"],
+    "EC2SecurityGroupName": ["name"],
+    "EC2SubnetGroupOwnerId": ["owner_id"],
+    "EventCategoriesList": ["event_categories"],
+    "HttpEndpointEnabled": ["enable_http_endpoint"],
     "IAMDatabaseAuthenticationEnabled": [
         "enable_iam_database_authentication",
         "iam_auth",
     ],
-    # "DBInstanceStatus": "status",
-    "DbInstancePort": "port",
-    "MultiAZ": "is_multi_az",
-    "HttpEndpointEnabled": "enable_http_endpoint",
-    "DatabaseName": "db_name",
-    "DbClusterResourceId": "resource_id",
-    "TargetGroupArn": "arn",
-    "DBProxyName": "proxy_name",
-    "TargetGroupName": "group_name",
-    # second one is for neptune
-    "DBClusterParameterGroup": ["parameter_group", "db_cluster_parameter_group_name"],
-    # "DBProxyArn": "arn",
-    # Alias our DTO classes so DBInstanceDTO can still be DBInstance..,
-    "DBSubnetGroupDTO": "DBSubnetGroup",
-    "DBParameterGroupDTO": "DBParameterGroup",
-    "DBInstanceDTO": "DBInstance",
-    "DBSnapshotDTO": "DBSnapshot",
-    "DBSecurityGroupDTO": "DBSecurityGroup",
-    # "DBProxyDTO": "DBProxy",
-    "OptionGroupDTO": "OptionGroup",
-    # Dotted attrs
-    "AllocatedStorage": "db_instance.allocated_storage",
+    "MultiAZ": ["is_multi_az"],
+    "OptionGroupDTO": ["OptionGroup"],
+    "ReadReplicaSourceDBInstanceIdentifier": ["source_db_identifier"],
+    "S3Bucket": ["s3_bucket_name"],
+    "SourceIdsList": ["source_ids"],
+    "TagList": ["tags"],
+    "TargetGroupArn": ["arn"],
+    "TargetGroupName": ["group_name"],
 }
 
 
@@ -99,11 +70,13 @@ class DBInstanceDTO:
     def __init__(self, instance: DBInstance) -> None:
         self.db_instance = instance
 
-    # def __getattribute__(self, item):
-    #     return super().__getattribute__(item)
-    #
-    # def __getattr__(self, item):
-    #     return super().__getattribute__(item)
+    def __getattribute__(self, name: str) -> Any:
+        try:
+            return super().__getattribute__(name)
+        except AttributeError:
+            pass
+        return self.db_instance.__getattribute__(name)
+
     @property
     def engine(self) -> Engine:
         return Engine(self.db_instance.engine, self.db_instance.engine_version)
@@ -314,6 +287,17 @@ class DBSnapshotDTO:
         self.db_snapshot = snapshot
         self.db_instance = snapshot.database
 
+    def __getattribute__(self, name: str) -> Any:
+        try:
+            return super().__getattribute__(name)
+        except AttributeError:
+            pass
+        try:
+            return self.db_snapshot.__getattribute__(name)
+        except AttributeError:
+            pass
+        return self.db_instance.__getattribute__(name)
+
     @property
     def dbi_resource_id(self) -> str:
         return self.db_instance.dbi_resource_id
@@ -321,10 +305,6 @@ class DBSnapshotDTO:
     @property
     def engine(self) -> str:
         return self.db_instance.engine
-
-    @property
-    def iam_database_authentication_enabled(self) -> bool:
-        return self.db_instance.enable_iam_database_authentication
 
 
 class GlobalClusterDTO:
@@ -376,6 +356,10 @@ class DBClusterDTO:
         secret_dict = self.cluster.master_user_secret()
         manage_master_user_password = self.cluster.manage_master_user_password
         return secret_dict if manage_master_user_password else None
+
+    @property
+    def db_cluster_parameter_group(self) -> str:
+        return self.cluster.parameter_group
 
     @property
     def status(self) -> str:

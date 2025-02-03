@@ -59,14 +59,9 @@ class RDSResponse(BaseResponse):
 
         if isinstance(request, AWSPreparedRequest):
             request = normalize_request(request)
-        from motocore.parsers import QueryParser
-        from motocore.serialize import QuerySerializer
-        from motocore.utils import (
-            ValuePicker,
-            get_service_model,
-            xform_dict,
-        )
 
+        from .serialize import QuerySerializer
+        from .utils import ValuePicker, get_service_model
         from .viewmodels import SERIALIZATION_ALIASES
 
         self.action = request.values["Action"]
@@ -74,11 +69,11 @@ class RDSResponse(BaseResponse):
         service_model = get_service_model(self.service_name)
         self.operation_model = service_model.operation_model(self.action)
 
-        parser = QueryParser()
-        parsed = parser.get_parameters(
-            {"query_params": request.values}, self.operation_model
-        )
-        self.parameters = xform_dict(parsed)
+        # parser = QueryParser()
+        # parsed = parser.get_parameters(
+        #     {"query_params": request.values}, self.operation_model
+        # )
+        # self.parameters = xform_dict(parsed)
 
         value_picker = ValuePicker(SERIALIZATION_ALIASES)
         self.serializer = QuerySerializer(
