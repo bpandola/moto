@@ -5,7 +5,7 @@ import datetime
 import re
 from collections import OrderedDict, namedtuple
 from enum import Enum
-from functools import cache
+from functools import lru_cache
 from typing import Any, Dict, List, Optional, Tuple
 
 from botocore import xform_name
@@ -393,7 +393,7 @@ def decode_orderable_db_instance(db: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-@cache
+@lru_cache()
 def get_service_model(service_name: str) -> ServiceModel:
     loader = create_loader()
     model = loader.load_service_model(service_name, "service-2")

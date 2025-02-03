@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Mapping, MutableMapping, Optional, Tuple, TypeAlias, Union
+from typing import Any, Mapping, MutableMapping, Optional, Tuple, Union
 
 import xmltodict
 from botocore.model import (
@@ -14,6 +14,7 @@ from botocore.model import (
     StructureShape,
 )
 from botocore.utils import parse_to_aware_datetime
+from typing_extensions import TypeAlias
 
 Serialized: TypeAlias = MutableMapping[str, Any]
 
