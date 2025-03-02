@@ -40,3 +40,10 @@ assert x == 456
 
 y: int = method_without_parentheses()
 assert y == 123
+
+
+def test_typing_extensions_not_installed_with_moto() -> None:
+    from importlib import util
+
+    spec = util.find_spec("typing_extensions")
+    assert spec is None, "typing_extensions should not be importable"

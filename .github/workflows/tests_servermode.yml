@@ -37,7 +37,7 @@ jobs:
         python -m pip install --upgrade pip
     - name: Install project dependencies
       run: |
-        pip install -r requirements-dev.txt
+        pip install -r requirements-tests.txt
     - name: Download Docker dependencies
       # This happens automatically during test execution
       # However, our tests can run concurrently

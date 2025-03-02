@@ -31,7 +31,7 @@ jobs:
         python -m pip install --upgrade pip
     - name: Install project dependencies
       run: |
-        pip install -r requirements-dev.txt
+        pip install -r requirements-tests.txt
         pip install pytest-cov
         pip install pytest-github-actions-annotate-failures
     - name: Download Docker dependencies
