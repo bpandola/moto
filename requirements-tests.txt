@@ -1,3 +1,5 @@
+-e .[all,server]
+
 coverage
 pycognito
 pytest
