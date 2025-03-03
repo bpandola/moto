@@ -19,7 +19,7 @@ from xmltodict import parse
 from moto.core.serialize import QuerySerializer
 
 
-def test_serialize_from_object():
+def test_serialize_from_object() -> None:
     model = {
         "metadata": {"protocol": "query", "apiVersion": "2014-01-01"},
         "documentation": "",
@@ -56,7 +56,7 @@ def test_serialize_from_object():
     assert serialized
 
 
-def test_datetime_with_microseconds():
+def test_datetime_with_microseconds() -> None:
     model = {
         "metadata": {"protocol": "query", "apiVersion": "2014-01-01"},
         "documentation": "",
@@ -97,7 +97,7 @@ def test_datetime_with_microseconds():
     assert time_str[-1] == "Z"
 
 
-def test_pretty_print_with_short_elements_and_list():
+def test_pretty_print_with_short_elements_and_list() -> None:
     model = {
         "metadata": {"protocol": "query", "apiVersion": "2014-01-01"},
         "documentation": "",

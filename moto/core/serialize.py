@@ -69,9 +69,8 @@ from botocore.model import (
     StructureShape,
 )
 from botocore.utils import is_json_value_header, parse_to_aware_datetime
-from typing_extensions import TypeAlias
 
-Serialized: TypeAlias = MutableMapping[str, Any]
+Serialized = MutableMapping[str, Any]
 
 
 class ResponseDict(TypedDict):
