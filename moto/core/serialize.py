@@ -240,12 +240,12 @@ class ResponseSerializer(ShapeHelpersMixin):
         self,
         operation_model: OperationModel,
         context: Optional[SerializationContext] = None,
+        pretty_print: Optional[bool] = False,
         value_picker: Any = None,
-        **kwargs: Mapping[str, Any],
     ) -> None:
         self.operation_model = operation_model
         self.context = context or SerializationContext()
-        self.pretty_print = kwargs.get("pretty_print", False)
+        self.pretty_print = pretty_print
         if value_picker is None:
             value_picker = self._default_value_picker
         self._value_picker = value_picker
@@ -281,9 +281,10 @@ class ResponseSerializer(ShapeHelpersMixin):
 
     def _serialize_result(self, resp: ResponseDict, result: Any) -> ResponseDict:
         output_shape = self.operation_model.output_shape
-        assert isinstance(output_shape, StructureShape)  # mypy hint
         serialized_result = self.MAP_TYPE()
-        self._serialize(serialized_result, result, output_shape, "")
+        if output_shape is not None:
+            assert isinstance(output_shape, StructureShape)  # mypy hint
+            self._serialize(serialized_result, result, output_shape, "")
         return self._serialized_result_to_response(
             resp, result, output_shape, serialized_result
         )
@@ -301,7 +302,7 @@ class ResponseSerializer(ShapeHelpersMixin):
         self,
         resp: ResponseDict,
         result: Any,
-        shape: StructureShape,
+        shape: Optional[StructureShape],
         serialized_result: MutableMapping[str, Any],
     ) -> ResponseDict:
         raise NotImplementedError("Must be implemented in subclass.")
@@ -456,7 +457,7 @@ class BaseJSONSerializer(ResponseSerializer):
         self,
         resp: ResponseDict,
         result: Any,
-        shape: StructureShape,
+        shape: Optional[StructureShape],
         serialized_result: MutableMapping[str, Any],
     ) -> ResponseDict:
         resp["body"] = self._serialize_body(serialized_result)
@@ -580,7 +581,7 @@ class BaseXMLSerializer(ResponseSerializer):
         self,
         resp: ResponseDict,
         result: Any,
-        shape: StructureShape,
+        shape: Optional[StructureShape],
         serialized_result: MutableMapping[str, Any],
     ) -> ResponseDict:
         result_key = f"{self.operation_model.name}Result"
@@ -642,7 +643,7 @@ class BaseRestSerializer(ResponseSerializer):
         self,
         resp: ResponseDict,
         result: Any,
-        shape: StructureShape,
+        shape: Optional[StructureShape],
         serialized_result: MutableMapping[str, Any],
     ) -> ResponseDict:
         if "payload" in serialized_result:
@@ -752,21 +753,20 @@ class QuerySerializer(BaseXMLSerializer):
         self,
         resp: ResponseDict,
         result: Any,
-        shape: StructureShape,
+        shape: Optional[StructureShape],
         serialized_result: MutableMapping[str, Any],
     ) -> ResponseDict:
         response_key = f"{self.operation_model.name}Response"
-        result_key = shape.serialization.get("resultWrapper", f"{shape.name}Result")
-        result_wrapper = {
-            response_key: {
-                result_key: serialized_result,
-                "ResponseMetadata": {
-                    "RequestId": self.context.request_id,
-                },
-            }
+        response_wrapper = {response_key: {}}
+        if shape is not None:
+            result_key = shape.serialization.get("resultWrapper", f"{shape.name}Result")
+            response_wrapper[response_key][result_key] = serialized_result
+        response_wrapper[response_key]["ResponseMetadata"] = {
+            "RequestId": self.context.request_id
         }
-        self._serialize_namespace_attribute(result_wrapper[response_key])
-        resp["body"] = self._serialize_body(result_wrapper)
+        self._serialize_namespace_attribute(response_wrapper[response_key])
+        resp["body"] = self._serialize_body(response_wrapper)
+        resp["headers"]["Content-Type"] = self.CONTENT_TYPE
         return resp
 
 
