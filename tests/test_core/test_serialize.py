@@ -1,3 +1,4 @@
+# mypy: ignore-errors
 """Additional tests for response serialization.
 
 While there are compliance tests in ``test_protocols.py``, where the majority
