@@ -4,6 +4,28 @@ from typing import Any, Dict, List, Optional, Tuple
 from jinja2 import DictLoader, Environment
 from werkzeug.exceptions import HTTPException
 
+
+class MotoCoreError(Exception):
+    """
+    The base exception class for Moto exceptions.
+
+    :ivar msg: The descriptive message associated with the error.
+    """
+
+    fmt = "An unspecified error occurred"
+    code: Optional[str] = "MotoError"
+    http_status_code: int = 400
+
+    def __init__(self, **kwargs: Any) -> None:
+        msg = self.fmt.format(**kwargs)
+        Exception.__init__(self, msg)
+        self.kwargs = kwargs
+        self.message = msg
+
+    # def __reduce__(self):
+    #     return _exception_from_packed_args, (self.__class__, None, self.kwargs)
+
+
 SINGLE_ERROR_RESPONSE = """<?xml version="1.0" encoding="UTF-8"?>
 <Error>
     <Code>{{error_type}}</Code>

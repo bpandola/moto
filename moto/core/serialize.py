@@ -59,6 +59,7 @@ from datetime import datetime
 from typing import Any, Mapping, MutableMapping, Optional, TypedDict, Union
 
 import xmltodict
+from botocore import xform_name
 from botocore.compat import formatdate
 from botocore.model import (
     ListShape,
@@ -451,6 +452,7 @@ class ResponseSerializer(ShapeHelpersMixin):
 
 
 class BaseJSONSerializer(ResponseSerializer):
+    CONTENT_TYPE = "application/json"
     DEFAULT_TIMESTAMP_FORMAT = "unixtimestamp"
 
     def _serialized_result_to_response(
@@ -461,6 +463,7 @@ class BaseJSONSerializer(ResponseSerializer):
         serialized_result: MutableMapping[str, Any],
     ) -> ResponseDict:
         resp["body"] = self._serialize_body(serialized_result)
+        resp["headers"]["Content-Type"] = self.CONTENT_TYPE
         return resp
 
     def _serialized_error_to_response(
@@ -477,6 +480,7 @@ class BaseJSONSerializer(ResponseSerializer):
         resp["status_code"] = status_code
         error_code = self._get_protocol_specific_error_code(shape.error_code)
         resp["headers"]["X-Amzn-Errortype"] = error_code
+        resp["headers"]["Content-Type"] = self.CONTENT_TYPE
         return resp
 
     def _get_protocol_specific_error_code(
@@ -697,13 +701,14 @@ class BaseRestSerializer(ResponseSerializer):
             "body": {},
             "headers": {},
         }
-        assert isinstance(output_shape, StructureShape)
-        self._serialize(serialized_result, result, output_shape, "")
-        payload_member = output_shape.serialization.get("payload")
-        if payload_member is not None:
-            payload_shape = output_shape.members[payload_member]
-            payload_value = self._get_value(result, payload_member, payload_shape)
-            self._serialize_payload(serialized_result, payload_value, payload_shape)
+        if output_shape is not None:
+            assert isinstance(output_shape, StructureShape)
+            self._serialize(serialized_result, result, output_shape, "")
+            payload_member = output_shape.serialization.get("payload")
+            if payload_member is not None:
+                payload_shape = output_shape.members[payload_member]
+                payload_value = self._get_value(result, payload_member, payload_shape)
+                self._serialize_payload(serialized_result, payload_value, payload_shape)
 
         return self._serialized_result_to_response(
             resp, result, output_shape, serialized_result
@@ -868,3 +873,29 @@ SERIALIZERS = {
     "rest-json": RestJSONSerializer,
     "rest-xml": RestXMLSerializer,
 }
+
+
+class XFormedAttributePicker:
+    def __init__(self, alias_dict: dict[str, list[str]]) -> None:
+        self.alias_dict = alias_dict
+        self._xform_cache = {}
+
+    def __call__(self, value: Any, key: str, shape: Shape) -> Any:
+        return self._get_value(value, key, shape)
+
+    def _get_value(self, value: Any, key: str, shape: Shape) -> Any:
+        new_value = None
+        possible_keys = [key, xform_name(key, _xform_cache=self._xform_cache)]
+        if hasattr(value, "__class__"):
+            class_name = value.__class__.__name__
+            if key.lower().startswith(class_name.lower()):
+                short_key = key[len(class_name) :]
+                possible_keys += [
+                    short_key,
+                    xform_name(short_key, _xform_cache=self._xform_cache),
+                ]
+        for key in possible_keys:
+            new_value = ResponseSerializer._default_value_picker(value, key, shape)
+            if new_value is not None:
+                break
+        return new_value

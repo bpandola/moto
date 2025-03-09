@@ -305,10 +305,12 @@ def test_describe_broker_unknown():
 
     with pytest.raises(ClientError) as exc:
         client.describe_broker(BrokerId="unknown")
-    err = exc.value.response["Error"]
-    assert err["Code"] == "NotFoundException"
+    resp = exc.value.response
+    assert resp["ResponseMetadata"]["HTTPStatusCode"] == 404
+    assert resp["ErrorAttribute"] == "broker-id"
+    assert resp["Error"]["Code"] == "NotFoundException"
     assert (
-        err["Message"]
+        resp["Error"]["Message"]
         == "Can't find requested broker [unknown]. Make sure your broker exists."
     )
 
