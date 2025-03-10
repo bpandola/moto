@@ -452,7 +452,6 @@ class ResponseSerializer(ShapeHelpersMixin):
 
 
 class BaseJSONSerializer(ResponseSerializer):
-    CONTENT_TYPE = "application/json"
     DEFAULT_TIMESTAMP_FORMAT = "unixtimestamp"
 
     def _serialized_result_to_response(
@@ -755,6 +754,7 @@ class RestXMLSerializer(BaseRestSerializer, BaseXMLSerializer):
 
 
 class RestJSONSerializer(BaseRestSerializer, BaseJSONSerializer):
+    CONTENT_TYPE = "application/json"
     REQUIRES_EMPTY_BODY = True
 
 
