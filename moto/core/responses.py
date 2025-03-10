@@ -30,7 +30,7 @@ from werkzeug.exceptions import HTTPException
 
 from moto import settings
 from moto.core.common_types import TYPE_IF_NONE, TYPE_RESPONSE
-from moto.core.exceptions import DryRunClientError, MotoCoreError
+from moto.core.exceptions import DryRunClientError, MotoServiceException
 from moto.core.serialize import (
     SerializationContext,
     XFormedAttributePicker,
@@ -586,7 +586,7 @@ class BaseResponse(_TemplateEnvironmentMixin, ActionAuthenticatorMixin):
         # get action from method and uri
         return self._get_action_from_method_and_request_uri(self.method, self.raw_path)
 
-    def serialized(self, response: ActionResult) -> TYPE_RESPONSE:
+    def serialized(self, action_result: ActionResult) -> TYPE_RESPONSE:
         from moto.core.serialize import SERIALIZERS
 
         service_model = get_service_model(self.service_name)
@@ -598,7 +598,7 @@ class BaseResponse(_TemplateEnvironmentMixin, ActionAuthenticatorMixin):
             pretty_print=settings.PRETTIFY_RESPONSES,
             value_picker=XFormedAttributePicker({}),
         )
-        serialized = serializer.serialize(response.result)
+        serialized = serializer.serialize(action_result.result)
         return serialized["status_code"], serialized["headers"], serialized["body"]  # type: ignore[return-value]
 
     def call_action(self) -> TYPE_RESPONSE:
@@ -624,7 +624,7 @@ class BaseResponse(_TemplateEnvironmentMixin, ActionAuthenticatorMixin):
             method = getattr(self, action)
             try:
                 response = method()
-            except MotoCoreError as e:
+            except MotoServiceException as e:
                 response = ActionResult(e)  # type: ignore[assignment]
             except HTTPException as http_error:
                 response_headers: Dict[str, Union[str, int]] = dict(

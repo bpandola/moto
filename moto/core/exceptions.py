@@ -5,25 +5,24 @@ from jinja2 import DictLoader, Environment
 from werkzeug.exceptions import HTTPException
 
 
-class MotoCoreError(Exception):
+class MotoServiceException(Exception):
     """
-    The base exception class for Moto exceptions.
-
-    :ivar msg: The descriptive message associated with the error.
+    The base class for Moto service exceptions.
     """
 
-    fmt = "An unspecified error occurred"
-    code: Optional[str] = "MotoError"
-    http_status_code: int = 400
+    code = "UnspecifiedError"
+    message = "An unspecified error occurred"
 
-    def __init__(self, **kwargs: Any) -> None:
-        msg = self.fmt.format(**kwargs)
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        if len(args) == 1:
+            msg = args[0]
+        else:
+            msg = self.message.format(**kwargs)
         Exception.__init__(self, msg)
-        self.kwargs = kwargs
         self.message = msg
 
-    # def __reduce__(self):
-    #     return _exception_from_packed_args, (self.__class__, None, self.kwargs)
+    def __str__(self) -> str:
+        return f"{self.code}: {self.message}"
 
 
 SINGLE_ERROR_RESPONSE = """<?xml version="1.0" encoding="UTF-8"?>

@@ -121,7 +121,7 @@ class SnapshotAttributesMixin:
         if common_values:
             raise InvalidParameterCombination(
                 "A value may not appear in both the add list and remove list. "
-                + f"{common_values}"
+                + f"{list(common_values)}"
             )
         add = self.attributes[attribute_name] + values_to_add
         new_attribute_values = [value for value in add if value not in values_to_remove]
@@ -1248,7 +1248,8 @@ class DBInstance(EventMixin, CloudFormationModel, RDSBaseModel):
         else:
             backend = rds_backends[self.account_id][self.region]
             if self.db_parameter_group_name not in backend.db_parameter_groups:
-                raise DBParameterGroupNotFoundError(self.db_parameter_group_name)
+                # raise DBParameterGroupNotFoundError(self.db_parameter_group_name)
+                return []
 
             return [backend.db_parameter_groups[self.db_parameter_group_name]]
 
@@ -2384,6 +2385,10 @@ class RDSBackend(BaseBackend):
                 db_kwargs.pop("new_db_instance_identifier")
             )
             self.databases[db_instance_identifier] = database
+        if "db_parameter_group_name" in db_kwargs:
+            db_parameter_group_name = db_kwargs["db_parameter_group_name"]
+            if db_parameter_group_name not in self.db_parameter_groups:
+                raise DBParameterGroupNotFoundError(db_parameter_group_name)
         preferred_backup_window = db_kwargs.get(
             "preferred_backup_window", database.preferred_backup_window
         )
