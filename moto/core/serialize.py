@@ -876,24 +876,24 @@ SERIALIZERS = {
 
 
 class XFormedAttributePicker:
-    def __init__(self, alias_dict: dict[str, list[str]]) -> None:
-        self.alias_dict = alias_dict
+    def __init__(self) -> None:
         self._xform_cache = {}
 
     def __call__(self, value: Any, key: str, shape: Shape) -> Any:
         return self._get_value(value, key, shape)
 
+    def xform_name(self, name: str) -> str:
+        return xform_name(name, _xform_cache=self._xform_cache)
+
     def _get_value(self, value: Any, key: str, shape: Shape) -> Any:
         new_value = None
-        possible_keys = [key, xform_name(key, _xform_cache=self._xform_cache)]
+        possible_keys = [key, self.xform_name(key)]
+        # If a class `Role` has an attribute named `arn`, that will work for a `RoleArn` key.
         if hasattr(value, "__class__"):
             class_name = value.__class__.__name__
             if key.lower().startswith(class_name.lower()):
                 short_key = key[len(class_name) :]
-                possible_keys += [
-                    short_key,
-                    xform_name(short_key, _xform_cache=self._xform_cache),
-                ]
+                possible_keys += [short_key, self.xform_name(short_key)]
         for key in possible_keys:
             new_value = ResponseSerializer._default_value_picker(value, key, shape)
             if new_value is not None:
