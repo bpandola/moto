@@ -30,7 +30,7 @@ from werkzeug.exceptions import HTTPException
 from moto import settings
 from moto.core.common_types import TYPE_IF_NONE, TYPE_RESPONSE
 from moto.core.exceptions import DryRunClientError, MotoServiceException
-from moto.core.serialize import XFormedAttributePicker
+from moto.core.serialize import SERIALIZERS, XFormedAttributePicker
 from moto.core.utils import (
     camelcase_to_underscores,
     get_service_model,
@@ -583,8 +583,6 @@ class BaseResponse(_TemplateEnvironmentMixin, ActionAuthenticatorMixin):
         return self._get_action_from_method_and_request_uri(self.method, self.raw_path)
 
     def serialized(self, action_result: ActionResult) -> TYPE_RESPONSE:
-        from moto.core.serialize import SERIALIZERS
-
         service_model = get_service_model(self.service_name)
         operation_model = service_model.operation_model(self._get_action())
         serializer_cls = SERIALIZERS[service_model.protocol]
