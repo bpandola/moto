@@ -19,7 +19,6 @@ from typing import (
     Union,
 )
 from urllib.parse import parse_qs, parse_qsl, urlparse
-from uuid import uuid4
 from xml.dom.minidom import parseString as parseXML
 
 import boto3
@@ -31,10 +30,7 @@ from werkzeug.exceptions import HTTPException
 from moto import settings
 from moto.core.common_types import TYPE_IF_NONE, TYPE_RESPONSE
 from moto.core.exceptions import DryRunClientError, MotoServiceException
-from moto.core.serialize import (
-    SerializationContext,
-    XFormedAttributePicker,
-)
+from moto.core.serialize import XFormedAttributePicker
 from moto.core.utils import (
     camelcase_to_underscores,
     get_service_model,
@@ -594,9 +590,8 @@ class BaseResponse(_TemplateEnvironmentMixin, ActionAuthenticatorMixin):
         serializer_cls = SERIALIZERS[service_model.protocol]
         serializer = serializer_cls(
             operation_model=operation_model,
-            context=SerializationContext(request_id=str(uuid4())),
             pretty_print=settings.PRETTIFY_RESPONSES,
-            value_picker=XFormedAttributePicker({}),
+            value_picker=XFormedAttributePicker(),
         )
         serialized = serializer.serialize(action_result.result)
         return serialized["status_code"], serialized["headers"], serialized["body"]  # type: ignore[return-value]
