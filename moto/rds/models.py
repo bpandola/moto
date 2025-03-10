@@ -1245,13 +1245,8 @@ class DBInstance(EventMixin, CloudFormationModel, RDSBaseModel):
             )
             self.backend.db_parameter_groups[db_parameter_group_name] = default_group
             return [default_group]
-        else:
-            backend = rds_backends[self.account_id][self.region]
-            if self.db_parameter_group_name not in backend.db_parameter_groups:
-                # raise DBParameterGroupNotFoundError(self.db_parameter_group_name)
-                return []
 
-            return [backend.db_parameter_groups[self.db_parameter_group_name]]
+        return [self.backend.db_parameter_groups[self.db_parameter_group_name]]
 
     def is_default_parameter_group(self, param_group_name: str) -> bool:
         return param_group_name.startswith(f"default.{self.engine.lower()}")  # type: ignore
