@@ -893,7 +893,8 @@ class XFormedAttributePicker:
             class_name = value.__class__.__name__
             if key.lower().startswith(class_name.lower()):
                 short_key = key[len(class_name) :]
-                possible_keys += [short_key, self.xform_name(short_key)]
+                if short_key:  # Will be empty string if class name same as key
+                    possible_keys += [short_key, self.xform_name(short_key)]
         for key in possible_keys:
             new_value = ResponseSerializer._default_value_picker(value, key, shape)
             if new_value is not None:
