@@ -17,6 +17,10 @@ class TestMotoServiceException:
         exc = FormattedException(resource_type="DBCluster", resource_id="cluster-id")
         assert exc.message == "The DBCluster resource cluster-id was not found!"
 
-    def test_overridden_exception_message(self) -> None:
+    def test_override_exception_message(self) -> None:
         exc = TestMotoServiceException.TestException("Override message")
         assert str(exc) == "ExceptionCode: Override message"
+
+    def test_override_exception_message_and_code(self) -> None:
+        exc = TestMotoServiceException.TestException("OverrideCode", "Override message")
+        assert str(exc) == "OverrideCode: Override message"

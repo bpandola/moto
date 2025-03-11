@@ -16,6 +16,9 @@ class MotoServiceException(Exception):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         if len(args) == 1:
             msg = args[0]
+        elif len(args) == 2:
+            self.code = args[0]
+            msg = args[1]
         else:
             msg = self.message.format(**kwargs)
         Exception.__init__(self, msg)
