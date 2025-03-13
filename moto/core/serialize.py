@@ -876,6 +876,21 @@ SERIALIZERS = {
 
 
 class XFormedAttributePicker:
+    """Can be injected into a ResponseSerializer to aid in plucking AWS model
+    attributes specified in `camelCase` or `PascalCase` from Python objects
+    with standard `snake_case` attribute names.
+
+    For a model attribute named `DBInstanceIdentifier`, this class will check
+    for the following attributes on the provided object:
+       * `DBInstanceIdentifier`
+       * `db_instance_identifier`
+    If the provided object is a class named `DBInstance`, this class will also
+    check for the following attribute on the provided object:
+       * `identifier`
+
+    Uses ``botocore.xform_name`` to translate the attribute name.
+    """
+
     def __init__(self) -> None:
         self._xform_cache = {}
 
@@ -894,7 +909,7 @@ class XFormedAttributePicker:
             if key.lower().startswith(class_name.lower()):
                 short_key = key[len(class_name) :]
                 if short_key:  # Will be empty string if class name same as key
-                    possible_keys += [short_key, self.xform_name(short_key)]
+                    possible_keys.append(self.xform_name(short_key))
         for key in possible_keys:
             new_value = ResponseSerializer._default_value_picker(value, key, shape)
             if new_value is not None:

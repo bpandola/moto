@@ -155,10 +155,10 @@ class TestXFormedAttributePicker:
 
     def test_short_key(self):
         class Role:
-            id = "role_id"
+            id = "unique-identifier"
 
         value = self.picker(Role(), "RoleId", None)
-        assert value == "role_id"
+        assert value == "unique-identifier"
 
     def test_transformed_key(self):
         class DBInstance:
