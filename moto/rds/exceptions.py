@@ -1,9 +1,9 @@
 from typing import Optional
 
-from moto.core.exceptions import MotoServiceException
+from moto.core.exceptions import ServiceException
 
 
-class RDSClientError(MotoServiceException):
+class RDSClientError(ServiceException):
     def __init__(self, code: str, message: str):
         super().__init__(message)
         self.code = code

@@ -1,7 +1,7 @@
-from moto.core.exceptions import MotoServiceException
+from moto.core.exceptions import ServiceException
 
 
-class LifecyclePolicyNotFoundException(MotoServiceException):
+class LifecyclePolicyNotFoundException(ServiceException):
     code = "LifecyclePolicyNotFoundException"
 
     def __init__(self, repository_name: str, registry_id: str):
@@ -13,20 +13,22 @@ class LifecyclePolicyNotFoundException(MotoServiceException):
         super().__init__(message)
 
 
-class LimitExceededException(MotoServiceException):
+class LimitExceededException(ServiceException):
     code = "LimitExceededException"
     message = "The scan quota per image has been exceeded. Wait and try again."
 
 
-class RegistryPolicyNotFoundException(MotoServiceException):
+class RegistryPolicyNotFoundException(ServiceException):
     code = "RegistryPolicyNotFoundException"
-    message = "Registry policy does not exist in the registry with id '{registry_id}'"
 
     def __init__(self, registry_id: str):
-        super().__init__(registry_id=registry_id)
+        message = (
+            f"Registry policy does not exist in the registry with id '{registry_id}'"
+        )
+        super().__init__(message)
 
 
-class RepositoryAlreadyExistsException(MotoServiceException):
+class RepositoryAlreadyExistsException(ServiceException):
     code = "RepositoryAlreadyExistsException"
 
     def __init__(self, repository_name: str, registry_id: str):
@@ -37,7 +39,7 @@ class RepositoryAlreadyExistsException(MotoServiceException):
         super().__init__(message)
 
 
-class RepositoryNotEmptyException(MotoServiceException):
+class RepositoryNotEmptyException(ServiceException):
     code = "RepositoryNotEmptyException"
 
     def __init__(self, repository_name: str, registry_id: str):
@@ -49,7 +51,7 @@ class RepositoryNotEmptyException(MotoServiceException):
         super().__init__(message)
 
 
-class RepositoryNotFoundException(MotoServiceException):
+class RepositoryNotFoundException(ServiceException):
     code = "RepositoryNotFoundException"
 
     def __init__(self, repository_name: str, registry_id: str):
@@ -60,7 +62,7 @@ class RepositoryNotFoundException(MotoServiceException):
         super().__init__(message)
 
 
-class RepositoryPolicyNotFoundException(MotoServiceException):
+class RepositoryPolicyNotFoundException(ServiceException):
     code = "RepositoryPolicyNotFoundException"
 
     def __init__(self, repository_name: str, registry_id: str):
@@ -72,7 +74,7 @@ class RepositoryPolicyNotFoundException(MotoServiceException):
         super().__init__(message)
 
 
-class ImageNotFoundException(MotoServiceException):
+class ImageNotFoundException(ServiceException):
     code = "ImageNotFoundException"
 
     def __init__(self, image_id: str, repository_name: str, registry_id: str):
@@ -84,7 +86,7 @@ class ImageNotFoundException(MotoServiceException):
         super().__init__(message)
 
 
-class ImageAlreadyExistsException(MotoServiceException):
+class ImageAlreadyExistsException(ServiceException):
     code = "ImageAlreadyExistsException"
 
     def __init__(
@@ -102,11 +104,11 @@ class ImageAlreadyExistsException(MotoServiceException):
         super().__init__(message)
 
 
-class InvalidParameterException(MotoServiceException):
+class InvalidParameterException(ServiceException):
     code = "InvalidParameterException"
 
 
-class ScanNotFoundException(MotoServiceException):
+class ScanNotFoundException(ServiceException):
     code = "ScanNotFoundException"
 
     def __init__(self, image_id: str, repository_name: str, registry_id: str):
@@ -118,5 +120,5 @@ class ScanNotFoundException(MotoServiceException):
         super().__init__(message)
 
 
-class ValidationException(MotoServiceException):
+class ValidationException(ServiceException):
     code = "ValidationException"

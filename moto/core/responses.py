@@ -29,7 +29,7 @@ from werkzeug.exceptions import HTTPException
 
 from moto import settings
 from moto.core.common_types import TYPE_IF_NONE, TYPE_RESPONSE
-from moto.core.exceptions import DryRunClientError, MotoServiceException
+from moto.core.exceptions import DryRunClientError, ServiceException
 from moto.core.serialize import SERIALIZERS, XFormedAttributePicker
 from moto.core.utils import (
     camelcase_to_underscores,
@@ -617,7 +617,7 @@ class BaseResponse(_TemplateEnvironmentMixin, ActionAuthenticatorMixin):
             method = getattr(self, action)
             try:
                 response = method()
-            except MotoServiceException as e:
+            except ServiceException as e:
                 response = ActionResult(e)  # type: ignore[assignment]
             except HTTPException as http_error:
                 response_headers: Dict[str, Union[str, int]] = dict(
