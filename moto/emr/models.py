@@ -1011,9 +1011,6 @@ class ElasticMapReduceBackend(BaseBackend):
             groups = [
                 g for g in groups if g.instance_group.role in instance_group_types
             ]
-        # for g in groups:
-        #     g.details = self.ec2_backend.get_instance(g.ec2_instance_id)  # type: ignore
-        #     g.details.public_dns_name = g.details.public_dns
         return groups[start_idx : start_idx + max_items], marker
 
     def list_steps(
