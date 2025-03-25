@@ -100,7 +100,7 @@ class Instance(BaseModel):
         return ebs_volumes
 
     @property
-    def status(self) -> dict[str, Any]:
+    def status(self) -> dict[str, Any]:  # type: ignore[misc]
         status_dict = {
             "State": self.instance_group.state,
             "StateChangeReason": {
@@ -128,7 +128,7 @@ class InstanceGroup(CloudFormationModel):
         bid_price: Optional[str] = None,
         ebs_configuration: Optional[Dict[str, Any]] = None,
         auto_scaling_policy: Optional[Dict[str, Any]] = None,
-    ):
+    ) -> None:
         self.id = instance_group_id or random_instance_group_id()
         self.cluster_id = cluster_id
 
@@ -148,17 +148,17 @@ class InstanceGroup(CloudFormationModel):
         self.instance_type = instance_type
         self.ebs_configuration = ebs_configuration
         self.auto_scaling_policy = auto_scaling_policy
-        self.creation_date_time = utcnow()
-        self.start_date_time = utcnow()
-        self.ready_date_time = utcnow()
-        self.end_date_time = None
-        self.state = "RUNNING"
+        self.creation_date_time: datetime = utcnow()
+        self.start_date_time: datetime = utcnow()
+        self.ready_date_time: datetime = utcnow()
+        self.end_date_time: Optional[datetime] = None
+        self.state: str = "RUNNING"
 
     def set_instance_count(self, instance_count: int) -> None:
         self.num_instances = instance_count
 
     @property
-    def status(self) -> dict[str, Any]:
+    def status(self) -> dict[str, Any]:  # type: ignore[misc]
         status_dict = {
             "State": self.state,
             "StateChangeReason": {
@@ -174,9 +174,9 @@ class InstanceGroup(CloudFormationModel):
         return status_dict
 
     @property
-    def ebs_block_devices(self) -> list[dict[str, Any]]:
+    def ebs_block_devices(self) -> list[dict[str, Any]]:  # type: ignore[misc]
         ebs_block_devices = []
-        try:
+        if self.ebs_configuration is not None:
             for ebs_block_device in self.ebs_configuration.get(
                 "ebs_block_device_configs", []
             ):
@@ -191,8 +191,6 @@ class InstanceGroup(CloudFormationModel):
                         "Device": f"/dev/sd{i}",
                     }
                     ebs_block_devices.append(member)
-        except AttributeError:
-            pass
         return ebs_block_devices
 
     @property
@@ -307,7 +305,7 @@ class Step(BaseModel):
         self.state = state
 
     @property
-    def config(self) -> dict[str, Any]:
+    def config(self) -> dict[str, Any]:  # type: ignore[misc]
         config = {
             "ActionOnFailure": self.action_on_failure,
             "HadoopJarStep": {
@@ -325,7 +323,7 @@ class Step(BaseModel):
         return config
 
     @property
-    def execution_status_detail(self) -> dict[str, Any]:
+    def execution_status_detail(self) -> dict[str, Any]:  # type: ignore[misc]
         status_dict = {
             "CreationDateTime": self.creation_date_time,
             "StartDateTime": self.start_date_time,
@@ -337,7 +335,7 @@ class Step(BaseModel):
         return status_dict
 
     @property
-    def status(self) -> dict[str, Any]:
+    def status(self) -> dict[str, Any]:  # type: ignore[misc]
         status_dict = {
             "State": self.state,
             "StateChangeReason": {
@@ -508,7 +506,7 @@ class Cluster(CloudFormationModel):
         return f"arn:{get_partition(self.emr_backend.region_name)}:elasticmapreduce:{self.emr_backend.region_name}:{self.emr_backend.account_id}:cluster/{self.id}"
 
     @property
-    def ami_version(self) -> str:
+    def ami_version(self) -> str | None:
         return self.running_ami_version
 
     @property
@@ -516,7 +514,7 @@ class Cluster(CloudFormationModel):
         return not self.keep_job_flow_alive_when_no_steps
 
     @property
-    def bootstrap_action_detail_list(self) -> list[dict[str, Any]]:
+    def bootstrap_action_detail_list(self) -> list[dict[str, Any]]:  # type: ignore[misc]
         details = []
         for bootstrap_action in self.bootstrap_actions:
             member = {
@@ -536,7 +534,7 @@ class Cluster(CloudFormationModel):
         return Ec2InstanceAttributes(self)
 
     @property
-    def job_flow_instances_detail(self) -> dict[str, Any]:
+    def job_flow_instances_detail(self) -> dict[str, Any]:  # type: ignore[misc]
         instances_detail = {
             "Ec2KeyName": self.ec2_key_name,
             "Ec2SubnetId": self.ec2_subnet_id,
@@ -555,7 +553,7 @@ class Cluster(CloudFormationModel):
         return instances_detail
 
     @property
-    def execution_status_detail(self) -> dict[str, Any]:
+    def execution_status_detail(self) -> dict[str, Any]:  # type: ignore[misc]
         status_dict = {
             "State": self.state,
             "CreationDateTime": self.creation_datetime,
@@ -580,7 +578,7 @@ class Cluster(CloudFormationModel):
         return "ec2-184-0-0-1.us-west-1.compute.amazonaws.com"
 
     @property
-    def status(self) -> dict[str, Any]:
+    def status(self) -> dict[str, Any]:  # type: ignore[misc]
         status_dict = {
             "State": self.state,
             "StateChangeReason": {
