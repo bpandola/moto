@@ -936,8 +936,9 @@ class XFormedAttributePicker:
         new_value = None
         possible_keys = []
         # If a structure or list shape has a specific name, check for it.
-        if shape.name != key and shape.type_name in ["list", "structure"]:
-            possible_keys += [shape.name, self.xform_name(shape.name)]
+        if shape is not None:
+            if shape.name != key and shape.type_name in ["list", "structure"]:
+                possible_keys += [shape.name, self.xform_name(shape.name)]
         # Key and xformed key.
         possible_keys += [key, self.xform_name(key)]
         # If a class `Role` has an attribute named `arn`, that will work for a `RoleArn` key.
