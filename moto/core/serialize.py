@@ -450,6 +450,22 @@ class ResponseSerializer(ShapeHelpersMixin):
         blob_value = self._base64(value)
         self._default_serialize(serialized, blob_value, shape, key)
 
+    def _serialize_type_integer(
+        self, serialized: Serialized, value: Any, shape: Shape, key: str
+    ) -> None:
+        integer_value = int(value)
+        self._default_serialize(serialized, integer_value, shape, key)
+
+    _serialize_type_long = _serialize_type_integer
+
+    def _serialize_type_float(
+        self, serialized: Serialized, value: Any, shape: Shape, key: str
+    ) -> None:
+        integer_value = float(value)
+        self._default_serialize(serialized, integer_value, shape, key)
+
+    _serialize_type_double = _serialize_type_float
+
 
 class BaseJSONSerializer(ResponseSerializer):
     APPLICATION_AMZ_JSON = "application/x-amz-json-{version}"
@@ -918,7 +934,12 @@ class XFormedAttributePicker:
 
     def _get_value(self, value: Any, key: str, shape: Shape) -> Any:
         new_value = None
-        possible_keys = [key, self.xform_name(key)]
+        possible_keys = []
+        # If a structure or list shape has a specific name, check for it.
+        if shape.name != key and shape.type_name in ["list", "structure"]:
+            possible_keys += [shape.name, self.xform_name(shape.name)]
+        # Key and xformed key.
+        possible_keys += [key, self.xform_name(key)]
         # If a class `Role` has an attribute named `arn`, that will work for a `RoleArn` key.
         if hasattr(value, "__class__"):
             class_name = value.__class__.__name__
