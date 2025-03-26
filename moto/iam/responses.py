@@ -1,6 +1,6 @@
 from xml.sax.saxutils import escape
 
-from moto.core.responses import BaseResponse
+from moto.core.responses import ActionResult, BaseResponse
 
 from .models import IAMBackend, User, iam_backends
 
@@ -18,7 +18,7 @@ class IamResponse(BaseResponse):
         role_name = self._get_param("RoleName")
         self.backend.attach_role_policy(policy_arn, role_name)
         template = self.response_template(ATTACH_ROLE_POLICY_TEMPLATE)
-        return template.render()
+        return ActionResult({})
 
     def detach_role_policy(self) -> str:
         role_name = self._get_param("RoleName")
@@ -32,28 +32,28 @@ class IamResponse(BaseResponse):
         group_name = self._get_param("GroupName")
         self.backend.attach_group_policy(policy_arn, group_name)
         template = self.response_template(ATTACH_GROUP_POLICY_TEMPLATE)
-        return template.render()
+        return ActionResult({})
 
     def detach_group_policy(self) -> str:
         policy_arn = self._get_param("PolicyArn")
         group_name = self._get_param("GroupName")
         self.backend.detach_group_policy(policy_arn, group_name)
         template = self.response_template(DETACH_GROUP_POLICY_TEMPLATE)
-        return template.render()
+        return ActionResult({})
 
     def attach_user_policy(self) -> str:
         policy_arn = self._get_param("PolicyArn")
         user_name = self._get_param("UserName")
         self.backend.attach_user_policy(policy_arn, user_name)
         template = self.response_template(ATTACH_USER_POLICY_TEMPLATE)
-        return template.render()
+        return ActionResult({})
 
     def detach_user_policy(self) -> str:
         policy_arn = self._get_param("PolicyArn")
         user_name = self._get_param("UserName")
         self.backend.detach_user_policy(policy_arn, user_name)
         template = self.response_template(DETACH_USER_POLICY_TEMPLATE)
-        return template.render()
+        return ActionResult({})
 
     def create_policy(self) -> str:
         description = self._get_param("Description")
@@ -188,7 +188,7 @@ class IamResponse(BaseResponse):
         version_id = self._get_param("VersionId")
         self.backend.set_default_policy_version(policy_arn, version_id)
         template = self.response_template(SET_DEFAULT_POLICY_VERSION_TEMPLATE)
-        return template.render()
+        return ActionResult({})
 
     def create_role(self) -> str:
         role_name = self._get_param("RoleName")
@@ -334,7 +334,7 @@ class IamResponse(BaseResponse):
         self.backend.tag_policy(policy_arn, tags)
 
         template = self.response_template(TAG_POLICY_TEMPLATE)
-        return template.render()
+        return ActionResult({})
 
     def untag_policy(self) -> str:
         policy_arn = self._get_param("PolicyArn")
@@ -343,7 +343,7 @@ class IamResponse(BaseResponse):
         self.backend.untag_policy(policy_arn, tag_keys)
 
         template = self.response_template(UNTAG_POLICY_TEMPLATE)
-        return template.render()
+        return ActionResult({})
 
     def delete_policy_version(self) -> str:
         policy_arn = self._get_param("PolicyArn")
@@ -369,7 +369,7 @@ class IamResponse(BaseResponse):
 
         self.backend.delete_instance_profile(profile_name)
         template = self.response_template(DELETE_INSTANCE_PROFILE_TEMPLATE)
-        return template.render()
+        return ActionResult({})
 
     def get_instance_profile(self) -> str:
         profile_name = self._get_param("InstanceProfileName")
@@ -384,7 +384,7 @@ class IamResponse(BaseResponse):
 
         self.backend.add_role_to_instance_profile(profile_name, role_name)
         template = self.response_template(ADD_ROLE_TO_INSTANCE_PROFILE_TEMPLATE)
-        return template.render()
+        return ActionResult({})
 
     def remove_role_from_instance_profile(self) -> str:
         profile_name = self._get_param("InstanceProfileName")
@@ -392,7 +392,7 @@ class IamResponse(BaseResponse):
 
         self.backend.remove_role_from_instance_profile(profile_name, role_name)
         template = self.response_template(REMOVE_ROLE_FROM_INSTANCE_PROFILE_TEMPLATE)
-        return template.render()
+        return ActionResult({})
 
     def list_roles(self) -> str:
         path_prefix = self._get_param("PathPrefix", "/")
@@ -730,7 +730,7 @@ class IamResponse(BaseResponse):
 
         self.backend.update_ssh_public_key(user_name, ssh_public_key_id, status)
         template = self.response_template(UPDATE_SSH_PUBLIC_KEY_TEMPLATE)
-        return template.render()
+        return ActionResult({})
 
     def delete_ssh_public_key(self) -> str:
         user_name = self._get_param("UserName")
@@ -738,7 +738,7 @@ class IamResponse(BaseResponse):
 
         self.backend.delete_ssh_public_key(user_name, ssh_public_key_id)
         template = self.response_template(DELETE_SSH_PUBLIC_KEY_TEMPLATE)
-        return template.render()
+        return ActionResult({})
 
     def deactivate_mfa_device(self) -> str:
         user_name = self._get_param("UserName")
@@ -783,7 +783,7 @@ class IamResponse(BaseResponse):
         self.backend.delete_virtual_mfa_device(serial_number)
 
         template = self.response_template(DELETE_VIRTUAL_MFA_DEVICE_TEMPLATE)
-        return template.render()
+        return ActionResult({})
 
     def list_virtual_mfa_devices(self) -> str:
         assignment_status = self._get_param("AssignmentStatus", "Any")
@@ -837,12 +837,12 @@ class IamResponse(BaseResponse):
         alias = self._get_param("AccountAlias")
         self.backend.create_account_alias(alias)
         template = self.response_template(CREATE_ACCOUNT_ALIAS_TEMPLATE)
-        return template.render()
+        return ActionResult({})
 
     def delete_account_alias(self) -> str:
         self.backend.delete_account_alias()
         template = self.response_template(DELETE_ACCOUNT_ALIAS_TEMPLATE)
-        return template.render()
+        return ActionResult({})
 
     def get_account_authorization_details(self) -> str:
         filter_param = self._get_multi_param("Filter.member")
@@ -889,7 +889,7 @@ class IamResponse(BaseResponse):
         self.backend.delete_saml_provider(saml_provider_arn)
 
         template = self.response_template(DELETE_SAML_PROVIDER_TEMPLATE)
-        return template.render()
+        return ActionResult({})
 
     def list_saml_providers(self) -> str:
         saml_providers = self.backend.list_saml_providers()
@@ -919,7 +919,7 @@ class IamResponse(BaseResponse):
 
         self.backend.update_signing_certificate(user_name, cert_id, status)
         template = self.response_template(UPDATE_SIGNING_CERTIFICATE_TEMPLATE)
-        return template.render()
+        return ActionResult({})
 
     def delete_signing_certificate(self) -> str:
         user_name = self._get_param("UserName")
@@ -927,7 +927,7 @@ class IamResponse(BaseResponse):
 
         self.backend.delete_signing_certificate(user_name, cert_id)
         template = self.response_template(DELETE_SIGNING_CERTIFICATE_TEMPLATE)
-        return template.render()
+        return ActionResult({})
 
     def list_signing_certificates(self) -> str:
         user_name = self._get_param("UserName")
@@ -953,7 +953,7 @@ class IamResponse(BaseResponse):
         self.backend.tag_role(role_name, tags)
 
         template = self.response_template(TAG_ROLE_TEMPLATE)
-        return template.render()
+        return ActionResult({})
 
     def untag_role(self) -> str:
         role_name = self._get_param("RoleName")
@@ -962,7 +962,7 @@ class IamResponse(BaseResponse):
         self.backend.untag_role(role_name, tag_keys)
 
         template = self.response_template(UNTAG_ROLE_TEMPLATE)
-        return template.render()
+        return ActionResult({})
 
     def create_open_id_connect_provider(self) -> str:
         open_id_provider_url = self._get_param("Url")
@@ -986,7 +986,7 @@ class IamResponse(BaseResponse):
         )
 
         template = self.response_template(UPDATE_OPEN_ID_CONNECT_PROVIDER_THUMBPRINT)
-        return template.render()
+        return ActionResult({})
 
     def tag_open_id_connect_provider(self) -> str:
         open_id_provider_arn = self._get_param("OpenIDConnectProviderArn")
@@ -995,7 +995,7 @@ class IamResponse(BaseResponse):
         self.backend.tag_open_id_connect_provider(open_id_provider_arn, tags)
 
         template = self.response_template(TAG_OPEN_ID_CONNECT_PROVIDER)
-        return template.render()
+        return ActionResult({})
 
     def untag_open_id_connect_provider(self) -> str:
         open_id_provider_arn = self._get_param("OpenIDConnectProviderArn")
@@ -1004,7 +1004,7 @@ class IamResponse(BaseResponse):
         self.backend.untag_open_id_connect_provider(open_id_provider_arn, tag_keys)
 
         template = self.response_template(UNTAG_OPEN_ID_CONNECT_PROVIDER)
-        return template.render()
+        return ActionResult({})
 
     def list_open_id_connect_provider_tags(self) -> str:
         open_id_provider_arn = self._get_param("OpenIDConnectProviderArn")
@@ -1022,7 +1022,7 @@ class IamResponse(BaseResponse):
         self.backend.delete_open_id_connect_provider(open_id_provider_arn)
 
         template = self.response_template(DELETE_OPEN_ID_CONNECT_PROVIDER_TEMPLATE)
-        return template.render()
+        return ActionResult({})
 
     def get_open_id_connect_provider(self) -> str:
         open_id_provider_arn = self._get_param("OpenIDConnectProviderArn")
@@ -1070,7 +1070,7 @@ class IamResponse(BaseResponse):
         )
 
         template = self.response_template(UPDATE_ACCOUNT_PASSWORD_POLICY_TEMPLATE)
-        return template.render()
+        return ActionResult({})
 
     def get_account_password_policy(self) -> str:
         account_password_policy = self.backend.get_account_password_policy()
@@ -1082,7 +1082,7 @@ class IamResponse(BaseResponse):
         self.backend.delete_account_password_policy()
 
         template = self.response_template(DELETE_ACCOUNT_PASSWORD_POLICY_TEMPLATE)
-        return template.render()
+        return ActionResult({})
 
     def get_account_summary(self) -> str:
         account_summary = self.backend.get_account_summary()
@@ -1097,7 +1097,7 @@ class IamResponse(BaseResponse):
         self.backend.tag_user(name, tags)
 
         template = self.response_template(TAG_USER_TEMPLATE)
-        return template.render()
+        return ActionResult({})
 
     def untag_user(self) -> str:
         name = self._get_param("UserName")
@@ -1106,7 +1106,7 @@ class IamResponse(BaseResponse):
         self.backend.untag_user(name, tag_keys)
 
         template = self.response_template(UNTAG_USER_TEMPLATE)
-        return template.render()
+        return ActionResult({})
 
     def create_service_linked_role(self) -> str:
         service_name = self._get_param("AWSServiceName")
@@ -1145,7 +1145,7 @@ class IamResponse(BaseResponse):
             tags=tags,
         )
         template = self.response_template(TAG_INSTANCE_PROFILE_TEMPLATE)
-        return template.render()
+        return ActionResult({})
 
     def untag_instance_profile(self) -> str:
         instance_profile_name = self._get_param("InstanceProfileName")
@@ -1156,7 +1156,7 @@ class IamResponse(BaseResponse):
             tagKeys=tags,
         )
         template = self.response_template(UNTAG_INSTANCE_PROFILE_TEMPLATE)
-        return template.render()
+        return ActionResult({})
 
 
 LIST_ENTITIES_FOR_POLICY_TEMPLATE = """<ListEntitiesForPolicyResponse>
