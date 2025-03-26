@@ -32,8 +32,8 @@ class Application(BaseModel):
     ):
         self.additional_info = additional_info or {}
         self.args = args or []
-        self.name = name
-        self.version = version
+        self.name = name or None
+        self.version = version or None
 
 
 class BootstrapAction(BaseModel):
