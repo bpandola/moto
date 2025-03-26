@@ -817,11 +817,14 @@ class IamResponse(BaseResponse):
 
     def generate_credential_report(self) -> str:
         if self.backend.report_generated():
-            template = self.response_template(CREDENTIAL_REPORT_GENERATED)
+            result = {"State": "COMPLETE"}
         else:
-            template = self.response_template(CREDENTIAL_REPORT_GENERATING)
+            result = {
+                "State": "STARTED",
+                "Description": "No report exists. Starting a new report generation task",
+            }
         self.backend.generate_report()
-        return template.render()
+        return ActionResult(result)
 
     def get_credential_report(self) -> str:
         report = self.backend.get_credential_report()
@@ -1131,10 +1134,8 @@ class IamResponse(BaseResponse):
     def get_service_linked_role_deletion_status(self) -> str:
         self.backend.get_service_linked_role_deletion_status()
 
-        template = self.response_template(
-            GET_SERVICE_LINKED_ROLE_DELETION_STATUS_TEMPLATE
-        )
-        return template.render()
+        result = {"Status": "SUCCEEDED"}
+        return ActionResult(result)
 
     def tag_instance_profile(self) -> str:
         instance_profile_name = self._get_param("InstanceProfileName")
