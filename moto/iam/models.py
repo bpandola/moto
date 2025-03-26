@@ -219,6 +219,10 @@ class Policy(CloudFormationModel):
     def get_tags(self) -> List[Dict[str, str]]:
         return [self.tags[tag] for tag in self.tags]
 
+    @property
+    def tag_list_type(self) -> list[dict[str, str]]:
+        return self.get_tags()
+
 
 class SAMLProvider(BaseModel):
     def __init__(

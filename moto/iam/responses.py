@@ -49,7 +49,7 @@ class IamResponse(BaseResponse):
         self.backend.detach_user_policy(policy_arn, user_name)
         return ActionResult({})
 
-    def create_policy(self) -> str:
+    def create_policy(self) -> ActionResult:
         description = self._get_param("Description")
         path = self._get_param("Path")
         policy_document = self._get_param("PolicyDocument")
@@ -58,8 +58,8 @@ class IamResponse(BaseResponse):
         policy = self.backend.create_policy(
             description, path, policy_document, policy_name, tags
         )
-        template = self.response_template(CREATE_POLICY_TEMPLATE)
-        return template.render(policy=policy)
+        result = {"Policy": policy}
+        return ActionResult(result)
 
     def get_policy(self) -> str:
         policy_arn = self._get_param("PolicyArn")
