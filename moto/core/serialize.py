@@ -400,6 +400,7 @@ class ResponseSerializer(ShapeHelpersMixin):
             serialized[key] = new_serialized
             serialized = new_serialized
         for member_key, member_shape in shape.members.items():
+            setattr(member_shape, "parent_shape", shape)
             self._serialize_structure_member(
                 serialized, value, member_shape, member_key
             )
@@ -918,7 +919,13 @@ class XFormedAttributePicker:
 
     def _get_value(self, value: Any, key: str, shape: Shape) -> Any:
         new_value = None
-        possible_keys = [key, self.xform_name(key)]
+        possible_keys = []
+        # If a structure or list shape has a specific name, check for it.
+        if shape is not None:
+            if shape.name != key and shape.type_name in ["list", "structure"]:
+                possible_keys += [shape.name, self.xform_name(shape.name)]
+        # Key and xformed key.
+        possible_keys += [key, self.xform_name(key)]
         # If a class `Role` has an attribute named `arn`, that will work for a `RoleArn` key.
         if hasattr(value, "__class__"):
             class_name = value.__class__.__name__
@@ -926,6 +933,15 @@ class XFormedAttributePicker:
                 short_key = key[len(class_name) :]
                 if short_key:  # Will be empty string if class name same as key
                     possible_keys.append(self.xform_name(short_key))
+        # If parent shape "Policy" and key is "PolicyName", check for "Name".
+        if shape is not None:
+            parent_shape = getattr(shape, "parent_shape", None)
+            if parent_shape is not None:
+                parent_name = parent_shape.name
+                if key.lower().startswith(parent_name.lower()):
+                    short_key = key[len(parent_name) :]
+                    if short_key:
+                        possible_keys.append(self.xform_name(short_key))
         if shape is not None:
             serialization_key = shape.serialization.get("name", key)
             if serialization_key != key:
