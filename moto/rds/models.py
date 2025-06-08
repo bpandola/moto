@@ -74,7 +74,6 @@ from .exceptions import (
     SubscriptionAlreadyExistError,
     SubscriptionNotFoundError,
 )
-from .serialize import XFormedAttributeAccessMixin
 from .utils import (
     ClusterEngine,
     DbInstanceEngine,
@@ -195,7 +194,7 @@ class TaggingMixin:
         self.tags = [tag_set for tag_set in self.tags if tag_set["Key"] not in tag_keys]
 
 
-class RDSBaseModel(TaggingMixin, XFormedAttributeAccessMixin, BaseModel):
+class RDSBaseModel(TaggingMixin, BaseModel):
     resource_type: str
 
     def __init__(self, backend: RDSBackend, **kwargs: Any) -> None:
@@ -997,9 +996,7 @@ class LogFileManager:
         return self.log_files
 
 
-class DBLogFile(XFormedAttributeAccessMixin):
-    BOTOCORE_MODEL = "DescribeDBLogFilesDetails"
-
+class DBLogFile:
     def __init__(self, name: str) -> None:
         self.log_file_name = name
         self.last_written = unix_time()
@@ -1007,7 +1004,6 @@ class DBLogFile(XFormedAttributeAccessMixin):
 
 
 class DBInstance(EventMixin, CloudFormationModel, RDSBaseModel):
-    BOTOCORE_MODEL = "DBInstance"
     SUPPORTED_FILTERS = {
         "db-cluster-id": FilterDef(
             ["db_cluster_identifier"], "DB Cluster Identifiers", case_insensitive=True
@@ -1039,6 +1035,11 @@ class DBInstance(EventMixin, CloudFormationModel, RDSBaseModel):
     event_source_type = "db-instance"
     resource_type = "db"
 
+    class Meta:
+        serialization_aliases = {
+            "DBParameterGroups": "db_parameter_group_status_list",
+            "DBSecurityGroups": "db_security_group_membership_list",
+        }
     def __init__(
         self,
         backend: RDSBackend,
@@ -2164,7 +2165,7 @@ class DBProxy(RDSBaseModel):
         return self.unique_id
 
 
-class DBInstanceAutomatedBackup(XFormedAttributeAccessMixin):
+class DBInstanceAutomatedBackup:
     def __init__(
         self,
         backend: RDSBackend,
@@ -4070,7 +4071,7 @@ class DBClusterParameterGroup(CloudFormationModel, RDSBaseModel):
         return self.name
 
 
-class Event(XFormedAttributeAccessMixin):
+class Event:
     EVENT_MAP = {
         "DB_INSTANCE_BACKUP_START": {
             "Categories": ["backup"],

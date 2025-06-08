@@ -54,9 +54,10 @@ from __future__ import annotations
 
 import base64
 import calendar
+import inspect
 import json
 from datetime import datetime
-from typing import Any, Mapping, MutableMapping, Optional, TypedDict, Union
+from typing import Any, Mapping, MutableMapping, Optional, TypedDict, Union, Generator
 
 import xmltodict
 from botocore import xform_name
@@ -400,6 +401,7 @@ class ResponseSerializer(ShapeHelpersMixin):
             serialized[key] = new_serialized
             serialized = new_serialized
         for member_key, member_shape in shape.members.items():
+            member_shape.parent = shape
             self._serialize_structure_member(
                 serialized, value, member_shape, member_key
             )
@@ -891,7 +893,7 @@ SERIALIZERS = {
 }
 
 
-class XFormedAttributePicker:
+class XFormedAttributePickerOld:
     """Can be injected into a ResponseSerializer to aid in plucking AWS model
     attributes specified in `camelCase` or `PascalCase` from Python objects
     with standard `snake_case` attribute names.
@@ -935,3 +937,140 @@ class XFormedAttributePicker:
             if new_value is not None:
                 break
         return new_value
+
+
+MISSING = object()
+
+
+class XFormedAttributePicker:
+    """Can be injected into a ResponseSerializer to aid in plucking AWS model
+    attributes specified in `camelCase` or `PascalCase` from Python objects
+    with standard `snake_case` attribute names.
+
+    For a model attribute named `DBInstanceIdentifier`, this class will check
+    for the following attributes on the provided object:
+       * `DBInstanceIdentifier`
+       * `db_instance_identifier`
+    If the provided object is a class named `DBInstance`, this class will also
+    check for the following attribute on the provided object:
+       * `identifier`
+
+    Uses ``botocore.xform_name`` to translate the attribute name.
+    """
+
+    def __init__(self) -> None:
+        self._xform_cache = {}
+        self.alias_providers = [
+            #ModelTypeAliasProvider(),
+            ModelAttributeBaseAliasProvider(),
+            BaseAliasProvider(),
+            BotocoreModelBaseAliasProvider(),
+            ParentAliasProvider(),
+            ParentClassAliasProvider(),
+            ModelTypeAliasProvider(),
+        ]
+
+    def __call__(self, value: Any, key: str, shape: Shape) -> Any:
+        return self._get_value(value, key, shape)
+
+    def xform_name(self, name: str) -> str:
+        return xform_name(name, _xform_cache=self._xform_cache)
+
+    def get_possible_keys(self, value, shape, key) -> Generator[str]:
+        for alias_provider in self.alias_providers:
+            if alias_provider.has_alias(value, shape, key):
+                alias = alias_provider.get_alias(value, shape, key)
+                yield self.xform_name(alias)
+                yield alias
+
+
+    def _get_value(self, value: Any, key: str, shape: Shape) -> Any:
+        for possible_key in self.get_possible_keys(value, shape, key):
+            new_value = ResponseSerializer._default_value_picker(
+                value, possible_key, shape, MISSING
+            )
+            if new_value is not MISSING:
+                break
+        else:
+            new_value = None
+        return new_value
+
+
+class BaseAliasProvider:
+    def has_alias(self, value: Any, shape: Shape, key: str) -> bool:
+        return True
+
+    def get_alias(self, value: Any, shape: Shape, key: str) -> Any:
+        return key
+
+
+class ModelAttributeBaseAliasProvider(BaseAliasProvider):
+    def has_alias(self, value: Any, shape: Shape, key: str) -> bool:
+        if not hasattr(value, "Meta"):
+            return False
+        if not hasattr(value.Meta, "serialization_aliases"):
+            return False
+        return key in value.Meta.serialization_aliases
+
+    def get_alias(self, value: Any, shape: Shape, key: str) -> Any:
+        if not self.has_alias(value, shape, key):
+            raise AttributeError(f"No alias found for {key} in {value}")
+        return value.Meta.serialization_aliases[key]
+
+
+class BotocoreModelBaseAliasProvider(BaseAliasProvider):
+    def has_alias(self, value: Any, shape: Shape, key: str) -> bool:
+        if shape is not None:
+            serialization_key = shape.serialization.get("name", key)
+            if serialization_key != key:
+                return True
+        return False
+
+    def get_alias(self, value: Any, shape: Shape, key: str) -> Any:
+        if not self.has_alias(value, shape, key):
+            raise AttributeError(f"No alias found for {key} in {value}")
+        return shape.serialization.get("name", key)
+
+
+class ParentAliasProvider(BaseAliasProvider):
+    def has_alias(self, value: Any, shape: Shape, key: str) -> bool:
+        if shape is not None:
+            if hasattr(shape, "parent"):
+                if key.lower().startswith(shape.parent.name.lower()):
+                    return True
+        return False
+
+    def get_alias(self, value: Any, shape: Shape, key: str) -> Any:
+        if not self.has_alias(value, shape, key):
+            raise AttributeError(f"No alias found for {key} in {value}")
+        assert shape.parent is not None
+        return key[len(shape.parent.name) :]
+
+
+class ParentClassAliasProvider(BaseAliasProvider):
+    def has_alias(self, value: Any, shape: Shape, key: str) -> bool:
+        if hasattr(value, "__class__"):
+            class_name = value.__class__.__name__
+            if key.lower().startswith(class_name.lower()):
+                return True
+
+        return False
+
+    def get_alias(self, value: Any, shape: Shape, key: str) -> Any:
+        if not self.has_alias(value, shape, key):
+            raise AttributeError(f"No alias found for {key} in {value}")
+        class_name = value.__class__.__name__
+        short_key = key[len(class_name) :]
+        return short_key
+
+
+class ModelTypeAliasProvider(BaseAliasProvider):
+    def has_alias(self, value: Any, shape: Shape, key: str) -> bool:
+        if shape.type_name == "list":
+            if key != shape.name:
+                return True
+        return False
+
+    def get_alias(self, value: Any, shape: Shape, key: str) -> Any:
+        return shape.name
+

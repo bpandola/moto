@@ -354,7 +354,7 @@ CREATE_VPC_RESPONSE = """
       <vpcId>{{ vpc.id }}</vpcId>
       <state>pending</state>
       <cidrBlock>{{ vpc.cidr_block }}</cidrBlock>
-      {% if doc_date == "2016-11-15" %}
+      {% if doc_date == '2016-11-15' %}
           <cidrBlockAssociationSet>
               {% for assoc in vpc.get_cidr_block_association_set() %}
                 <item>

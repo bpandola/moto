@@ -100,7 +100,7 @@ CREATE_SUBNET_RESPONSE = """
     <assignIpv6AddressOnCreation>{{ 'false' if not subnet.assign_ipv6_address_on_creation or subnet.assign_ipv6_address_on_creation == 'false' else 'true'}}</assignIpv6AddressOnCreation>
     <ipv6CidrBlockAssociationSet>
     {% for ipv6_association in subnet.ipv6_cidr_block_associations.values() %}
-    {% if ipv6_association.ipv6CidrBlockState == "associated" %}
+    {% if ipv6_association.ipv6CidrBlockState == 'associated' %}
       <item>
         <ipv6CidrBlock>{{ ipv6_association.ipv6CidrBlock }}</ipv6CidrBlock>
         <associationId>{{ ipv6_association.associationId }}</associationId>
