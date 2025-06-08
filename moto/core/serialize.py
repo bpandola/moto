@@ -54,10 +54,9 @@ from __future__ import annotations
 
 import base64
 import calendar
-import inspect
 import json
 from datetime import datetime
-from typing import Any, Mapping, MutableMapping, Optional, TypedDict, Union, Generator
+from typing import Any, Generator, Mapping, MutableMapping, Optional, TypedDict, Union
 
 import xmltodict
 from botocore import xform_name
@@ -401,7 +400,7 @@ class ResponseSerializer(ShapeHelpersMixin):
             serialized[key] = new_serialized
             serialized = new_serialized
         for member_key, member_shape in shape.members.items():
-            member_shape.parent = shape
+            setattr(member_shape, "parent_shape", shape)
             self._serialize_structure_member(
                 serialized, value, member_shape, member_key
             )
@@ -961,7 +960,7 @@ class XFormedAttributePicker:
     def __init__(self) -> None:
         self._xform_cache = {}
         self.alias_providers = [
-            #ModelTypeAliasProvider(),
+            # ModelTypeAliasProvider(),
             ModelAttributeBaseAliasProvider(),
             BaseAliasProvider(),
             BotocoreModelBaseAliasProvider(),
@@ -976,13 +975,12 @@ class XFormedAttributePicker:
     def xform_name(self, name: str) -> str:
         return xform_name(name, _xform_cache=self._xform_cache)
 
-    def get_possible_keys(self, value, shape, key) -> Generator[str]:
+    def get_possible_keys(self, value: Any, shape: Shape, key: str) -> Generator[str]:
         for alias_provider in self.alias_providers:
             if alias_provider.has_alias(value, shape, key):
                 alias = alias_provider.get_alias(value, shape, key)
                 yield self.xform_name(alias)
                 yield alias
-
 
     def _get_value(self, value: Any, key: str, shape: Shape) -> Any:
         for possible_key in self.get_possible_keys(value, shape, key):
@@ -1043,7 +1041,8 @@ class ParentAliasProvider(BaseAliasProvider):
     def get_alias(self, value: Any, shape: Shape, key: str) -> Any:
         if not self.has_alias(value, shape, key):
             raise AttributeError(f"No alias found for {key} in {value}")
-        assert shape.parent is not None
+        assert hasattr(shape, "parent")
+        assert isinstance(shape.parent, Shape)  # mypy hint
         return key[len(shape.parent.name) :]
 
 
@@ -1073,4 +1072,3 @@ class ModelTypeAliasProvider(BaseAliasProvider):
 
     def get_alias(self, value: Any, shape: Shape, key: str) -> Any:
         return shape.name
-
