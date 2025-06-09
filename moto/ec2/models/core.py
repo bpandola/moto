@@ -16,6 +16,10 @@ class TaggedEC2Resource(BaseModel):
     def tag_set(self) -> list[dict[str, str]]:
         return self.get_tags()
 
+    @property
+    def tag_list(self) -> list[dict[str, str]]:
+        return self.tag_set
+
     def add_tag(self, key: str, value: str) -> None:
         self.ec2_backend.create_tags([self.id], {key: value})  # type: ignore[attr-defined]
 
