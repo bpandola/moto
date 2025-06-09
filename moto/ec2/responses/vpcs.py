@@ -1,5 +1,6 @@
 from typing import List
 
+from moto.core.responses import ActionResult
 from moto.core.utils import camelcase_to_underscores
 from moto.ec2.utils import add_tag_specification
 
@@ -15,13 +16,12 @@ class VPCs(EC2BaseResponse):
             else "2016-11-15"
         )
 
-    def create_default_vpc(self) -> str:
+    def create_default_vpc(self) -> ActionResult:
         vpc = self.ec2_backend.create_default_vpc()
-        doc_date = self._get_doc_date()
-        template = self.response_template(CREATE_VPC_RESPONSE)
-        return template.render(vpc=vpc, doc_date=doc_date)
+        result = {"Vpc": vpc}
+        return ActionResult(result)
 
-    def create_vpc(self) -> str:
+    def create_vpc(self) -> ActionResult:
         cidr_block = self._get_param("CidrBlock")
         tags = self._get_multi_param("TagSpecification")
         instance_tenancy = self._get_param("InstanceTenancy", if_none="default")
@@ -43,102 +43,88 @@ class VPCs(EC2BaseResponse):
             ipv6_cidr_block_network_border_group=ipv6_cidr_block_network_border_group,
             tags=tags,
         )
-        doc_date = self._get_doc_date()
-        template = self.response_template(CREATE_VPC_RESPONSE)
-        return template.render(vpc=vpc, doc_date=doc_date)
+        result = {"Vpc": vpc}
+        return ActionResult(result)
 
-    def delete_vpc(self) -> str:
+    def delete_vpc(self) -> ActionResult:
         vpc_id = self._get_param("VpcId")
-        vpc = self.ec2_backend.delete_vpc(vpc_id)
-        template = self.response_template(DELETE_VPC_RESPONSE)
-        return template.render(vpc=vpc)
+        self.ec2_backend.delete_vpc(vpc_id)
+        return ActionResult({})
 
-    def describe_vpcs(self) -> str:
+    def describe_vpcs(self) -> ActionResult:
         self.error_on_dryrun()
         vpc_ids = self._get_multi_param("VpcId")
         filters = self._filters_from_querystring()
         vpcs = self.ec2_backend.describe_vpcs(vpc_ids=vpc_ids, filters=filters)
-        doc_date = (
-            "2013-10-15"
-            if "Boto/" in self.headers.get("user-agent", "")
-            else "2016-11-15"
-        )
-        template = self.response_template(DESCRIBE_VPCS_RESPONSE)
-        return template.render(vpcs=vpcs, doc_date=doc_date, region=self.region)
+        result = {"Vpcs": vpcs}
+        return ActionResult(result)
 
-    def modify_vpc_tenancy(self) -> str:
+    def modify_vpc_tenancy(self) -> ActionResult:
         vpc_id = self._get_param("VpcId")
         tenancy = self._get_param("InstanceTenancy")
         self.ec2_backend.modify_vpc_tenancy(vpc_id, tenancy)
-        return self.response_template(MODIFY_VPC_TENANCY_RESPONSE).render()
+        return ActionResult({})
 
-    def describe_vpc_attribute(self) -> str:
+    def describe_vpc_attribute(self) -> ActionResult:
         vpc_id = self._get_param("VpcId")
         attribute = self._get_param("Attribute")
         attr_name = camelcase_to_underscores(attribute)
         value = self.ec2_backend.describe_vpc_attribute(vpc_id, attr_name)
-        template = self.response_template(DESCRIBE_VPC_ATTRIBUTE_RESPONSE)
-        return template.render(vpc_id=vpc_id, attribute=attribute, value=value)
+        result = {"VpcId": vpc_id, attribute: {"Value": value}}
+        return ActionResult(result)
 
-    def describe_vpc_classic_link_dns_support(self) -> str:
+    def describe_vpc_classic_link_dns_support(self) -> ActionResult:
         vpc_ids = self._get_multi_param("VpcIds")
         filters = self._filters_from_querystring()
         vpcs = self.ec2_backend.describe_vpcs(vpc_ids=vpc_ids, filters=filters)
-        doc_date = self._get_doc_date()
-        template = self.response_template(
-            DESCRIBE_VPC_CLASSIC_LINK_DNS_SUPPORT_RESPONSE
-        )
-        return template.render(vpcs=vpcs, doc_date=doc_date)
+        result = {
+            "Vpcs": [
+                {
+                    "VpcId": vpc.id,
+                    "ClassicLinkDnsSupported": vpc.classic_link_dns_supported,
+                }
+                for vpc in vpcs
+            ]
+        }
+        return ActionResult(result)
 
-    def enable_vpc_classic_link_dns_support(self) -> str:
+    def enable_vpc_classic_link_dns_support(self) -> ActionResult:
         vpc_id = self._get_param("VpcId")
-        classic_link_dns_supported = (
-            self.ec2_backend.enable_vpc_classic_link_dns_support(vpc_id=vpc_id)
-        )
-        doc_date = self._get_doc_date()
-        template = self.response_template(ENABLE_VPC_CLASSIC_LINK_DNS_SUPPORT_RESPONSE)
-        return template.render(
-            classic_link_dns_supported=classic_link_dns_supported, doc_date=doc_date
-        )
+        ret = self.ec2_backend.enable_vpc_classic_link_dns_support(vpc_id=vpc_id)
+        return ActionResult({"Return": ret})
 
-    def disable_vpc_classic_link_dns_support(self) -> str:
+    def disable_vpc_classic_link_dns_support(self) -> ActionResult:
         vpc_id = self._get_param("VpcId")
-        classic_link_dns_supported = (
-            self.ec2_backend.disable_vpc_classic_link_dns_support(vpc_id=vpc_id)
-        )
-        doc_date = self._get_doc_date()
-        template = self.response_template(DISABLE_VPC_CLASSIC_LINK_DNS_SUPPORT_RESPONSE)
-        return template.render(
-            classic_link_dns_supported=classic_link_dns_supported, doc_date=doc_date
-        )
+        ret = self.ec2_backend.disable_vpc_classic_link_dns_support(vpc_id=vpc_id)
+        return ActionResult({"Return": ret})
 
-    def describe_vpc_classic_link(self) -> str:
+    def describe_vpc_classic_link(self) -> ActionResult:
         vpc_ids = self._get_multi_param("VpcId")
         filters = self._filters_from_querystring()
         vpcs = self.ec2_backend.describe_vpcs(vpc_ids=vpc_ids, filters=filters)
-        doc_date = self._get_doc_date()
-        template = self.response_template(DESCRIBE_VPC_CLASSIC_LINK_RESPONSE)
-        return template.render(vpcs=vpcs, doc_date=doc_date)
+        result = {
+            "Vpcs": [
+                {
+                    "VpcId": vpc.id,
+                    "ClassicLinkEnabled": vpc.classic_link_enabled,
+                    "Tags": vpc.tag_list,
+                }
+                for vpc in vpcs
+            ]
+        }
+        return ActionResult(result)
 
-    def enable_vpc_classic_link(self) -> str:
+    def enable_vpc_classic_link(self) -> ActionResult:
         vpc_id = self._get_param("VpcId")
-        classic_link_enabled = self.ec2_backend.enable_vpc_classic_link(vpc_id=vpc_id)
-        doc_date = self._get_doc_date()
-        template = self.response_template(ENABLE_VPC_CLASSIC_LINK_RESPONSE)
-        return template.render(
-            classic_link_enabled=classic_link_enabled, doc_date=doc_date
-        )
+        ret = self.ec2_backend.enable_vpc_classic_link(vpc_id=vpc_id)
+        return ActionResult({"Return": ret})
 
-    def disable_vpc_classic_link(self) -> str:
+    def disable_vpc_classic_link(self) -> ActionResult:
         vpc_id = self._get_param("VpcId")
-        classic_link_enabled = self.ec2_backend.disable_vpc_classic_link(vpc_id=vpc_id)
-        doc_date = self._get_doc_date()
-        template = self.response_template(DISABLE_VPC_CLASSIC_LINK_RESPONSE)
-        return template.render(
-            classic_link_enabled=classic_link_enabled, doc_date=doc_date
-        )
+        ret = self.ec2_backend.disable_vpc_classic_link(vpc_id=vpc_id)
+        return ActionResult({"Return": ret})
 
-    def modify_vpc_attribute(self) -> str:
+    def modify_vpc_attribute(self) -> ActionResult:
         vpc_id = self._get_param("VpcId")
         for attribute in (
             "EnableDnsSupport",
@@ -149,10 +135,9 @@ class VPCs(EC2BaseResponse):
                 attr_name = camelcase_to_underscores(attribute)
                 attr_value = self.querystring[f"{attribute}.Value"][0]
                 self.ec2_backend.modify_vpc_attribute(vpc_id, attr_name, attr_value)
-                return MODIFY_VPC_ATTRIBUTE_RESPONSE
-        return ""
+        return ActionResult({})
 
-    def associate_vpc_cidr_block(self) -> str:
+    def associate_vpc_cidr_block(self) -> ActionResult:
         vpc_id = self._get_param("VpcId")
         amazon_provided_ipv6_cidr_blocks = self._get_param(
             "AmazonProvidedIpv6CidrBlock"
@@ -163,36 +148,49 @@ class VPCs(EC2BaseResponse):
             if not amazon_provided_ipv6_cidr_blocks
             else None
         )
-        value = self.ec2_backend.associate_vpc_cidr_block(
+        association = self.ec2_backend.associate_vpc_cidr_block(
             vpc_id, cidr_block, amazon_provided_ipv6_cidr_blocks
         )
+        result = {"VpcId": vpc_id}
         if not amazon_provided_ipv6_cidr_blocks:
-            render_template = ASSOCIATE_VPC_CIDR_BLOCK_RESPONSE
+            result["CidrBlockAssociation"] = {
+                "AssociationId": association["association_id"],
+                "CidrBlock": association["cidr_block"],
+                "CidrBlockState": {"State": "associating"},
+            }
         else:
-            render_template = IPV6_ASSOCIATE_VPC_CIDR_BLOCK_RESPONSE
-        template = self.response_template(render_template)
-        return template.render(
-            vpc_id=vpc_id,
-            value=value,
-            cidr_block=value["cidr_block"],
-            association_id=value["association_id"],
-            cidr_block_state="associating",
-        )
+            result["Ipv6CidrBlockAssociation"] = {
+                "AssociationId": association["association_id"],
+                "Ipv6CidrBlock": association["cidr_block"],
+                "Ipv6CidrBlockState": {"State": "associating"},
+                "NetworkBorderGroup": association.get(
+                    "ipv6_cidr_block_network_border_group"
+                ),
+                "Ipv6Pool": association.get("ipv6_pool"),
+            }
+        return ActionResult(result)
 
-    def disassociate_vpc_cidr_block(self) -> str:
+    def disassociate_vpc_cidr_block(self) -> ActionResult:
         association_id = self._get_param("AssociationId")
-        value = self.ec2_backend.disassociate_vpc_cidr_block(association_id)
-        if "::" in value.get("cidr_block", ""):
-            render_template = IPV6_DISASSOCIATE_VPC_CIDR_BLOCK_RESPONSE
+        association = self.ec2_backend.disassociate_vpc_cidr_block(association_id)
+        result = {"VpcId": association["vpc_id"]}
+        if "::" in association.get("cidr_block", ""):
+            result["Ipv6CidrBlockAssociation"] = {
+                "AssociationId": association["association_id"],
+                "Ipv6CidrBlock": association["cidr_block"],
+                "Ipv6CidrBlockState": {"State": "disassociating"},
+                "NetworkBorderGroup": association.get(
+                    "ipv6_cidr_block_network_border_group"
+                ),
+                "Ipv6Pool": association.get("ipv6_pool"),
+            }
         else:
-            render_template = DISASSOCIATE_VPC_CIDR_BLOCK_RESPONSE
-        template = self.response_template(render_template)
-        return template.render(
-            vpc_id=value["vpc_id"],
-            cidr_block=value["cidr_block"],
-            association_id=value["association_id"],
-            cidr_block_state="disassociating",
-        )
+            result["CidrBlockAssociation"] = {
+                "AssociationId": association["association_id"],
+                "CidrBlock": association["cidr_block"],
+                "CidrBlockState": {"State": "disassociating"},
+            }
+        return ActionResult(result)
 
     def create_vpc_endpoint(self) -> str:
         vpc_id = self._get_param("VpcId")
@@ -221,7 +219,7 @@ class VPCs(EC2BaseResponse):
         template = self.response_template(CREATE_VPC_END_POINT)
         return template.render(vpc_end_point=vpc_end_point)
 
-    def modify_vpc_endpoint(self) -> str:
+    def modify_vpc_endpoint(self) -> ActionResult:
         vpc_id = self._get_param("VpcEndpointId")
         add_subnets = self._get_multi_param("AddSubnetId")
         add_route_tables = self._get_multi_param("AddRouteTableId")
@@ -234,8 +232,7 @@ class VPCs(EC2BaseResponse):
             add_route_tables=add_route_tables,
             remove_route_tables=remove_route_tables,
         )
-        template = self.response_template(MODIFY_VPC_END_POINT)
-        return template.render()
+        return ActionResult({"Return": True})
 
     def describe_vpc_endpoint_services(self) -> str:
         vpc_end_point_services = self.ec2_backend.describe_vpc_endpoint_services(
