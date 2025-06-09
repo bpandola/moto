@@ -1240,7 +1240,7 @@ class VPCBackend:
             max_results = MAX_NUMBER_OF_ENDPOINT_SERVICES_RESULTS
 
         # If necessary, set the value of the next_token.
-        next_token = ""
+        next_token = None
         if len(filtered_services) > (start + max_results):
             service = filtered_services[start + max_results]
             next_token = service["ServiceId"]

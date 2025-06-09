@@ -979,8 +979,10 @@ class XFormedAttributePicker:
         for alias_provider in self.alias_providers:
             if alias_provider.has_alias(value, shape, key):
                 alias = alias_provider.get_alias(value, shape, key)
-                yield self.xform_name(alias)
+                # dict 'keys' attribute screws us up if we yield the xformed name first
+                # change the ordering and run tests for DynamoDBStreams to see the bug
                 yield alias
+                yield self.xform_name(alias)
 
     def _get_value(self, value: Any, key: str, shape: Shape) -> Any:
         for possible_key in self.get_possible_keys(value, shape, key):
@@ -1065,9 +1067,10 @@ class ParentClassAliasProvider(BaseAliasProvider):
 
 class ModelTypeAliasProvider(BaseAliasProvider):
     def has_alias(self, value: Any, shape: Shape, key: str) -> bool:
-        if shape.type_name == "list":
-            if key != shape.name:
-                return True
+        if shape is not None:
+            if shape.type_name == "list":
+                if key != shape.name:
+                    return True
         return False
 
     def get_alias(self, value: Any, shape: Shape, key: str) -> Any:
