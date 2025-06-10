@@ -1070,7 +1070,7 @@ class ShapeNameAlias(AttributeAliasProvider):
     def has_alias(self, key: str) -> bool:
         shape = self.context.shape
         if shape is not None:
-            if shape.type_name == "list":
+            if shape.type_name in ["list", "structure"]:
                 if key != shape.name:
                     return True
         return False
