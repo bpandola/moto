@@ -55,6 +55,7 @@ from __future__ import annotations
 import base64
 import calendar
 import json
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Generator, Mapping, MutableMapping, Optional, TypedDict, Union
 
@@ -70,6 +71,8 @@ from botocore.model import (
     StructureShape,
 )
 from botocore.utils import is_json_value_header, parse_to_aware_datetime
+
+from moto.core.utils import MISSING, get_value
 
 Serialized = MutableMapping[str, Any]
 
@@ -248,7 +251,7 @@ class ResponseSerializer(ShapeHelpersMixin):
         self.context = context or SerializationContext()
         self.pretty_print = pretty_print
         if value_picker is None:
-            value_picker = self._default_value_picker
+            value_picker = DefaultAttributePicker()
         self._value_picker = value_picker
         self._timestamp_serializer = TimestampSerializer(self.DEFAULT_TIMESTAMP_FORMAT)
 
@@ -329,18 +332,9 @@ class ResponseSerializer(ShapeHelpersMixin):
             value = value.encode(self.DEFAULT_ENCODING)
         return base64.b64encode(value).strip().decode(self.DEFAULT_ENCODING)
 
-    @staticmethod
-    def _default_value_picker(obj: Any, key: str, _: Shape, default: Any = None) -> Any:
-        if not hasattr(obj, "__getitem__"):
-            return getattr(obj, key, default)
-
-        try:
-            return obj[key]
-        except (KeyError, IndexError, TypeError, AttributeError):
-            return getattr(obj, key, default)
-
-    def _get_value(self, value: Any, key: str, shape: Shape) -> Any:
-        return self._value_picker(value, key, shape)
+    def get_value(self, value: Any, key: str, shape: Shape) -> Any:
+        context = AttributePickerContext(obj=value, key=key, shape=shape)
+        return self._value_picker(context)
 
     @staticmethod
     def _get_error_shape_name(error: Exception) -> str:
@@ -408,7 +402,7 @@ class ResponseSerializer(ShapeHelpersMixin):
     def _serialize_structure_member(
         self, serialized: Serialized, value: Any, shape: Shape, key: str
     ) -> None:
-        member_value = self._get_value(value, key, shape)
+        member_value = self.get_value(value, key, shape)
         if member_value is not None:
             key_name = self.get_serialized_name(shape, key)
             self._serialize(serialized, member_value, shape, key_name)
@@ -720,7 +714,7 @@ class BaseRestSerializer(ResponseSerializer):
             payload_member = output_shape.serialization.get("payload")
             if payload_member is not None:
                 payload_shape = output_shape.members[payload_member]
-                payload_value = self._get_value(result, payload_member, payload_shape)
+                payload_value = self.get_value(result, payload_member, payload_shape)
                 self._serialize_payload(serialized_result, payload_value, payload_shape)
 
         return self._serialized_result_to_response(
@@ -746,7 +740,7 @@ class BaseRestSerializer(ResponseSerializer):
     ) -> None:
         if self.is_not_bound_to_body(shape):
             if self.is_http_header_trait(shape) and "headers" in serialized:
-                member_value = self._get_value(value, key, shape)
+                member_value = self.get_value(value, key, shape)
                 if member_value is not None:
                     key_name = self.get_serialized_name(shape, key)
                     header_serializer = HeaderSerializer()
@@ -892,108 +886,69 @@ SERIALIZERS = {
 }
 
 
-class XFormedAttributePickerOld:
-    """Can be injected into a ResponseSerializer to aid in plucking AWS model
-    attributes specified in `camelCase` or `PascalCase` from Python objects
-    with standard `snake_case` attribute names.
+@dataclass
+class AttributePickerContext:
+    obj: Any
+    key: str
+    shape: Shape
 
-    For a model attribute named `DBInstanceIdentifier`, this class will check
-    for the following attributes on the provided object:
-       * `DBInstanceIdentifier`
-       * `db_instance_identifier`
-    If the provided object is a class named `DBInstance`, this class will also
-    check for the following attribute on the provided object:
-       * `identifier`
 
-    Uses ``botocore.xform_name`` to translate the attribute name.
-    """
+class DefaultAttributePicker:
+    def __call__(self, context: AttributePickerContext) -> Any:
+        return get_value(context.obj, context.key, None)
 
-    def __init__(self) -> None:
-        self._xform_cache = {}
 
-    def __call__(self, value: Any, key: str, shape: Shape) -> Any:
-        return self._get_value(value, key, shape)
+class AliasedAttributePicker(DefaultAttributePicker):
+    def __init__(self, alias_providers: list[BaseAliasProvider] | None = None) -> None:
+        self.alias_providers = (
+            alias_providers if alias_providers is not None else DEFAULT_ALIAS_PROVIDERS
+        )
 
-    def xform_name(self, name: str) -> str:
-        return xform_name(name, _xform_cache=self._xform_cache)
-
-    def _get_value(self, value: Any, key: str, shape: Shape) -> Any:
-        new_value = None
-        possible_keys = [key, self.xform_name(key)]
-        # If a class `Role` has an attribute named `arn`, that will work for a `RoleArn` key.
-        if hasattr(value, "__class__"):
-            class_name = value.__class__.__name__
-            if key.lower().startswith(class_name.lower()):
-                short_key = key[len(class_name) :]
-                if short_key:  # Will be empty string if class name same as key
-                    possible_keys.append(self.xform_name(short_key))
-        if shape is not None:
-            serialization_key = shape.serialization.get("name", key)
-            if serialization_key != key:
-                possible_keys.append(serialization_key)
-        for key in possible_keys:
-            new_value = ResponseSerializer._default_value_picker(value, key, shape)
-            if new_value is not None:
+    def __call__(self, context: AttributePickerContext) -> Any:
+        obj = context.obj
+        for possible_key in self.get_possible_keys(context):
+            value = get_value(obj, possible_key, MISSING)
+            if value is not MISSING:
                 break
-        return new_value
+        else:
+            value = None
+        return value
 
-
-MISSING = object()
-
-
-class XFormedAttributePicker:
-    """Can be injected into a ResponseSerializer to aid in plucking AWS model
-    attributes specified in `camelCase` or `PascalCase` from Python objects
-    with standard `snake_case` attribute names.
-
-    For a model attribute named `DBInstanceIdentifier`, this class will check
-    for the following attributes on the provided object:
-       * `DBInstanceIdentifier`
-       * `db_instance_identifier`
-    If the provided object is a class named `DBInstance`, this class will also
-    check for the following attribute on the provided object:
-       * `identifier`
-
-    Uses ``botocore.xform_name`` to translate the attribute name.
-    """
-
-    def __init__(self) -> None:
-        self._xform_cache = {}
-        self.alias_providers = [
-            # ModelTypeAliasProvider(),
-            ModelAttributeBaseAliasProvider(),
-            BaseAliasProvider(),
-            BotocoreModelBaseAliasProvider(),
-            ParentAliasProvider(),
-            ParentClassAliasProvider(),
-            ModelTypeAliasProvider(),
-        ]
-
-    def __call__(self, value: Any, key: str, shape: Shape) -> Any:
-        return self._get_value(value, key, shape)
-
-    def xform_name(self, name: str) -> str:
-        return xform_name(name, _xform_cache=self._xform_cache)
-
-    def get_possible_keys(self, value: Any, shape: Shape, key: str) -> Generator[str]:
+    def get_possible_keys(self, context: AttributePickerContext) -> Generator[str]:
+        value, shape, key = context.obj, context.shape, context.key
         for alias_provider in self.alias_providers:
             if alias_provider.has_alias(value, shape, key):
                 alias = alias_provider.get_alias(value, shape, key)
-                # dict 'keys' attribute screws us up if we yield the xformed name first
-                # change the ordering and run tests for DynamoDBStreams to see the bug
                 yield alias
-                yield self.xform_name(alias)
 
-    def _get_value(self, value: Any, key: str, shape: Shape) -> Any:
-        for possible_key in self.get_possible_keys(value, shape, key):
-            new_value = ResponseSerializer._default_value_picker(
-                value, possible_key, shape, MISSING
-            )
-            if new_value is not MISSING:
-                break
-        else:
-            new_value = None
-        return new_value
+
+class XFormedAttributePicker(AliasedAttributePicker):
+    """Can be injected into a ResponseSerializer to aid in plucking AWS model
+    attributes specified in `camelCase` or `PascalCase` from Python objects
+    with standard `snake_case` attribute names.
+
+    For a model attribute named `DBInstanceIdentifier`, this class will check
+    for the following attributes on the provided object:
+       * `DBInstanceIdentifier`
+       * `db_instance_identifier`
+    If the provided object is a class named `DBInstance`, this class will also
+    check for the following attribute on the provided object:
+       * `identifier`
+
+    Uses ``botocore.xform_name`` to translate the attribute name.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._xform_cache = {}
+
+    def xform_name(self, name: str) -> str:
+        return xform_name(name, _xform_cache=self._xform_cache)
+
+    def get_possible_keys(self, context: AttributePickerContext) -> Generator[str]:
+        for possible_key in super().get_possible_keys(context):
+            yield possible_key
+            yield self.xform_name(possible_key)
 
 
 class BaseAliasProvider:
@@ -1075,3 +1030,13 @@ class ModelTypeAliasProvider(BaseAliasProvider):
 
     def get_alias(self, value: Any, shape: Shape, key: str) -> Any:
         return shape.name
+
+
+DEFAULT_ALIAS_PROVIDERS = [
+    ModelAttributeBaseAliasProvider(),
+    BaseAliasProvider(),
+    BotocoreModelBaseAliasProvider(),
+    ParentAliasProvider(),
+    ParentClassAliasProvider(),
+    ModelTypeAliasProvider(),
+]
