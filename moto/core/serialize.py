@@ -446,6 +446,22 @@ class ResponseSerializer(ShapeHelpersMixin):
         blob_value = self._base64(value)
         self._default_serialize(serialized, blob_value, shape, key)
 
+    def _serialize_type_integer(
+        self, serialized: Serialized, value: Any, shape: Shape, key: str
+    ) -> None:
+        integer_value = int(value)
+        self._default_serialize(serialized, integer_value, shape, key)
+
+    _serialize_type_long = _serialize_type_integer
+
+    def _serialize_type_float(
+        self, serialized: Serialized, value: Any, shape: Shape, key: str
+    ) -> None:
+        integer_value = float(value)
+        self._default_serialize(serialized, integer_value, shape, key)
+
+    _serialize_type_double = _serialize_type_float
+
 
 class BaseJSONSerializer(ResponseSerializer):
     APPLICATION_AMZ_JSON = "application/x-amz-json-{version}"
