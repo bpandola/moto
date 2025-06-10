@@ -52,6 +52,7 @@ encoded as ``utf-8``.
 
 from __future__ import annotations
 
+import abc
 import base64
 import calendar
 import json
@@ -899,7 +900,9 @@ class DefaultAttributePicker:
 
 
 class AliasedAttributePicker(DefaultAttributePicker):
-    def __init__(self, alias_providers: list[BaseAliasProvider] | None = None) -> None:
+    def __init__(
+        self, alias_providers: list[type[AttributeAliasProvider]] | None = None
+    ) -> None:
         self.alias_providers = (
             alias_providers if alias_providers is not None else DEFAULT_ALIAS_PROVIDERS
         )
@@ -915,10 +918,11 @@ class AliasedAttributePicker(DefaultAttributePicker):
         return value
 
     def get_possible_keys(self, context: AttributePickerContext) -> Generator[str]:
-        value, shape, key = context.obj, context.shape, context.key
-        for alias_provider in self.alias_providers:
-            if alias_provider.has_alias(value, shape, key):
-                alias = alias_provider.get_alias(value, shape, key)
+        key = context.key
+        for alias_provider_cls in self.alias_providers:
+            alias_provider = alias_provider_cls(context)
+            if alias_provider.has_alias(key):
+                alias = alias_provider.get_alias(key)
                 yield alias
 
 
@@ -951,92 +955,118 @@ class XFormedAttributePicker(AliasedAttributePicker):
             yield self.xform_name(possible_key)
 
 
-class BaseAliasProvider:
-    def has_alias(self, value: Any, shape: Shape, key: str) -> bool:
+class AttributeAliasProvider(abc.ABC):
+    def __init__(self, context: AttributePickerContext) -> None:
+        self.context = context
+
+    @abc.abstractmethod
+    def has_alias(self, key: str) -> bool:
+        """Check if a key alias exists for the given context."""
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def get_alias(self, key: str) -> str:
+        """Get the key alias for the given context."""
+        raise NotImplementedError()
+
+
+class ExplicitAlias(AttributeAliasProvider):
+    """Provides a key alias explicitly defined in the source object's Meta class."""
+
+    def has_alias(self, key: str) -> bool:
+        obj = self.context.obj
+        if not hasattr(obj, "Meta"):
+            return False
+        if not hasattr(obj.Meta, "serialization_aliases"):
+            return False
+        return key in obj.Meta.serialization_aliases
+
+    def get_alias(self, key: str) -> str:
+        return self.context.obj.Meta.serialization_aliases[key]
+
+
+class NoAlias(AttributeAliasProvider):
+    """Provides the key as is, without any aliasing."""
+
+    def has_alias(self, key: str) -> bool:
         return True
 
-    def get_alias(self, value: Any, shape: Shape, key: str) -> Any:
+    def get_alias(self, key: str) -> str:
         return key
 
 
-class ModelAttributeBaseAliasProvider(BaseAliasProvider):
-    def has_alias(self, value: Any, shape: Shape, key: str) -> bool:
-        if not hasattr(value, "Meta"):
-            return False
-        if not hasattr(value.Meta, "serialization_aliases"):
-            return False
-        return key in value.Meta.serialization_aliases
-
-    def get_alias(self, value: Any, shape: Shape, key: str) -> Any:
-        if not self.has_alias(value, shape, key):
-            raise AttributeError(f"No alias found for {key} in {value}")
-        return value.Meta.serialization_aliases[key]
-
-
-class BotocoreModelBaseAliasProvider(BaseAliasProvider):
-    def has_alias(self, value: Any, shape: Shape, key: str) -> bool:
+class ModeledAlias(AttributeAliasProvider):
+    def has_alias(self, key: str) -> bool:
+        shape = self.context.shape
         if shape is not None:
             serialization_key = shape.serialization.get("name", key)
             if serialization_key != key:
                 return True
         return False
 
-    def get_alias(self, value: Any, shape: Shape, key: str) -> Any:
-        if not self.has_alias(value, shape, key):
-            raise AttributeError(f"No alias found for {key} in {value}")
-        return shape.serialization.get("name", key)
+    def get_alias(self, key: str) -> Any:
+        return self.context.shape.serialization["name"]
 
 
-class ParentAliasProvider(BaseAliasProvider):
-    def has_alias(self, value: Any, shape: Shape, key: str) -> bool:
+class ModelPrefixAlias(AttributeAliasProvider):
+    """Provides a shortened key alias if key is prefixed with the model name.
+
+    Example: `DBInstanceIdentifier` becomes `Identifier` if the model name is `DBInstance`.
+    """
+
+    def has_alias(self, key: str) -> bool:
+        shape = self.context.shape
         if shape is not None:
             if hasattr(shape, "parent"):
                 if key.lower().startswith(shape.parent.name.lower()):
                     return True
         return False
 
-    def get_alias(self, value: Any, shape: Shape, key: str) -> Any:
-        if not self.has_alias(value, shape, key):
-            raise AttributeError(f"No alias found for {key} in {value}")
+    def get_alias(self, key: str) -> Any:
+        shape = self.context.shape
         assert hasattr(shape, "parent")
         assert isinstance(shape.parent, Shape)  # mypy hint
         return key[len(shape.parent.name) :]
 
 
-class ParentClassAliasProvider(BaseAliasProvider):
-    def has_alias(self, value: Any, shape: Shape, key: str) -> bool:
-        if hasattr(value, "__class__"):
-            class_name = value.__class__.__name__
+class ClassPrefixAlias(AttributeAliasProvider):
+    """Provides a shortened key alias if key is prefixed with the source object's class name.
+
+    Example: `DBInstanceIdentifier` becomes `Identifier` if the class name is `DBInstance`.
+    """
+
+    def has_alias(self, key: str) -> bool:
+        obj = self.context.obj
+        if hasattr(obj, "__class__"):
+            class_name = obj.__class__.__name__
             if key.lower().startswith(class_name.lower()):
                 return True
-
         return False
 
-    def get_alias(self, value: Any, shape: Shape, key: str) -> Any:
-        if not self.has_alias(value, shape, key):
-            raise AttributeError(f"No alias found for {key} in {value}")
-        class_name = value.__class__.__name__
+    def get_alias(self, key: str) -> Any:
+        class_name = self.context.obj.__class__.__name__
         short_key = key[len(class_name) :]
         return short_key
 
 
-class ModelTypeAliasProvider(BaseAliasProvider):
-    def has_alias(self, value: Any, shape: Shape, key: str) -> bool:
+class ShapeNameAlias(AttributeAliasProvider):
+    def has_alias(self, key: str) -> bool:
+        shape = self.context.shape
         if shape is not None:
             if shape.type_name == "list":
                 if key != shape.name:
                     return True
         return False
 
-    def get_alias(self, value: Any, shape: Shape, key: str) -> Any:
-        return shape.name
+    def get_alias(self, key: str) -> Any:
+        return self.context.shape.name
 
 
 DEFAULT_ALIAS_PROVIDERS = [
-    ModelAttributeBaseAliasProvider(),
-    BaseAliasProvider(),
-    BotocoreModelBaseAliasProvider(),
-    ParentAliasProvider(),
-    ParentClassAliasProvider(),
-    ModelTypeAliasProvider(),
+    ExplicitAlias,
+    NoAlias,
+    ModeledAlias,
+    ModelPrefixAlias,
+    ClassPrefixAlias,
+    ShapeNameAlias,
 ]
