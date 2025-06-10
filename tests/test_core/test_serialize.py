@@ -199,3 +199,10 @@ class TestXFormedAttributePicker:
         ctx = AttributePickerContext(obj, "PascalCasedAttr", None)
         value = self.picker(ctx)
         assert value is True
+
+    def test_key_path_traversal(self):
+        child = {"Child": True}
+        parent = {"Parent": child}
+        ctx = AttributePickerContext(parent, "Parent.Child", None)
+        value = self.picker(ctx)
+        assert value is True

@@ -395,7 +395,7 @@ class ResponseSerializer(ShapeHelpersMixin):
             serialized[key] = new_serialized
             serialized = new_serialized
         for member_key, member_shape in shape.members.items():
-            setattr(member_shape, "parent_shape", shape)
+            setattr(member_shape, "parent", shape)
             self._serialize_structure_member(
                 serialized, value, member_shape, member_key
             )
@@ -900,6 +900,8 @@ class DefaultAttributePicker:
 
 
 class AliasedAttributePicker(DefaultAttributePicker):
+    """Uses alias providers to find the value of an attribute in a Python object"""
+
     def __init__(
         self, alias_providers: list[type[AttributeAliasProvider]] | None = None
     ) -> None:
@@ -939,23 +941,18 @@ class XFormedAttributePicker(AliasedAttributePicker):
     check for the following attribute on the provided object:
        * `identifier`
 
-    Uses ``botocore.xform_name`` to translate the attribute name.
+    ``botocore.xform_name`` is used to transform the attribute name.
     """
-
-    def __init__(self) -> None:
-        super().__init__()
-        self._xform_cache = {}
-
-    def xform_name(self, name: str) -> str:
-        return xform_name(name, _xform_cache=self._xform_cache)
 
     def get_possible_keys(self, context: AttributePickerContext) -> Generator[str]:
         for possible_key in super().get_possible_keys(context):
             yield possible_key
-            yield self.xform_name(possible_key)
+            yield xform_name(possible_key)
 
 
 class AttributeAliasProvider(abc.ABC):
+    """Abstract base class for providing attribute key aliases."""
+
     def __init__(self, context: AttributePickerContext) -> None:
         self.context = context
 
@@ -995,7 +992,9 @@ class NoAlias(AttributeAliasProvider):
         return key
 
 
-class ModeledAlias(AttributeAliasProvider):
+class ModelAlias(AttributeAliasProvider):
+    """Provides a key alias based on the botocore model's serialization name."""
+
     def has_alias(self, key: str) -> bool:
         shape = self.context.shape
         if shape is not None:
@@ -1008,7 +1007,7 @@ class ModeledAlias(AttributeAliasProvider):
         return self.context.shape.serialization["name"]
 
 
-class ModelPrefixAlias(AttributeAliasProvider):
+class ShapePrefixAlias(AttributeAliasProvider):
     """Provides a shortened key alias if key is prefixed with the model name.
 
     Example: `DBInstanceIdentifier` becomes `Identifier` if the model name is `DBInstance`.
@@ -1050,6 +1049,8 @@ class ClassPrefixAlias(AttributeAliasProvider):
 
 
 class ShapeNameAlias(AttributeAliasProvider):
+    """Provides a key alias based on the shape's name if it differs from the key."""
+
     def has_alias(self, key: str) -> bool:
         shape = self.context.shape
         if shape is not None:
@@ -1062,11 +1063,13 @@ class ShapeNameAlias(AttributeAliasProvider):
         return self.context.shape.name
 
 
+# Ordering is important here, as the first alias provider that matches will be used.
+# We want to try the most specific alias providers first, and fall back to the more generic ones.
 DEFAULT_ALIAS_PROVIDERS = [
     ExplicitAlias,
     NoAlias,
-    ModeledAlias,
-    ModelPrefixAlias,
+    ModelAlias,
+    ShapePrefixAlias,
     ClassPrefixAlias,
     ShapeNameAlias,
 ]
