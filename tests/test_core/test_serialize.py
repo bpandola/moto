@@ -206,3 +206,14 @@ class TestXFormedAttributePicker:
         ctx = AttributePickerContext(parent, "Parent.Child", None)
         value = self.picker(ctx)
         assert value is True
+
+    def test_explicit_key_alias(self):
+        class DBInstance:
+            class Meta:
+                serialization_aliases = {"DBInstanceClass": "db_instance_klass"}
+
+            db_instance_klass = "t2.medium"
+
+        ctx = AttributePickerContext(DBInstance(), "DBInstanceClass", None)
+        value = self.picker(ctx)
+        assert value == "t2.medium"

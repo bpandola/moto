@@ -1067,9 +1067,9 @@ class ShapeNameAlias(AttributeAliasProvider):
 # We want to try the most specific alias providers first, and fall back to the more generic ones.
 DEFAULT_ALIAS_PROVIDERS = [
     ExplicitAlias,
+    ShapeNameAlias,
     NoAlias,
-    ModelAlias,
     ShapePrefixAlias,
     ClassPrefixAlias,
-    ShapeNameAlias,
+    ModelAlias,
 ]
