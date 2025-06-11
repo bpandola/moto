@@ -94,15 +94,13 @@ class IamResponse(BaseResponse):
         policies, marker = self.backend.list_attached_role_policies(
             role_name, marker=marker, max_items=max_items, path_prefix=path_prefix
         )
-        result = {}
-        if marker:
-            result["Marker"] = marker
-            result["IsTruncated"] = True
-        else:
-            result["IsTruncated"] = False
-        result["AttachedPolicies"] = [
-            {"PolicyName": p.name, "PolicyArn": p.arn} for p in policies
-        ]
+        result = {
+            "AttachedPolicies": [
+                {"PolicyName": p.name, "PolicyArn": p.arn} for p in policies
+            ],
+            "Marker": marker,
+            "IsTruncated": bool(marker),
+        }
         return ActionResult(result)
 
     def list_attached_group_policies(self) -> ActionResult:
