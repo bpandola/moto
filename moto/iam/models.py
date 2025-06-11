@@ -65,7 +65,6 @@ SERVICE_NAME_CONVERSION = {
 }
 
 # TODO: Unify tagging.  Currently using tagging service for some models, but not all.
-# TODO: Get rid of all iso_8601_datetime_with_milliseconds and iso_8601_datetime_without_milliseconds
 # TODO: All tag_* and untag_* methods should point to singular tag_resource method.
 # TODO: Remove all pagination from the model
 # TODO: Move all parse.quote calls to the responses.py layer, so the model only deals with raw data.
