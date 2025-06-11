@@ -1,62 +1,39 @@
 from typing import Any
 
-from moto.core.exceptions import RESTError
-
-XMLNS_IAM = "https://iam.amazonaws.com/doc/2010-05-08/"
+from moto.core.exceptions import ServiceException
 
 
-class IAMNotFoundException(RESTError):
-    code = 404
-
+class IAMNotFoundException(ServiceException):
     def __init__(self, message: str):
-        super().__init__(
-            "NoSuchEntity", message, xmlns=XMLNS_IAM, template="wrapped_single_error"
-        )
+        super().__init__("NoSuchEntity", message)
 
 
-class IAMConflictException(RESTError):
-    code = 409
-
+class IAMConflictException(ServiceException):
     def __init__(self, code: str = "Conflict", message: str = ""):
         super().__init__(code, message)
 
 
-class IAMReportNotPresentException(RESTError):
-    code = 410
-
+class IAMReportNotPresentException(ServiceException):
     def __init__(self, message: str):
-        super().__init__("ReportNotPresent", message)
+        super().__init__("CredentialReportNotPresentException", message)
 
 
-class IAMLimitExceededException(RESTError):
-    code = 400
-
+class IAMLimitExceededException(ServiceException):
     def __init__(self, message: str):
         super().__init__("LimitExceeded", message)
 
 
-class MalformedCertificate(RESTError):
-    code = 400
-
+class MalformedCertificate(ServiceException):
     def __init__(self, cert: str):
         super().__init__("MalformedCertificate", f"Certificate {cert} is malformed")
 
 
-class MalformedPolicyDocument(RESTError):
-    code = 400
-
+class MalformedPolicyDocument(ServiceException):
     def __init__(self, message: str = ""):
-        super().__init__(
-            "MalformedPolicyDocument",
-            message,
-            xmlns=XMLNS_IAM,
-            template="wrapped_single_error",
-        )
+        super().__init__("MalformedPolicyDocument", message)
 
 
-class DuplicateTags(RESTError):
-    code = 400
-
+class DuplicateTags(ServiceException):
     def __init__(self) -> None:
         super().__init__(
             "InvalidInput",
@@ -64,9 +41,7 @@ class DuplicateTags(RESTError):
         )
 
 
-class TagKeyTooBig(RESTError):
-    code = 400
-
+class TagKeyTooBig(ServiceException):
     def __init__(self, tag: str, param: str = "tags.X.member.key"):
         super().__init__(
             "ValidationError",
@@ -75,9 +50,7 @@ class TagKeyTooBig(RESTError):
         )
 
 
-class TagValueTooBig(RESTError):
-    code = 400
-
+class TagValueTooBig(ServiceException):
     def __init__(self, tag: str):
         super().__init__(
             "ValidationError",
@@ -86,18 +59,14 @@ class TagValueTooBig(RESTError):
         )
 
 
-class InvalidTagCharacters(RESTError):
-    code = 400
-
+class InvalidTagCharacters(ServiceException):
     def __init__(self, tag: str, param: str = "tags.X.member.key"):
         message = f"1 validation error detected: Value '{tag}' at '{param}' failed to satisfy constraint: Member must satisfy regular expression pattern: [\\p{{L}}\\p{{Z}}\\p{{N}}_.:/=+\\-@]+"
 
         super().__init__("ValidationError", message)
 
 
-class TooManyTags(RESTError):
-    code = 400
-
+class TooManyTags(ServiceException):
     def __init__(self, tags: Any, param: str = "tags"):
         super().__init__(
             "ValidationError",
@@ -106,31 +75,21 @@ class TooManyTags(RESTError):
         )
 
 
-class EntityAlreadyExists(RESTError):
-    code = 409
-
+class EntityAlreadyExists(ServiceException):
     def __init__(self, message: str):
-        super().__init__("EntityAlreadyExists", message)
+        super().__init__("EntityAlreadyExistsException", message)
 
 
-class ValidationError(RESTError):
-    code = 400
-
+class ValidationError(ServiceException):
     def __init__(self, message: str):
         super().__init__("ValidationError", message)
 
 
-class InvalidInput(RESTError):
-    code = 400
-
+class InvalidInput(ServiceException):
     def __init__(self, message: str):
         super().__init__("InvalidInput", message)
 
 
-class NoSuchEntity(RESTError):
-    code = 404
-
+class NoSuchEntity(ServiceException):
     def __init__(self, message: str):
-        super().__init__(
-            "NoSuchEntity", message, xmlns=XMLNS_IAM, template="wrapped_single_error"
-        )
+        super().__init__("NoSuchEntityException", message)
