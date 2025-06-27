@@ -101460,7 +101460,12 @@
    "TotalNeuronDeviceMemoryInMiB": 8388608
   },
   "NitroEnclavesSupport": "supported",
-  "NitroTpmSupport": "unsupported",
+  "NitroTpmInfo": {
+   "SupportedVersions": [
+    "2.0"
+   ]
+  },
+  "NitroTpmSupport": "supported",
   "PhcSupport": "unsupported",
   "PlacementGroupInfo": {
    "SupportedStrategies": [
@@ -102450,7 +102455,7 @@
    ]
   },
   "NitroTpmSupport": "supported",
-  "PhcSupport": "unsupported",
+  "PhcSupport": "supported",
   "PlacementGroupInfo": {
    "SupportedStrategies": [
     "cluster",
@@ -102607,7 +102612,7 @@
    ]
   },
   "NitroTpmSupport": "supported",
-  "PhcSupport": "unsupported",
+  "PhcSupport": "supported",
   "PlacementGroupInfo": {
    "SupportedStrategies": [
     "cluster",
@@ -102764,7 +102769,7 @@
    ]
   },
   "NitroTpmSupport": "supported",
-  "PhcSupport": "unsupported",
+  "PhcSupport": "supported",
   "PlacementGroupInfo": {
    "SupportedStrategies": [
     "cluster",
@@ -102929,7 +102934,7 @@
    ]
   },
   "NitroTpmSupport": "supported",
-  "PhcSupport": "unsupported",
+  "PhcSupport": "supported",
   "PlacementGroupInfo": {
    "SupportedStrategies": [
     "cluster",
@@ -103094,7 +103099,7 @@
    ]
   },
   "NitroTpmSupport": "supported",
-  "PhcSupport": "unsupported",
+  "PhcSupport": "supported",
   "PlacementGroupInfo": {
    "SupportedStrategies": [
     "cluster",
@@ -103259,7 +103264,7 @@
    ]
   },
   "NitroTpmSupport": "supported",
-  "PhcSupport": "unsupported",
+  "PhcSupport": "supported",
   "PlacementGroupInfo": {
    "SupportedStrategies": [
     "cluster",
