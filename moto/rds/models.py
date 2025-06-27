@@ -1050,12 +1050,6 @@ class DBInstance(EventMixin, CloudFormationModel, RDSBaseModel):
     event_source_type = "db-instance"
     resource_type = "db"
 
-    class Meta:
-        serialization_aliases = {
-            "DBParameterGroups": "db_parameter_group_status_list",
-            "DBSecurityGroups": "db_security_group_membership_list",
-        }
-
     def __init__(
         self,
         backend: RDSBackend,
