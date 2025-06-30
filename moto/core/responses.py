@@ -143,6 +143,7 @@ class _TemplateEnvironmentMixin:
                 autoescape=self.should_autoescape,
                 trim_blocks=True,
                 lstrip_blocks=True,
+                undefined=StrictUndefined,
             )
             JINJA_ENVS[key] = environment
 
