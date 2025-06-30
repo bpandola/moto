@@ -2156,6 +2156,10 @@
   "Location": "use2-az1"
  },
  {
+  "InstanceType": "p6-b200.48xlarge",
+  "Location": "use2-az1"
+ },
+ {
   "InstanceType": "r3.2xlarge",
   "Location": "use2-az1"
  },
@@ -3136,18 +3140,6 @@
   "Location": "use2-az1"
  },
  {
-  "InstanceType": "u-12tb1.112xlarge",
-  "Location": "use2-az1"
- },
- {
-  "InstanceType": "u-18tb1.112xlarge",
-  "Location": "use2-az1"
- },
- {
-  "InstanceType": "u-24tb1.112xlarge",
-  "Location": "use2-az1"
- },
- {
   "InstanceType": "u-3tb1.56xlarge",
   "Location": "use2-az1"
  },
@@ -3157,10 +3149,6 @@
  },
  {
   "InstanceType": "u-6tb1.56xlarge",
-  "Location": "use2-az1"
- },
- {
-  "InstanceType": "u-9tb1.112xlarge",
   "Location": "use2-az1"
  },
  {
@@ -6484,10 +6472,6 @@
   "Location": "use2-az2"
  },
  {
-  "InstanceType": "u-12tb1.112xlarge",
-  "Location": "use2-az2"
- },
- {
   "InstanceType": "u-3tb1.56xlarge",
   "Location": "use2-az2"
  },
@@ -6497,10 +6481,6 @@
  },
  {
   "InstanceType": "u-6tb1.56xlarge",
-  "Location": "use2-az2"
- },
- {
-  "InstanceType": "u-9tb1.112xlarge",
   "Location": "use2-az2"
  },
  {

@@ -100,7 +100,7 @@ class Instance(BaseModel):
         return ebs_volumes
 
     @property
-    def status(self) -> dict[str, Any]:  # type: ignore[misc]
+    def status(self) -> dict[str, Any]:
         status_dict = {
             "State": self.instance_group.state,
             "StateChangeReason": {
@@ -214,7 +214,63 @@ class InstanceGroup(CloudFormationModel):
         return self.num_instances
 
     @property
-    def auto_scaling_policy(self) -> Any:  # type: ignore[misc]
+    def status(self) -> dict[str, Any]:
+        status_dict = {
+            "State": self.state,
+            "StateChangeReason": {
+                "Message": getattr(self, "state_change_reason", None),
+                "Code": "USER_REQUEST",
+            },
+            "Timeline": {
+                "CreationDateTime": self.creation_date_time,
+                "EndDateTime": self.end_date_time,
+                "ReadyDateTime": self.ready_date_time,
+            },
+        }
+        return status_dict
+
+    @property
+    def ebs_block_devices(self) -> list[dict[str, Any]]:
+        ebs_block_devices = []
+        if self.ebs_configuration is not None:
+            for ebs_block_device in self.ebs_configuration.get(
+                "ebs_block_device_configs", []
+            ):
+                for i in range(ebs_block_device.get("volumes_per_instance", 0)):
+                    volume_spec = ebs_block_device["volume_specification"]
+                    member = {
+                        "VolumeSpecification": {
+                            "VolumeType": volume_spec.get("volume_type"),
+                            "Iops": volume_spec.get("iops"),
+                            "SizeInGB": volume_spec.get("size_in_gb"),
+                        },
+                        "Device": f"/dev/sd{i}",
+                    }
+                    ebs_block_devices.append(member)
+        return ebs_block_devices
+
+    @property
+    def instance_request_count(self) -> int:
+        return self.num_instances
+
+    @property
+    def instance_role(self) -> str:
+        return self.role
+
+    @property
+    def instance_running_count(self) -> int:
+        return self.num_instances
+
+    @property
+    def requested_instance_count(self) -> int:
+        return self.num_instances
+
+    @property
+    def running_instance_count(self) -> int:
+        return self.num_instances
+
+    @property
+    def auto_scaling_policy(self) -> Any:
         return self._auto_scaling_policy
 
     @auto_scaling_policy.setter
@@ -250,7 +306,7 @@ class InstanceGroup(CloudFormationModel):
         return "AWS::EMR::InstanceGroupConfig"
 
     @classmethod
-    def create_from_cloudformation_json(  # type: ignore[misc]
+    def create_from_cloudformation_json(
         cls,
         resource_name: str,
         cloudformation_json: Any,
@@ -305,7 +361,7 @@ class Step(BaseModel):
         self.state = state
 
     @property
-    def config(self) -> dict[str, Any]:  # type: ignore[misc]
+    def config(self) -> dict[str, Any]:
         config = {
             "ActionOnFailure": self.action_on_failure,
             "HadoopJarStep": {
@@ -323,7 +379,7 @@ class Step(BaseModel):
         return config
 
     @property
-    def execution_status_detail(self) -> dict[str, Any]:  # type: ignore[misc]
+    def execution_status_detail(self) -> dict[str, Any]:
         status_dict = {
             "CreationDateTime": self.creation_date_time,
             "StartDateTime": self.start_date_time,
@@ -335,7 +391,7 @@ class Step(BaseModel):
         return status_dict
 
     @property
-    def status(self) -> dict[str, Any]:  # type: ignore[misc]
+    def status(self) -> dict[str, Any]:
         status_dict = {
             "State": self.state,
             "StateChangeReason": {
@@ -514,7 +570,7 @@ class Cluster(CloudFormationModel):
         return not self.keep_job_flow_alive_when_no_steps
 
     @property
-    def bootstrap_action_detail_list(self) -> list[dict[str, Any]]:  # type: ignore[misc]
+    def bootstrap_action_detail_list(self) -> list[dict[str, Any]]:
         details = []
         for bootstrap_action in self.bootstrap_actions:
             member = {
@@ -534,7 +590,7 @@ class Cluster(CloudFormationModel):
         return Ec2InstanceAttributes(self)
 
     @property
-    def job_flow_instances_detail(self) -> dict[str, Any]:  # type: ignore[misc]
+    def job_flow_instances_detail(self) -> dict[str, Any]:
         instances_detail = {
             "Ec2KeyName": self.ec2_key_name,
             "Ec2SubnetId": self.ec2_subnet_id,
@@ -553,7 +609,7 @@ class Cluster(CloudFormationModel):
         return instances_detail
 
     @property
-    def execution_status_detail(self) -> dict[str, Any]:  # type: ignore[misc]
+    def execution_status_detail(self) -> dict[str, Any]:
         status_dict = {
             "State": self.state,
             "CreationDateTime": self.creation_datetime,
@@ -578,7 +634,7 @@ class Cluster(CloudFormationModel):
         return "ec2-184-0-0-1.us-west-1.compute.amazonaws.com"
 
     @property
-    def status(self) -> dict[str, Any]:  # type: ignore[misc]
+    def status(self) -> dict[str, Any]:
         status_dict = {
             "State": self.state,
             "StateChangeReason": {
@@ -719,7 +775,7 @@ class Cluster(CloudFormationModel):
         raise UnformattedGetAttTemplateException()
 
     @classmethod
-    def create_from_cloudformation_json(  # type: ignore[misc]
+    def create_from_cloudformation_json(
         cls,
         resource_name: str,
         cloudformation_json: Any,
@@ -764,7 +820,7 @@ class Cluster(CloudFormationModel):
         return cluster
 
     @classmethod
-    def delete_from_cloudformation_json(  # type: ignore[misc]
+    def delete_from_cloudformation_json(
         cls,
         resource_name: str,
         cloudformation_json: Dict[str, Any],
@@ -791,7 +847,7 @@ class SecurityConfiguration(CloudFormationModel):
         return "AWS::EMR::SecurityConfiguration"
 
     @classmethod
-    def create_from_cloudformation_json(  # type: ignore[misc]
+    def create_from_cloudformation_json(
         cls,
         resource_name: str,
         cloudformation_json: Any,
@@ -808,7 +864,7 @@ class SecurityConfiguration(CloudFormationModel):
         )
 
     @classmethod
-    def delete_from_cloudformation_json(  # type: ignore[misc]
+    def delete_from_cloudformation_json(
         cls,
         resource_name: str,
         cloudformation_json: Dict[str, Any],
@@ -831,7 +887,7 @@ class ElasticMapReduceBackend(BaseBackend):
         self.block_public_access_configuration: Dict[str, Any] = {}
 
     @property
-    def ec2_backend(self) -> Any:  # type: ignore[misc]
+    def ec2_backend(self) -> Any:
         """
         :return: EC2 Backend
         :rtype: moto.ec2.models.EC2Backend

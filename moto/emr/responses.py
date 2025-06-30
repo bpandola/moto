@@ -1,7 +1,7 @@
 import re
 from typing import Any, Dict, List, Pattern
 
-from moto.core.responses import ActionResult, AWSServiceSpec, BaseResponse
+from moto.core.responses import ActionResult, AWSServiceSpec, BaseResponse, EmptyResult
 from moto.core.utils import tags_from_query_string
 
 from .exceptions import ValidationException
@@ -43,20 +43,22 @@ class ElasticMapReduceResponse(BaseResponse):
             # Adding support for auto_scaling_policy
             Unflattener.unflatten_complex_params(item, "auto_scaling_policy")
         fake_groups = self.backend.add_instance_groups(jobflow_id, instance_groups)
-        return ActionResult(dict(instance_groups=fake_groups))
+        result = {"InstanceGroups": fake_groups}
+        return ActionResult(result)
 
     def add_job_flow_steps(self) -> ActionResult:
         job_flow_id = self._get_param("JobFlowId")
         steps = self.backend.add_job_flow_steps(
             job_flow_id, steps_from_query_string(self._get_list_prefix("Steps.member"))
         )
-        return ActionResult(dict(steps=steps))
+        result = {"StepIds": [step.id for step in steps]}
+        return ActionResult(result)
 
     def add_tags(self) -> ActionResult:
         cluster_id = self._get_param("ResourceId")
         tags = tags_from_query_string(self.querystring, prefix="Tags")
         self.backend.add_tags(cluster_id, tags)
-        return ActionResult({})
+        return EmptyResult()
 
     def create_security_configuration(self) -> ActionResult:
         name = self._get_param("Name")
@@ -74,12 +76,13 @@ class ElasticMapReduceResponse(BaseResponse):
     def delete_security_configuration(self) -> ActionResult:
         name = self._get_param("Name")
         self.backend.delete_security_configuration(name=name)
-        return ActionResult({})
+        return EmptyResult()
 
     def describe_cluster(self) -> ActionResult:
         cluster_id = self._get_param("ClusterId")
         cluster = self.backend.describe_cluster(cluster_id)
-        return ActionResult(dict(cluster=cluster))
+        result = {"Cluster": cluster}
+        return ActionResult(result)
 
     def describe_job_flows(self) -> ActionResult:
         created_after = self._get_param("CreatedAfter")
@@ -89,13 +92,15 @@ class ElasticMapReduceResponse(BaseResponse):
         clusters = self.backend.describe_job_flows(
             job_flow_ids, job_flow_states, created_after, created_before
         )
-        return ActionResult(dict(job_flows=clusters))
+        result = {"JobFlows": clusters}
+        return ActionResult(result)
 
     def describe_step(self) -> ActionResult:
         cluster_id = self._get_param("ClusterId")
         step_id = self._get_param("StepId")
         step = self.backend.describe_step(cluster_id, step_id)
-        return ActionResult(dict(step=step))
+        result = {"Step": step}
+        return ActionResult(result)
 
     def list_bootstrap_actions(self) -> ActionResult:
         cluster_id = self._get_param("ClusterId")
@@ -103,7 +108,8 @@ class ElasticMapReduceResponse(BaseResponse):
         bootstrap_actions, marker = self.backend.list_bootstrap_actions(
             cluster_id, marker
         )
-        return ActionResult(dict(bootstrap_actions=bootstrap_actions, marker=marker))
+        result = {"BootstrapActions": bootstrap_actions, "Marker": marker}
+        return ActionResult(result)
 
     def list_clusters(self) -> ActionResult:
         cluster_states = self._get_multi_param("ClusterStates.member")
@@ -113,7 +119,8 @@ class ElasticMapReduceResponse(BaseResponse):
         clusters, marker = self.backend.list_clusters(
             cluster_states, created_after, created_before, marker
         )
-        return ActionResult(dict(clusters=clusters, marker=marker))
+        result = {"Clusters": clusters, "Marker": marker}
+        return ActionResult(result)
 
     def list_instance_groups(self) -> ActionResult:
         cluster_id = self._get_param("ClusterId")
@@ -121,7 +128,8 @@ class ElasticMapReduceResponse(BaseResponse):
         instance_groups, marker = self.backend.list_instance_groups(
             cluster_id, marker=marker
         )
-        return ActionResult(dict(instance_groups=instance_groups, marker=marker))
+        result = {"InstanceGroups": instance_groups, "Marker": marker}
+        return ActionResult(result)
 
     def list_instances(self) -> ActionResult:
         cluster_id = self._get_param("ClusterId")
@@ -134,7 +142,8 @@ class ElasticMapReduceResponse(BaseResponse):
             instance_group_id=instance_group_id,
             instance_group_types=instance_group_types,
         )
-        return ActionResult(dict(instances=instances, marker=marker))
+        result = {"Instances": instances, "Marker": marker}
+        return ActionResult(result)
 
     def list_steps(self) -> ActionResult:
         cluster_id = self._get_param("ClusterId")
@@ -144,7 +153,8 @@ class ElasticMapReduceResponse(BaseResponse):
         steps, marker = self.backend.list_steps(
             cluster_id, marker=marker, step_ids=step_ids, step_states=step_states
         )
-        return ActionResult(dict(steps=steps, marker=marker))
+        result = {"Steps": steps, "Marker": marker}
+        return ActionResult(result)
 
     def modify_cluster(self) -> ActionResult:
         cluster_id = self._get_param("ClusterId")
@@ -158,13 +168,13 @@ class ElasticMapReduceResponse(BaseResponse):
         for item in instance_groups:
             item["instance_count"] = int(item["instance_count"])
         self.backend.modify_instance_groups(instance_groups)
-        return ActionResult({})
+        return EmptyResult()
 
     def remove_tags(self) -> ActionResult:
         cluster_id = self._get_param("ResourceId")
         tag_keys = self._get_multi_param("TagKeys.member")
         self.backend.remove_tags(cluster_id, tag_keys)
-        return ActionResult({})
+        return EmptyResult()
 
     def run_job_flow(self) -> ActionResult:
         instance_attrs = dict(
@@ -337,8 +347,11 @@ class ElasticMapReduceResponse(BaseResponse):
             self.backend.add_tags(
                 cluster.id, dict((d["key"], d["value"]) for d in tags)
             )
-        # TODO: we can make this more explicit since result is just two cluster attributes
-        return ActionResult(cluster)
+        result = {
+            "JobFlowId": cluster.job_flow_id,
+            "ClusterArn": cluster.arn,
+        }
+        return ActionResult(result)
 
     def _has_key_prefix(self, key_prefix: str, value: Dict[str, Any]) -> bool:
         for key in value:  # iter on both keys and values
@@ -421,18 +434,18 @@ class ElasticMapReduceResponse(BaseResponse):
         termination_protection = self._get_bool_param("TerminationProtected")
         job_ids = self._get_multi_param("JobFlowIds.member")
         self.backend.set_termination_protection(job_ids, termination_protection)
-        return ActionResult({})
+        return EmptyResult()
 
     def set_visible_to_all_users(self) -> ActionResult:
         visible_to_all_users = self._get_bool_param("VisibleToAllUsers", False)
         job_ids = self._get_multi_param("JobFlowIds.member")
         self.backend.set_visible_to_all_users(job_ids, visible_to_all_users)
-        return ActionResult({})
+        return EmptyResult()
 
     def terminate_job_flows(self) -> ActionResult:
         job_ids = self._get_multi_param("JobFlowIds.member.")
         self.backend.terminate_job_flows(job_ids)
-        return ActionResult({})
+        return EmptyResult()
 
     def put_auto_scaling_policy(self) -> ActionResult:
         cluster_id = self._get_param("ClusterId")
@@ -454,7 +467,7 @@ class ElasticMapReduceResponse(BaseResponse):
     def remove_auto_scaling_policy(self) -> ActionResult:
         instance_group_id = self._get_param("InstanceGroupId")
         self.backend.remove_auto_scaling_policy(instance_group_id)
-        return ActionResult({})
+        return EmptyResult()
 
     def get_block_public_access_configuration(self) -> ActionResult:
         configuration = self.backend.get_block_public_access_configuration()
@@ -480,5 +493,4 @@ class ElasticMapReduceResponse(BaseResponse):
                 "PermittedPublicSecurityGroupRuleRanges"
             ),
         )
-
-        return ActionResult({})
+        return EmptyResult()
