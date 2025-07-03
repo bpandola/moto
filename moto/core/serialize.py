@@ -1085,6 +1085,8 @@ class AttributePicker(DefaultAttributePicker):
         else:
             value = None
         key_path = f"{context.key_path}.{context.key}"
+        if context.shape.name in self.response_transformers:
+            key_path = f"{context.shape.name}"
         for transform_path, transform in self.response_transformers.items():
             if key_path.endswith(transform_path):
                 value = transform(value)
