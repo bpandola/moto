@@ -685,14 +685,12 @@ class ELBV2Response(BaseResponse):
         template = self.response_template(DESCRIBE_SSL_POLICIES_TEMPLATE)
         return template.render(policies=policies)
 
-    def set_ip_address_type(self) -> str:
+    def set_ip_address_type(self) -> ActionResult:
         arn = self._get_param("LoadBalancerArn")
         ip_type = self._get_param("IpAddressType")
-
         self.elbv2_backend.set_ip_address_type(arn, ip_type)
-
-        template = self.response_template(SET_IP_ADDRESS_TYPE_TEMPLATE)
-        return template.render(ip_type=ip_type)
+        result = {"IpAddressType": ip_type}
+        return ActionResult(result)
 
     def set_security_groups(self) -> str:
         arn = self._get_param("LoadBalancerArn")
@@ -783,22 +781,20 @@ class ELBV2Response(BaseResponse):
         template = self.response_template(MODIFY_LISTENER_TEMPLATE)
         return template.render(listener=listener)
 
-    def add_listener_certificates(self) -> str:
+    def add_listener_certificates(self) -> ActionResult:
         arn = self._get_param("ListenerArn")
         certificates = self._get_list_prefix("Certificates.member")
         certificate_arns = self.elbv2_backend.add_listener_certificates(
             arn, certificates
         )
+        result = {"Certificates": [{"CertificateArn": arn} for arn in certificate_arns]}
+        return ActionResult(result)
 
-        template = self.response_template(ADD_LISTENER_CERTIFICATES_TEMPLATE)
-        return template.render(certificates=certificate_arns)
-
-    def describe_listener_certificates(self) -> str:
+    def describe_listener_certificates(self) -> ActionResult:
         arn = self._get_param("ListenerArn")
         certificates = self.elbv2_backend.describe_listener_certificates(arn)
-
-        template = self.response_template(DESCRIBE_LISTENER_CERTIFICATES_TEMPLATE)
-        return template.render(certificates=certificates)
+        result = {"Certificates": [{"CertificateArn": arn} for arn in certificates]}
+        return ActionResult(result)
 
     def remove_listener_certificates(self) -> ActionResult:
         arn = self._get_param("ListenerArn")
@@ -821,8 +817,9 @@ class ELBV2Response(BaseResponse):
         template = self.response_template(MODIFY_LISTENER_ATTRIBUTES)
         return template.render(attributes=updated_attrs)
 
-    def describe_capacity_reservation(self) -> str:
-        return DESCRIBE_CAPACITY_RESERVATION
+    def describe_capacity_reservation(self) -> ActionResult:
+        result = {"CapacityReservationState": ["provisioned"]}
+        return ActionResult(result)
 
 
 DESCRIBE_TAGS_TEMPLATE = """<DescribeTagsResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
@@ -1647,14 +1644,6 @@ DESCRIBE_SSL_POLICIES_TEMPLATE = """<DescribeSSLPoliciesResponse xmlns="http://e
   </ResponseMetadata>
 </DescribeSSLPoliciesResponse>"""
 
-SET_IP_ADDRESS_TYPE_TEMPLATE = """<SetIpAddressTypeResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
-  <SetIpAddressTypeResult>
-    <IpAddressType>{{ ip_type }}</IpAddressType>
-  </SetIpAddressTypeResult>
-  <ResponseMetadata>
-    <RequestId>{{ request_id }}</RequestId>
-  </ResponseMetadata>
-</SetIpAddressTypeResponse>"""
 
 SET_SECURITY_GROUPS_TEMPLATE = """<SetSecurityGroupsResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
   <SetSecurityGroupsResult>
@@ -1785,36 +1774,6 @@ MODIFY_LISTENER_TEMPLATE = """<ModifyListenerResponse xmlns="http://elasticloadb
   </ResponseMetadata>
 </ModifyListenerResponse>"""
 
-ADD_LISTENER_CERTIFICATES_TEMPLATE = """<AddListenerCertificatesResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
-  <AddListenerCertificatesResult>
-    <Certificates>
-      {% for cert in certificates %}
-      <member>
-        <CertificateArn>{{ cert }}</CertificateArn>
-      </member>
-      {% endfor %}
-    </Certificates>
-  </AddListenerCertificatesResult>
-  <ResponseMetadata>
-    <RequestId>{{ request_id }}</RequestId>
-  </ResponseMetadata>
-</AddListenerCertificatesResponse>"""
-
-DESCRIBE_LISTENER_CERTIFICATES_TEMPLATE = """<DescribeListenerCertificatesResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
-  <DescribeListenerCertificatesResult>
-    <Certificates>
-      {% for cert in certificates %}
-      <member>
-        <CertificateArn>{{ cert }}</CertificateArn>
-      </member>
-      {% endfor %}
-    </Certificates>
-  </DescribeListenerCertificatesResult>
-  <ResponseMetadata>
-    <RequestId>{{ request_id }}</RequestId>
-  </ResponseMetadata>
-</DescribeListenerCertificatesResponse>"""
-
 
 DESCRIBE_LISTENER_ATTRIBUTES = """<DescribeListenerAttributesResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
   <DescribeListenerAttributesResult>
@@ -1847,18 +1806,3 @@ MODIFY_LISTENER_ATTRIBUTES = """<ModifyListenerAttributesResponse xmlns="http://
     <RequestId>{{ request_id }}</RequestId>
   </ResponseMetadata>
 </ModifyListenerAttributesResponse>"""
-
-DESCRIBE_CAPACITY_RESERVATION = """<DescribeCapacityReservationResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
-  <DescribeCapacityReservationResult>
-    <CapacityReservationState>
-      <item>
-        <State>
-          <code>provisioned</code>
-        </State>
-      </item>
-    </CapacityReservationState>
-  </DescribeCapacityReservationResult>
-  <ResponseMetadata>
-    <RequestId>{{ request_id }}</RequestId>
-  </ResponseMetadata>
-</DescribeCapacityReservationResponse>"""
