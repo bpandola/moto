@@ -692,7 +692,7 @@ class ELBV2Response(BaseResponse):
         result = {"Limits": limits}
         return ActionResult(result)
 
-    def describe_ssl_policies(self) -> str:
+    def describe_ssl_policies(self) -> ActionResult:
         names = self._get_multi_param("Names.member.")
         # Supports paging but not worth implementing yet
         # marker = self._get_param('Marker')
@@ -702,8 +702,8 @@ class ELBV2Response(BaseResponse):
         if names:
             policies = filter(lambda policy: policy["name"] in names, policies)  # type: ignore
 
-        template = self.response_template(DESCRIBE_SSL_POLICIES_TEMPLATE)
-        return template.render(policies=policies)
+        result = {"SslPolicies": policies}
+        return ActionResult(result)
 
     def set_ip_address_type(self) -> ActionResult:
         arn = self._get_param("LoadBalancerArn")
@@ -1362,35 +1362,6 @@ SET_RULE_PRIORITIES_TEMPLATE = """<SetRulePrioritiesResponse xmlns="http://elast
     <RequestId>{{ request_id }}</RequestId>
   </ResponseMetadata>
 </SetRulePrioritiesResponse>"""
-
-
-DESCRIBE_SSL_POLICIES_TEMPLATE = """<DescribeSSLPoliciesResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
-  <DescribeSSLPoliciesResult>
-    <SslPolicies>
-      {% for policy in policies %}
-      <member>
-        <Name>{{ policy['name'] }}</Name>
-        <Ciphers>
-          {% for cipher in policy['ciphers'] %}
-          <member>
-            <Name>{{ cipher['name'] }}</Name>
-            <Priority>{{ cipher['priority'] }}</Priority>
-          </member>
-          {% endfor %}
-        </Ciphers>
-        <SslProtocols>
-          {% for proto in policy['ssl_protocols'] %}
-          <member>{{ proto }}</member>
-          {% endfor %}
-        </SslProtocols>
-      </member>
-      {% endfor %}
-    </SslPolicies>
-  </DescribeSSLPoliciesResult>
-  <ResponseMetadata>
-    <RequestId>{{ request_id }}</RequestId>
-  </ResponseMetadata>
-</DescribeSSLPoliciesResponse>"""
 
 
 MODIFY_LISTENER_TEMPLATE = """<ModifyListenerResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
