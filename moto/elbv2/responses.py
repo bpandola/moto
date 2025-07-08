@@ -721,15 +721,13 @@ class ELBV2Response(BaseResponse):
         result = {"SecurityGroups": sec_groups}
         return ActionResult(result)
 
-    def set_subnets(self) -> str:
+    def set_subnets(self) -> ActionResult:
         arn = self._get_param("LoadBalancerArn")
         subnets = self._get_multi_param("Subnets.member.")
         subnet_mappings = self._get_params().get("SubnetMappings", [])
-
         subnet_zone_list = self.elbv2_backend.set_subnets(arn, subnets, subnet_mappings)
-
-        template = self.response_template(SET_SUBNETS_TEMPLATE)
-        return template.render(subnets=subnet_zone_list)
+        result = {"AvailabilityZones": subnet_zone_list}
+        return ActionResult(result)
 
     def modify_load_balancer_attributes(self) -> ActionResult:
         arn = self._get_param("LoadBalancerArn")
@@ -1473,23 +1471,6 @@ DESCRIBE_SSL_POLICIES_TEMPLATE = """<DescribeSSLPoliciesResponse xmlns="http://e
     <RequestId>{{ request_id }}</RequestId>
   </ResponseMetadata>
 </DescribeSSLPoliciesResponse>"""
-
-
-SET_SUBNETS_TEMPLATE = """<SetSubnetsResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
-  <SetSubnetsResult>
-    <AvailabilityZones>
-      {% for zone_id, subnet_id in subnets.items() %}
-      <member>
-        <SubnetId>{{ subnet_id }}</SubnetId>
-        <ZoneName>{{ zone_id }}</ZoneName>
-      </member>
-      {% endfor %}
-    </AvailabilityZones>
-  </SetSubnetsResult>
-  <ResponseMetadata>
-    <RequestId>{{ request_id }}</RequestId>
-  </ResponseMetadata>
-</SetSubnetsResponse>"""
 
 
 MODIFY_LISTENER_TEMPLATE = """<ModifyListenerResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">

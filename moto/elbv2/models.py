@@ -633,6 +633,12 @@ class FakeBackend(BaseModel):
         return f"FakeBackend(inp: {self.instance_port}, policies: {self.policy_names})"
 
 
+class AvailabilityZone:
+    def __init__(self, subnet: Subnet) -> None:
+        self.subnet_id = subnet.id
+        self.zone_name = subnet.availability_zone
+
+
 class FakeLoadBalancer(CloudFormationModel):
     VALID_ATTRS = {
         "access_logs.s3.enabled",
@@ -1790,7 +1796,7 @@ Member must satisfy regular expression pattern: {expression}"
 
     def set_subnets(
         self, arn: str, subnets: List[str], subnet_mappings: List[Dict[str, Any]]
-    ) -> Dict[str, str]:
+    ) -> list[AvailabilityZone]:
         balancer = self.load_balancers.get(arn)
         if balancer is None:
             raise LoadBalancerNotFoundError()
@@ -1821,7 +1827,7 @@ Member must satisfy regular expression pattern: {expression}"
 
         balancer.subnets = subnet_objects
 
-        return sub_zone_list
+        return [AvailabilityZone(subnet) for subnet in subnet_objects]
 
     def _get_subnet(self, sub_zone_list: Dict[str, str], subnet_id: str) -> Subnet:
         subnet = self.ec2_backend.get_subnet(subnet_id)
