@@ -1314,20 +1314,6 @@ DESCRIBE_LISTENERS_TEMPLATE = """<DescribeListenersResponse xmlns="http://elasti
   </ResponseMetadata>
 </DescribeListenersResponse>"""
 
-CONFIGURE_HEALTH_CHECK_TEMPLATE = """<ConfigureHealthCheckResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
-  <ConfigureHealthCheckResult>
-    <HealthCheck>
-      <Interval>{{ check.interval }}</Interval>
-      <Target>{{ check.target }}</Target>
-      <HealthyThreshold>{{ check.healthy_threshold }}</HealthyThreshold>
-      <Timeout>{{ check.timeout }}</Timeout>
-      <UnhealthyThreshold>{{ check.unhealthy_threshold }}</UnhealthyThreshold>
-    </HealthCheck>
-  </ConfigureHealthCheckResult>
-  <ResponseMetadata>
-    <RequestId>{{ request_id }}</RequestId>
-  </ResponseMetadata>
-</ConfigureHealthCheckResponse>"""
 
 MODIFY_RULE_TEMPLATE = """<ModifyRuleResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
   <ModifyRuleResult>
