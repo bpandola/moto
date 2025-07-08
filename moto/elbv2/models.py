@@ -90,8 +90,8 @@ class FakeTargetGroup(CloudFormationModel):
         healthcheck_protocol: Optional[str] = None,
         healthcheck_port: Optional[str] = None,
         healthcheck_path: Optional[str] = None,
-        healthcheck_interval_seconds: Optional[str] = None,
-        healthcheck_timeout_seconds: Optional[str] = None,
+        healthcheck_interval_seconds: Optional[int] = None,
+        healthcheck_timeout_seconds: Optional[int] = None,
         healthcheck_enabled: Optional[str] = None,
         healthy_threshold_count: Optional[str] = None,
         unhealthy_threshold_count: Optional[str] = None,
@@ -117,11 +117,11 @@ class FakeTargetGroup(CloudFormationModel):
             self.protocol = protocol
             self.protocol_version = protocol_version
         self.port = port
-        self.healthcheck_protocol = healthcheck_protocol or self.protocol
-        self.healthcheck_port = healthcheck_port or "traffic-port"
-        self.healthcheck_path = healthcheck_path
-        self.healthcheck_interval_seconds = healthcheck_interval_seconds or "30"
-        self.healthcheck_timeout_seconds = healthcheck_timeout_seconds or "10"
+        self.health_check_protocol = healthcheck_protocol or self.protocol
+        self.health_check_port = healthcheck_port or "traffic-port"
+        self.health_check_path = healthcheck_path
+        self.health_check_interval_seconds = healthcheck_interval_seconds or 30
+        self.health_check_timeout_seconds = healthcheck_timeout_seconds or 10
         self.ip_address_type = (
             ip_address_type or "ipv4" if self.protocol != "GENEVE" else None
         )
@@ -133,10 +133,10 @@ class FakeTargetGroup(CloudFormationModel):
         self.healthy_threshold_count = healthy_threshold_count or "5"
         self.unhealthy_threshold_count = unhealthy_threshold_count or "2"
         self.load_balancer_arns: List[str] = []
-        if self.healthcheck_protocol != "TCP":
+        if self.health_check_protocol != "TCP":
             self.matcher: Dict[str, Any] = matcher or {"HttpCode": "200"}
-            self.healthcheck_path = self.healthcheck_path
-            self.healthcheck_port = self.healthcheck_port or str(self.port)
+            self.health_check_path = self.health_check_path
+            self.health_check_port = self.health_check_port or str(self.port)
         self.target_type = target_type or "instance"
 
         self.attributes = {
@@ -199,7 +199,7 @@ class FakeTargetGroup(CloudFormationModel):
                 return FakeHealthStatus(
                     target["id"],
                     port,
-                    self.healthcheck_port,
+                    self.health_check_port,
                     "unused",
                     "Target.NotRegistered",
                     "Target is not registered to the target group",
@@ -208,7 +208,7 @@ class FakeTargetGroup(CloudFormationModel):
                 return FakeHealthStatus(
                     target["id"],
                     port,
-                    self.healthcheck_port,
+                    self.health_check_port,
                     "draining",
                     "Target.DeregistrationInProgress",
                     "Target deregistration is in progress",
@@ -218,7 +218,7 @@ class FakeTargetGroup(CloudFormationModel):
                 return FakeHealthStatus(
                     target["id"],
                     target.get("Port", 80),
-                    self.healthcheck_port,
+                    self.health_check_port,
                     "unused",
                     "Target.NotRegistered",
                     "Target is not registered to the target group",
@@ -227,7 +227,7 @@ class FakeTargetGroup(CloudFormationModel):
             return FakeHealthStatus(
                 target["id"],
                 port,
-                self.healthcheck_port,
+                self.health_check_port,
                 "unavailable",
                 "Target.NotRegistered",
                 "Target is not registered",
@@ -238,12 +238,12 @@ class FakeTargetGroup(CloudFormationModel):
                 return FakeHealthStatus(
                     t["id"],
                     t["port"],
-                    self.healthcheck_port,
+                    self.health_check_port,
                     "unused",
                     "Target.InvalidState",
                     "Target is in the stopped state",
                 )
-        return FakeHealthStatus(t["id"], t["port"], self.healthcheck_port, "healthy")
+        return FakeHealthStatus(t["id"], t["port"], self.health_check_port, "healthy")
 
     @staticmethod
     def cloudformation_name_type() -> str:
@@ -1302,12 +1302,8 @@ Member must satisfy regular expression pattern: {expression}"
         original_kwargs = dict(kwargs)
         kwargs.update(kwargs_patch)
 
-        healthcheck_timeout_seconds = int(
-            str(kwargs.get("healthcheck_timeout_seconds") or "10")
-        )
-        healthcheck_interval_seconds = int(
-            str(kwargs.get("healthcheck_interval_seconds") or "30")
-        )
+        healthcheck_timeout_seconds = kwargs.get("healthcheck_timeout_seconds", 10)
+        healthcheck_interval_seconds = kwargs.get("healthcheck_interval_seconds", 30)
 
         if (
             healthcheck_timeout_seconds is not None
@@ -1863,8 +1859,8 @@ Member must satisfy regular expression pattern: {expression}"
         health_check_proto: Optional[str] = None,
         health_check_port: Optional[str] = None,
         health_check_path: Optional[str] = None,
-        health_check_interval: Optional[str] = None,
-        health_check_timeout: Optional[str] = None,
+        health_check_interval: Optional[int] = None,
+        health_check_timeout: Optional[int] = None,
         healthy_threshold_count: Optional[str] = None,
         unhealthy_threshold_count: Optional[str] = None,
         http_codes: Optional[str] = None,
@@ -1886,15 +1882,15 @@ Member must satisfy regular expression pattern: {expression}"
         if http_codes is not None and target_group.protocol in ["HTTP", "HTTPS"]:
             target_group.matcher["HttpCode"] = http_codes
         if health_check_interval is not None:
-            target_group.healthcheck_interval_seconds = health_check_interval
+            target_group.health_check_interval_seconds = health_check_interval
         if health_check_path is not None:
-            target_group.healthcheck_path = health_check_path
+            target_group.health_check_path = health_check_path
         if health_check_port is not None:
-            target_group.healthcheck_port = health_check_port
+            target_group.health_check_port = health_check_port
         if health_check_proto is not None:
-            target_group.healthcheck_protocol = health_check_proto
+            target_group.health_check_protocol = health_check_proto
         if health_check_timeout is not None:
-            target_group.healthcheck_timeout_seconds = health_check_timeout
+            target_group.health_check_timeout_seconds = health_check_timeout
         if health_check_enabled is not None:
             target_group.healthcheck_enabled = health_check_enabled
         if healthy_threshold_count is not None:

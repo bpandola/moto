@@ -430,7 +430,7 @@ class ELBV2Response(BaseResponse):
         template = self.response_template(CREATE_RULE_TEMPLATE)
         return template.render(rules=rules)
 
-    def create_target_group(self) -> str:
+    def create_target_group(self) -> ActionResult:
         params = self._get_params()
         name = params.get("Name")
         vpc_id = params.get("VpcId")
@@ -440,8 +440,8 @@ class ELBV2Response(BaseResponse):
         healthcheck_protocol = self._get_param("HealthCheckProtocol")
         healthcheck_port = self._get_param("HealthCheckPort")
         healthcheck_path = self._get_param("HealthCheckPath")
-        healthcheck_interval_seconds = self._get_param("HealthCheckIntervalSeconds")
-        healthcheck_timeout_seconds = self._get_param("HealthCheckTimeoutSeconds")
+        healthcheck_interval_seconds = self._get_int_param("HealthCheckIntervalSeconds")
+        healthcheck_timeout_seconds = self._get_int_param("HealthCheckTimeoutSeconds")
         healthcheck_enabled = self._get_param("HealthCheckEnabled")
         healthy_threshold_count = self._get_param("HealthyThresholdCount")
         unhealthy_threshold_count = self._get_param("UnhealthyThresholdCount")
@@ -469,9 +469,8 @@ class ELBV2Response(BaseResponse):
             target_type=target_type,
             tags=tags,
         )
-
-        template = self.response_template(CREATE_TARGET_GROUP_TEMPLATE)
-        return template.render(target_group=target_group)
+        result = {"TargetGroups": [target_group]}
+        return ActionResult(result)
 
     def create_listener(self) -> str:
         params = self._get_params()
@@ -553,16 +552,15 @@ class ELBV2Response(BaseResponse):
         template = self.response_template(DESCRIBE_RULES_TEMPLATE)
         return template.render(rules=rules_resp, marker=next_marker)
 
-    def describe_target_groups(self) -> str:
+    def describe_target_groups(self) -> ActionResult:
         load_balancer_arn = self._get_param("LoadBalancerArn")
         target_group_arns = self._get_multi_param("TargetGroupArns.member")
         names = self._get_multi_param("Names.member")
-
         target_groups = self.elbv2_backend.describe_target_groups(
             load_balancer_arn, target_group_arns, names
         )
-        template = self.response_template(DESCRIBE_TARGET_GROUPS_TEMPLATE)
-        return template.render(target_groups=target_groups)
+        result = {"TargetGroups": target_groups}
+        return ActionResult(result)
 
     def describe_target_group_attributes(self) -> ActionResult:
         target_group_arn = self._get_param("TargetGroupArn")
@@ -748,7 +746,7 @@ class ELBV2Response(BaseResponse):
         result = {"Attributes": attrs}
         return ActionResult(result)
 
-    def modify_target_group(self) -> str:
+    def modify_target_group(self) -> ActionResult:
         arn = self._get_param("TargetGroupArn")
 
         health_check_proto = self._get_param(
@@ -756,13 +754,12 @@ class ELBV2Response(BaseResponse):
         )  # 'HTTP' | 'HTTPS' | 'TCP',
         health_check_port = self._get_param("HealthCheckPort")
         health_check_path = self._get_param("HealthCheckPath")
-        health_check_interval = self._get_param("HealthCheckIntervalSeconds")
-        health_check_timeout = self._get_param("HealthCheckTimeoutSeconds")
+        health_check_interval = self._get_int_param("HealthCheckIntervalSeconds")
+        health_check_timeout = self._get_int_param("HealthCheckTimeoutSeconds")
         health_check_enabled = self._get_param("HealthCheckEnabled")
         healthy_threshold_count = self._get_param("HealthyThresholdCount")
         unhealthy_threshold_count = self._get_param("UnhealthyThresholdCount")
         http_codes = self._get_param("Matcher.HttpCode")
-
         target_group = self.elbv2_backend.modify_target_group(
             arn,
             health_check_proto,
@@ -775,9 +772,8 @@ class ELBV2Response(BaseResponse):
             http_codes,
             health_check_enabled=health_check_enabled,
         )
-
-        template = self.response_template(MODIFY_TARGET_GROUP_TEMPLATE)
-        return template.render(target_group=target_group)
+        result = {"TargetGroups": [target_group]}
+        return ActionResult(result)
 
     def modify_listener(self) -> str:
         arn = self._get_param("ListenerArn")
@@ -971,59 +967,6 @@ CREATE_RULE_TEMPLATE = """<CreateRuleResponse xmlns="http://elasticloadbalancing
   </ResponseMetadata>
 </CreateRuleResponse>"""
 
-CREATE_TARGET_GROUP_TEMPLATE = """<CreateTargetGroupResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
-  <CreateTargetGroupResult>
-    <TargetGroups>
-      <member>
-        <TargetGroupArn>{{ target_group.arn }}</TargetGroupArn>
-        <TargetGroupName>{{ target_group.name }}</TargetGroupName>
-        {% if target_group.protocol %}
-        <Protocol>{{ target_group.protocol }}</Protocol>
-        {% if target_group.protocol_version %}
-        <ProtocolVersion>{{ target_group.protocol_version }}</ProtocolVersion>
-        {% endif %}
-        {% endif %}
-        {% if target_group.port %}
-        <Port>{{ target_group.port }}</Port>
-        {% endif %}
-        {% if target_group.vpc_id %}
-        <VpcId>{{ target_group.vpc_id }}</VpcId>
-        {% endif %}
-        {% if target_group.healthcheck_enabled %}
-        {% if target_group.healthcheck_port %}
-        <HealthCheckPort>{{ target_group.healthcheck_port }}</HealthCheckPort>
-        {% endif %}
-        {% if target_group.healthcheck_protocol %}
-        <HealthCheckProtocol>{{ target_group.healthcheck_protocol or "None" }}</HealthCheckProtocol>
-        {% endif %}
-        {% endif %}
-        {% if target_group.healthcheck_path %}
-        <HealthCheckPath>{{ target_group.healthcheck_path or '' }}</HealthCheckPath>
-        {% endif %}
-        <HealthCheckIntervalSeconds>{{ target_group.healthcheck_interval_seconds }}</HealthCheckIntervalSeconds>
-        <HealthCheckTimeoutSeconds>{{ target_group.healthcheck_timeout_seconds }}</HealthCheckTimeoutSeconds>
-        <HealthyThresholdCount>{{ target_group.healthy_threshold_count }}</HealthyThresholdCount>
-        <UnhealthyThresholdCount>{{ target_group.unhealthy_threshold_count }}</UnhealthyThresholdCount>
-        <HealthCheckEnabled>{{ target_group.healthcheck_enabled and 'true' or 'false' }}</HealthCheckEnabled>
-        {% if target_group.matcher %}
-        <Matcher>
-          {% if target_group.matcher.get("HttpCode") %}<HttpCode>{{ target_group.matcher['HttpCode'] }}</HttpCode>{% endif %}
-          {% if target_group.matcher.get("GrpcCode") %}<GrpcCode>{{ target_group.matcher['GrpcCode'] }}</GrpcCode>{% endif %}
-        </Matcher>
-        {% endif %}
-        {% if target_group.target_type %}
-        <TargetType>{{ target_group.target_type }}</TargetType>
-        {% endif %}
-        {% if target_group.ip_address_type %}
-        <IpAddressType>{{ target_group.ip_address_type }}</IpAddressType>
-        {% endif %}
-      </member>
-    </TargetGroups>
-  </CreateTargetGroupResult>
-  <ResponseMetadata>
-    <RequestId>{{ request_id }}</RequestId>
-  </ResponseMetadata>
-</CreateTargetGroupResponse>"""
 
 CREATE_LISTENER_TEMPLATE = """<CreateListenerResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
   <CreateListenerResult>
@@ -1206,55 +1149,6 @@ DESCRIBE_RULES_TEMPLATE = """<DescribeRulesResponse xmlns="http://elasticloadbal
     <RequestId>{{ request_id }}</RequestId>
   </ResponseMetadata>
 </DescribeRulesResponse>"""
-
-DESCRIBE_TARGET_GROUPS_TEMPLATE = """<DescribeTargetGroupsResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
-  <DescribeTargetGroupsResult>
-    <TargetGroups>
-      {% for target_group in target_groups %}
-      <member>
-        <TargetGroupArn>{{ target_group.arn }}</TargetGroupArn>
-        <TargetGroupName>{{ target_group.name }}</TargetGroupName>
-        {% if target_group.protocol %}
-        <Protocol>{{ target_group.protocol }}</Protocol>
-        <ProtocolVersion>{{ target_group.protocol_version }}</ProtocolVersion>
-        {% endif %}
-        {% if target_group.port %}
-        <Port>{{ target_group.port }}</Port>
-        {% endif %}
-        {% if target_group.vpc_id %}
-        <VpcId>{{ target_group.vpc_id }}</VpcId>
-        {% endif %}
-        <IpAddressType>{{ target_group.ip_address_type }}</IpAddressType>
-        <HealthCheckProtocol>{{ target_group.healthcheck_protocol }}</HealthCheckProtocol>
-        {% if target_group.healthcheck_port %}<HealthCheckPort>{{ target_group.healthcheck_port }}</HealthCheckPort>{% endif %}
-        <HealthCheckPath>{{ target_group.healthcheck_path or '' }}</HealthCheckPath>
-        <HealthCheckIntervalSeconds>{{ target_group.healthcheck_interval_seconds }}</HealthCheckIntervalSeconds>
-        <HealthCheckTimeoutSeconds>{{ target_group.healthcheck_timeout_seconds }}</HealthCheckTimeoutSeconds>
-        <HealthCheckEnabled>{{ target_group.healthcheck_enabled and 'true' or 'false' }}</HealthCheckEnabled>
-        <HealthyThresholdCount>{{ target_group.healthy_threshold_count }}</HealthyThresholdCount>
-        <UnhealthyThresholdCount>{{ target_group.unhealthy_threshold_count }}</UnhealthyThresholdCount>
-        {% if target_group.matcher %}
-        <Matcher>
-            {% if target_group.matcher.get("HttpCode") %}<HttpCode>{{ target_group.matcher['HttpCode'] }}</HttpCode>{% endif %}
-            {% if target_group.matcher.get("GrpcCode") %}<GrpcCode>{{ target_group.matcher['GrpcCode'] }}</GrpcCode>{% endif %}
-        </Matcher>
-        {% endif %}
-        {% if target_group.target_type %}
-        <TargetType>{{ target_group.target_type }}</TargetType>
-        {% endif %}
-        <LoadBalancerArns>
-          {% for load_balancer_arn in target_group.load_balancer_arns %}
-          <member>{{ load_balancer_arn }}</member>
-          {% endfor %}
-        </LoadBalancerArns>
-      </member>
-      {% endfor %}
-    </TargetGroups>
-  </DescribeTargetGroupsResult>
-  <ResponseMetadata>
-    <RequestId>{{ request_id }}</RequestId>
-  </ResponseMetadata>
-</DescribeTargetGroupsResponse>"""
 
 
 DESCRIBE_LISTENERS_TEMPLATE = """<DescribeListenersResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
@@ -1597,40 +1491,6 @@ SET_SUBNETS_TEMPLATE = """<SetSubnetsResponse xmlns="http://elasticloadbalancing
   </ResponseMetadata>
 </SetSubnetsResponse>"""
 
-
-MODIFY_TARGET_GROUP_TEMPLATE = """<ModifyTargetGroupResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
-  <ModifyTargetGroupResult>
-    <TargetGroups>
-      <member>
-        <TargetGroupArn>{{ target_group.arn }}</TargetGroupArn>
-        <TargetGroupName>{{ target_group.name }}</TargetGroupName>
-        <Protocol>{{ target_group.protocol }}</Protocol>
-        {% if target_group.port %}<Port>{{ target_group.port }}</Port>{% endif %}
-        <VpcId>{{ target_group.vpc_id }}</VpcId>
-        <HealthCheckProtocol>{{ target_group.healthcheck_protocol }}</HealthCheckProtocol>
-        {% if target_group.healthcheck_port %}<HealthCheckPort>{{ target_group.healthcheck_port }}</HealthCheckPort>{% endif %}
-        <HealthCheckPath>{{ target_group.healthcheck_path }}</HealthCheckPath>
-        <HealthCheckIntervalSeconds>{{ target_group.healthcheck_interval_seconds }}</HealthCheckIntervalSeconds>
-        <HealthCheckTimeoutSeconds>{{ target_group.healthcheck_timeout_seconds }}</HealthCheckTimeoutSeconds>
-        <HealthyThresholdCount>{{ target_group.healthy_threshold_count }}</HealthyThresholdCount>
-        <UnhealthyThresholdCount>{{ target_group.unhealthy_threshold_count }}</UnhealthyThresholdCount>
-        {% if target_group.protocol in ["HTTP", "HTTPS"] %}
-        <Matcher>
-          <HttpCode>{{ target_group.matcher['HttpCode'] }}</HttpCode>
-        </Matcher>
-        {% endif %}
-        <LoadBalancerArns>
-          {% for load_balancer_arn in target_group.load_balancer_arns %}
-          <member>{{ load_balancer_arn }}</member>
-          {% endfor %}
-        </LoadBalancerArns>
-      </member>
-    </TargetGroups>
-  </ModifyTargetGroupResult>
-  <ResponseMetadata>
-    <RequestId>{{ request_id }}</RequestId>
-  </ResponseMetadata>
-</ModifyTargetGroupResponse>"""
 
 MODIFY_LISTENER_TEMPLATE = """<ModifyListenerResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
   <ModifyListenerResult>
