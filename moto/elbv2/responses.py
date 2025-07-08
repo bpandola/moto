@@ -716,14 +716,12 @@ class ELBV2Response(BaseResponse):
         result = {"IpAddressType": ip_type}
         return ActionResult(result)
 
-    def set_security_groups(self) -> str:
+    def set_security_groups(self) -> ActionResult:
         arn = self._get_param("LoadBalancerArn")
         sec_groups = self._get_multi_param("SecurityGroups.member.")
-
         self.elbv2_backend.set_security_groups(arn, sec_groups)
-
-        template = self.response_template(SET_SECURITY_GROUPS_TEMPLATE)
-        return template.render(sec_groups=sec_groups)
+        result = {"SecurityGroups": sec_groups}
+        return ActionResult(result)
 
     def set_subnets(self) -> str:
         arn = self._get_param("LoadBalancerArn")
@@ -1582,19 +1580,6 @@ DESCRIBE_SSL_POLICIES_TEMPLATE = """<DescribeSSLPoliciesResponse xmlns="http://e
   </ResponseMetadata>
 </DescribeSSLPoliciesResponse>"""
 
-
-SET_SECURITY_GROUPS_TEMPLATE = """<SetSecurityGroupsResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
-  <SetSecurityGroupsResult>
-    <SecurityGroupIds>
-      {% for group in sec_groups %}
-      <member>{{ group }}</member>
-      {% endfor %}
-    </SecurityGroupIds>
-  </SetSecurityGroupsResult>
-  <ResponseMetadata>
-    <RequestId>{{ request_id }}</RequestId>
-  </ResponseMetadata>
-</SetSecurityGroupsResponse>"""
 
 SET_SUBNETS_TEMPLATE = """<SetSubnetsResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
   <SetSubnetsResult>
