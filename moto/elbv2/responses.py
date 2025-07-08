@@ -1,5 +1,5 @@
 from moto.core.exceptions import RESTError
-from moto.core.responses import BaseResponse
+from moto.core.responses import ActionResult, BaseResponse, EmptyResult
 
 from .exceptions import ListenerOrBalancerMissingError, TargetGroupNotFoundError
 from .models import ELBv2Backend, elbv2_backends
@@ -563,29 +563,25 @@ class ELBV2Response(BaseResponse):
         template = self.response_template(DESCRIBE_LISTENERS_TEMPLATE)
         return template.render(listeners=listeners)
 
-    def delete_load_balancer(self) -> str:
+    def delete_load_balancer(self) -> ActionResult:
         arn = self._get_param("LoadBalancerArn")
         self.elbv2_backend.delete_load_balancer(arn)
-        template = self.response_template(DELETE_LOAD_BALANCER_TEMPLATE)
-        return template.render()
+        return EmptyResult()
 
-    def delete_rule(self) -> str:
+    def delete_rule(self) -> ActionResult:
         arn = self._get_param("RuleArn")
         self.elbv2_backend.delete_rule(arn)
-        template = self.response_template(DELETE_RULE_TEMPLATE)
-        return template.render()
+        return EmptyResult()
 
-    def delete_target_group(self) -> str:
+    def delete_target_group(self) -> ActionResult:
         arn = self._get_param("TargetGroupArn")
         self.elbv2_backend.delete_target_group(arn)
-        template = self.response_template(DELETE_TARGET_GROUP_TEMPLATE)
-        return template.render()
+        return EmptyResult()
 
-    def delete_listener(self) -> str:
+    def delete_listener(self) -> ActionResult:
         arn = self._get_param("ListenerArn")
         self.elbv2_backend.delete_listener(arn)
-        template = self.response_template(DELETE_LISTENER_TEMPLATE)
-        return template.render()
+        return EmptyResult()
 
     def modify_rule(self) -> str:
         rule_arn = self._get_param("RuleArn")
@@ -607,21 +603,17 @@ class ELBV2Response(BaseResponse):
         template = self.response_template(MODIFY_TARGET_GROUP_ATTRIBUTES_TEMPLATE)
         return template.render(attributes=attributes)
 
-    def register_targets(self) -> str:
+    def register_targets(self) -> ActionResult:
         target_group_arn = self._get_param("TargetGroupArn")
         targets = self._get_list_prefix("Targets.member")
         self.elbv2_backend.register_targets(target_group_arn, targets)
+        return EmptyResult()
 
-        template = self.response_template(REGISTER_TARGETS_TEMPLATE)
-        return template.render()
-
-    def deregister_targets(self) -> str:
+    def deregister_targets(self) -> ActionResult:
         target_group_arn = self._get_param("TargetGroupArn")
         targets = self._get_list_prefix("Targets.member")
         self.elbv2_backend.deregister_targets(target_group_arn, targets)
-
-        template = self.response_template(DEREGISTER_TARGETS_TEMPLATE)
-        return template.render()
+        return EmptyResult()
 
     def describe_target_health(self) -> str:
         target_group_arn = self._get_param("TargetGroupArn")
@@ -641,23 +633,17 @@ class ELBV2Response(BaseResponse):
         template = self.response_template(SET_RULE_PRIORITIES_TEMPLATE)
         return template.render(rules=rules)
 
-    def add_tags(self) -> str:
+    def add_tags(self) -> ActionResult:
         resource_arns = self._get_multi_param("ResourceArns.member")
         tags = self._get_params().get("Tags")
-
         self.elbv2_backend.add_tags(resource_arns, tags)  # type: ignore
+        return EmptyResult()
 
-        template = self.response_template(ADD_TAGS_TEMPLATE)
-        return template.render()
-
-    def remove_tags(self) -> str:
+    def remove_tags(self) -> ActionResult:
         resource_arns = self._get_multi_param("ResourceArns.member")
         tag_keys = self._get_multi_param("TagKeys.member")
-
         self.elbv2_backend.remove_tags(resource_arns, tag_keys)
-
-        template = self.response_template(REMOVE_TAGS_TEMPLATE)
-        return template.render()
+        return EmptyResult()
 
     def describe_tags(self) -> str:
         resource_arns = self._get_multi_param("ResourceArns.member")
@@ -814,13 +800,11 @@ class ELBV2Response(BaseResponse):
         template = self.response_template(DESCRIBE_LISTENER_CERTIFICATES_TEMPLATE)
         return template.render(certificates=certificates)
 
-    def remove_listener_certificates(self) -> str:
+    def remove_listener_certificates(self) -> ActionResult:
         arn = self._get_param("ListenerArn")
         certificates = self._get_list_prefix("Certificates.member")
         self.elbv2_backend.remove_listener_certificates(arn, certificates)
-
-        template = self.response_template(REMOVE_LISTENER_CERTIFICATES_TEMPLATE)
-        return template.render()
+        return EmptyResult()
 
     def describe_listener_attributes(self) -> str:
         arn = self._get_param("ListenerArn")
@@ -840,20 +824,6 @@ class ELBV2Response(BaseResponse):
     def describe_capacity_reservation(self) -> str:
         return DESCRIBE_CAPACITY_RESERVATION
 
-
-ADD_TAGS_TEMPLATE = """<AddTagsResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
-  <AddTagsResult/>
-  <ResponseMetadata>
-    <RequestId>{{ request_id }}</RequestId>
-  </ResponseMetadata>
-</AddTagsResponse>"""
-
-REMOVE_TAGS_TEMPLATE = """<RemoveTagsResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
-  <RemoveTagsResult/>
-  <ResponseMetadata>
-    <RequestId>{{ request_id }}</RequestId>
-  </ResponseMetadata>
-</RemoveTagsResponse>"""
 
 DESCRIBE_TAGS_TEMPLATE = """<DescribeTagsResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
   <DescribeTagsResult>
@@ -1102,33 +1072,6 @@ CREATE_LISTENER_TEMPLATE = """<CreateListenerResponse xmlns="http://elasticloadb
   </ResponseMetadata>
 </CreateListenerResponse>"""
 
-DELETE_LOAD_BALANCER_TEMPLATE = """<DeleteLoadBalancerResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
-  <DeleteLoadBalancerResult/>
-  <ResponseMetadata>
-    <RequestId>{{ request_id }}</RequestId>
-  </ResponseMetadata>
-</DeleteLoadBalancerResponse>"""
-
-DELETE_RULE_TEMPLATE = """<DeleteRuleResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
-  <DeleteRuleResult/>
-  <ResponseMetadata>
-    <RequestId>{{ request_id }}</RequestId>
-  </ResponseMetadata>
-</DeleteRuleResponse>"""
-
-DELETE_TARGET_GROUP_TEMPLATE = """<DeleteTargetGroupResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
-  <DeleteTargetGroupResult/>
-  <ResponseMetadata>
-    <RequestId>{{ request_id }}</RequestId>
-  </ResponseMetadata>
-</DeleteTargetGroupResponse>"""
-
-DELETE_LISTENER_TEMPLATE = """<DeleteListenerResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
-  <DeleteListenerResult/>
-  <ResponseMetadata>
-    <RequestId>{{ request_id }}</RequestId>
-  </ResponseMetadata>
-</DeleteListenerResponse>"""
 
 DESCRIBE_LOAD_BALANCERS_TEMPLATE = """<DescribeLoadBalancersResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
   <DescribeLoadBalancersResult>
@@ -1499,35 +1442,6 @@ MODIFY_TARGET_GROUP_ATTRIBUTES_TEMPLATE = """<ModifyTargetGroupAttributesRespons
   </ResponseMetadata>
 </ModifyTargetGroupAttributesResponse>"""
 
-REGISTER_TARGETS_TEMPLATE = """<RegisterTargetsResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
-  <RegisterTargetsResult>
-  </RegisterTargetsResult>
-  <ResponseMetadata>
-    <RequestId>{{ request_id }}</RequestId>
-  </ResponseMetadata>
-</RegisterTargetsResponse>"""
-
-DEREGISTER_TARGETS_TEMPLATE = """<DeregisterTargetsResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
-  <DeregisterTargetsResult>
-  </DeregisterTargetsResult>
-  <ResponseMetadata>
-    <RequestId>{{ request_id }}</RequestId>
-  </ResponseMetadata>
-</DeregisterTargetsResponse>"""
-
-SET_LOAD_BALANCER_SSL_CERTIFICATE = """<SetLoadBalancerListenerSSLCertificateResponse xmlns="http://elasticloadbalan cing.amazonaws.com/doc/2015-12-01/">
- <SetLoadBalancerListenerSSLCertificateResult/>
-<ResponseMetadata>
-    <RequestId>{{ request_id }}</RequestId>
-</ResponseMetadata>
-</SetLoadBalancerListenerSSLCertificateResponse>"""
-
-DELETE_LOAD_BALANCER_LISTENERS = """<DeleteLoadBalancerListenersResponse xmlns="http://elasticloadbalan cing.amazonaws.com/doc/2015-12-01/">
- <DeleteLoadBalancerListenersResult/>
-<ResponseMetadata>
-    <RequestId>{{ request_id }}</RequestId>
-</ResponseMetadata>
-</DeleteLoadBalancerListenersResponse>"""
 
 DESCRIBE_ATTRIBUTES_TEMPLATE = """<DescribeLoadBalancerAttributesResponse  xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
   <DescribeLoadBalancerAttributesResult>
@@ -1562,29 +1476,6 @@ DESCRIBE_ATTRIBUTES_TEMPLATE = """<DescribeLoadBalancerAttributesResponse  xmlns
 </DescribeLoadBalancerAttributesResponse>
 """
 
-CREATE_LOAD_BALANCER_POLICY_TEMPLATE = """<CreateLoadBalancerPolicyResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
-  <CreateLoadBalancerPolicyResult/>
-  <ResponseMetadata>
-      <RequestId>{{ request_id }}</RequestId>
-  </ResponseMetadata>
-</CreateLoadBalancerPolicyResponse>
-"""
-
-SET_LOAD_BALANCER_POLICIES_OF_LISTENER_TEMPLATE = """<SetLoadBalancerPoliciesOfListenerResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
-    <SetLoadBalancerPoliciesOfListenerResult/>
-    <ResponseMetadata>
-        <RequestId>{{ request_id }}</RequestId>
-    </ResponseMetadata>
-</SetLoadBalancerPoliciesOfListenerResponse>
-"""
-
-SET_LOAD_BALANCER_POLICIES_FOR_BACKEND_SERVER_TEMPLATE = """<SetLoadBalancerPoliciesForBackendServerResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
-    <SetLoadBalancerPoliciesForBackendServerResult/>
-    <ResponseMetadata>
-        <RequestId>{{ request_id }}</RequestId>
-    </ResponseMetadata>
-</SetLoadBalancerPoliciesForBackendServerResponse>
-"""
 
 DESCRIBE_TARGET_HEALTH_TEMPLATE = """<DescribeTargetHealthResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
   <DescribeTargetHealthResult>
@@ -1924,12 +1815,6 @@ DESCRIBE_LISTENER_CERTIFICATES_TEMPLATE = """<DescribeListenerCertificatesRespon
   </ResponseMetadata>
 </DescribeListenerCertificatesResponse>"""
 
-REMOVE_LISTENER_CERTIFICATES_TEMPLATE = """<RemoveListenerCertificatesResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
-  <RemoveListenerCertificatesResult />
-  <ResponseMetadata>
-    <RequestId>{{ request_id }}</RequestId>
-  </ResponseMetadata>
-</RemoveListenerCertificatesResponse>"""
 
 DESCRIBE_LISTENER_ATTRIBUTES = """<DescribeListenerAttributesResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
   <DescribeListenerAttributesResult>
