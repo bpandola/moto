@@ -366,7 +366,28 @@ SSL_POLICIES = [
 ]
 
 
+def transform_dict(data: dict[str, str]) -> list[dict[str, str]]:
+    transformed = [{"Key": key, "Value": value} for key, value in data.items()]
+    return transformed
+
+
+def transform_limits(data: dict[str, str]) -> list[dict[str, str]]:
+    transformed = [{"Name": key, "Max": value} for key, value in data.items()]
+    return transformed
+
+
 class ELBV2Response(BaseResponse):
+    RESPONSE_KEY_PATH_TO_TRANSFORMER = {
+        "DescribeAccountLimitsOutput.Limits": transform_limits,
+        "DescribeListenerAttributesOutput.Attributes": transform_dict,
+        "DescribeLoadBalancerAttributesOutput.Attributes": transform_dict,
+        "DescribeTargetGroupAttributesOutput.Attributes": transform_dict,
+        "DescribeTagsOutput.TagDescriptions.TagDescription.Tags": transform_dict,
+        "ModifyListenerAttributesOutput.Attributes": transform_dict,
+        "ModifyLoadBalancerAttributesOutput.Attributes": transform_dict,
+        "ModifyTargetGroupAttributesOutput.Attributes": transform_dict,
+    }
+
     def __init__(self) -> None:
         super().__init__(service_name="elbv2")
 
@@ -543,13 +564,13 @@ class ELBV2Response(BaseResponse):
         template = self.response_template(DESCRIBE_TARGET_GROUPS_TEMPLATE)
         return template.render(target_groups=target_groups)
 
-    def describe_target_group_attributes(self) -> str:
+    def describe_target_group_attributes(self) -> ActionResult:
         target_group_arn = self._get_param("TargetGroupArn")
         target_group = self.elbv2_backend.target_groups.get(target_group_arn)
         if not target_group:
             raise TargetGroupNotFoundError()
-        template = self.response_template(DESCRIBE_TARGET_GROUP_ATTRIBUTES_TEMPLATE)
-        return template.render(attributes=target_group.attributes)
+        result = {"Attributes": target_group.attributes}
+        return ActionResult(result)
 
     def describe_listeners(self) -> str:
         load_balancer_arn = self._get_param("LoadBalancerArn")
@@ -594,14 +615,13 @@ class ELBV2Response(BaseResponse):
         template = self.response_template(MODIFY_RULE_TEMPLATE)
         return template.render(rules=rules)
 
-    def modify_target_group_attributes(self) -> str:
+    def modify_target_group_attributes(self) -> ActionResult:
         target_group_arn = self._get_param("TargetGroupArn")
         attrs = self._get_list_prefix("Attributes.member")
         attributes = {attr["key"]: attr["value"] for attr in attrs}
         self.elbv2_backend.modify_target_group_attributes(target_group_arn, attributes)
-
-        template = self.response_template(MODIFY_TARGET_GROUP_ATTRIBUTES_TEMPLATE)
-        return template.render(attributes=attributes)
+        result = {"Attributes": attributes}
+        return ActionResult(result)
 
     def register_targets(self) -> ActionResult:
         target_group_arn = self._get_param("TargetGroupArn")
@@ -645,14 +665,18 @@ class ELBV2Response(BaseResponse):
         self.elbv2_backend.remove_tags(resource_arns, tag_keys)
         return EmptyResult()
 
-    def describe_tags(self) -> str:
+    def describe_tags(self) -> ActionResult:
         resource_arns = self._get_multi_param("ResourceArns.member")
         resource_tags = self.elbv2_backend.describe_tags(resource_arns)
+        result = {
+            "TagDescriptions": [
+                {"ResourceArn": arn, "Tags": tags}
+                for arn, tags in resource_tags.items()
+            ]
+        }
+        return ActionResult(result)
 
-        template = self.response_template(DESCRIBE_TAGS_TEMPLATE)
-        return template.render(resource_tags=resource_tags)
-
-    def describe_account_limits(self) -> str:
+    def describe_account_limits(self) -> ActionResult:
         # Supports paging but not worth implementing yet
         # marker = self._get_param('Marker')
         # page_size = self._get_int_param('PageSize')
@@ -669,8 +693,8 @@ class ELBV2Response(BaseResponse):
             "certificates-per-application-load-balancer": 25,
         }
 
-        template = self.response_template(DESCRIBE_LIMITS_TEMPLATE)
-        return template.render(limits=limits)
+        result = {"Limits": limits}
+        return ActionResult(result)
 
     def describe_ssl_policies(self) -> str:
         names = self._get_multi_param("Names.member.")
@@ -711,23 +735,20 @@ class ELBV2Response(BaseResponse):
         template = self.response_template(SET_SUBNETS_TEMPLATE)
         return template.render(subnets=subnet_zone_list)
 
-    def modify_load_balancer_attributes(self) -> str:
+    def modify_load_balancer_attributes(self) -> ActionResult:
         arn = self._get_param("LoadBalancerArn")
         attrs = self._get_map_prefix(
             "Attributes.member", key_end="Key", value_end="Value"
         )
-
         all_attrs = self.elbv2_backend.modify_load_balancer_attributes(arn, attrs)
+        result = {"Attributes": all_attrs}
+        return ActionResult(result)
 
-        template = self.response_template(MODIFY_LOADBALANCER_ATTRS_TEMPLATE)
-        return template.render(attrs=all_attrs)
-
-    def describe_load_balancer_attributes(self) -> str:
+    def describe_load_balancer_attributes(self) -> ActionResult:
         arn = self._get_param("LoadBalancerArn")
         attrs = self.elbv2_backend.describe_load_balancer_attributes(arn)
-
-        template = self.response_template(DESCRIBE_LOADBALANCER_ATTRS_TEMPLATE)
-        return template.render(attrs=attrs)
+        result = {"Attributes": attrs}
+        return ActionResult(result)
 
     def modify_target_group(self) -> str:
         arn = self._get_param("TargetGroupArn")
@@ -802,48 +823,25 @@ class ELBV2Response(BaseResponse):
         self.elbv2_backend.remove_listener_certificates(arn, certificates)
         return EmptyResult()
 
-    def describe_listener_attributes(self) -> str:
+    def describe_listener_attributes(self) -> ActionResult:
         arn = self._get_param("ListenerArn")
         attrs = self.elbv2_backend.describe_listener_attributes(arn)
-        template = self.response_template(DESCRIBE_LISTENER_ATTRIBUTES)
-        return template.render(attributes=attrs)
+        result = {"Attributes": attrs}
+        return ActionResult(result)
 
-    def modify_listener_attributes(self) -> str:
+    def modify_listener_attributes(self) -> ActionResult:
         arn = self._get_param("ListenerArn")
         attrs = self._get_params()["Attributes"]
         updated_attrs = self.elbv2_backend.modify_listener_attributes(
             listener_arn=arn, attrs=attrs
         )
-        template = self.response_template(MODIFY_LISTENER_ATTRIBUTES)
-        return template.render(attributes=updated_attrs)
+        result = {"Attributes": updated_attrs}
+        return ActionResult(result)
 
     def describe_capacity_reservation(self) -> ActionResult:
         result = {"CapacityReservationState": ["provisioned"]}
         return ActionResult(result)
 
-
-DESCRIBE_TAGS_TEMPLATE = """<DescribeTagsResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
-  <DescribeTagsResult>
-    <TagDescriptions>
-      {% for resource_arn, tags in resource_tags.items() %}
-      <member>
-        <ResourceArn>{{ resource_arn }}</ResourceArn>
-        <Tags>
-          {% for key, value in tags.items() %}
-          <member>
-            <Value>{{ value }}</Value>
-            <Key>{{ key }}</Key>
-          </member>
-          {% endfor %}
-        </Tags>
-      </member>
-      {% endfor %}
-    </TagDescriptions>
-  </DescribeTagsResult>
-  <ResponseMetadata>
-    <RequestId>{{ request_id }}</RequestId>
-  </ResponseMetadata>
-</DescribeTagsResponse>"""
 
 CREATE_LOAD_BALANCER_TEMPLATE = """<CreateLoadBalancerResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
   <CreateLoadBalancerResult>
@@ -1260,21 +1258,6 @@ DESCRIBE_TARGET_GROUPS_TEMPLATE = """<DescribeTargetGroupsResponse xmlns="http:/
   </ResponseMetadata>
 </DescribeTargetGroupsResponse>"""
 
-DESCRIBE_TARGET_GROUP_ATTRIBUTES_TEMPLATE = """<DescribeTargetGroupAttributesResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
-  <DescribeTargetGroupAttributesResult>
-    <Attributes>
-      {% for key, value in attributes.items() %}
-      <member>
-        <Key>{{ key }}</Key>
-        <Value>{{ value }}</Value>
-      </member>
-      {% endfor %}
-    </Attributes>
-  </DescribeTargetGroupAttributesResult>
-  <ResponseMetadata>
-    <RequestId>{{ request_id }}</RequestId>
-  </ResponseMetadata>
-</DescribeTargetGroupAttributesResponse>"""
 
 DESCRIBE_LISTENERS_TEMPLATE = """<DescribeListenersResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
   <DescribeListenersResult>
@@ -1408,22 +1391,6 @@ MODIFY_RULE_TEMPLATE = """<ModifyRuleResponse xmlns="http://elasticloadbalancing
     <RequestId>{{ request_id }}</RequestId>
   </ResponseMetadata>
 </ModifyRuleResponse>"""
-
-MODIFY_TARGET_GROUP_ATTRIBUTES_TEMPLATE = """<ModifyTargetGroupAttributesResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
-  <ModifyTargetGroupAttributesResult>
-    <Attributes>
-      {% for key, value in attributes.items() %}
-      <member>
-        <Key>{{ key }}</Key>
-        <Value>{{ value }}</Value>
-      </member>
-      {% endfor %}
-    </Attributes>
-  </ModifyTargetGroupAttributesResult>
-  <ResponseMetadata>
-    <RequestId>{{ request_id }}</RequestId>
-  </ResponseMetadata>
-</ModifyTargetGroupAttributesResponse>"""
 
 
 DESCRIBE_ATTRIBUTES_TEMPLATE = """<DescribeLoadBalancerAttributesResponse  xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
@@ -1586,21 +1553,6 @@ SET_RULE_PRIORITIES_TEMPLATE = """<SetRulePrioritiesResponse xmlns="http://elast
   </ResponseMetadata>
 </SetRulePrioritiesResponse>"""
 
-DESCRIBE_LIMITS_TEMPLATE = """<DescribeAccountLimitsResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
-  <DescribeAccountLimitsResult>
-    <Limits>
-      {% for key, value in limits.items() %}
-      <member>
-        <Name>{{ key }}</Name>
-        <Max>{{ value }}</Max>
-      </member>
-      {% endfor %}
-    </Limits>
-  </DescribeAccountLimitsResult>
-  <ResponseMetadata>
-    <RequestId>{{ request_id }}</RequestId>
-  </ResponseMetadata>
-</DescribeAccountLimitsResponse>"""
 
 DESCRIBE_SSL_POLICIES_TEMPLATE = """<DescribeSSLPoliciesResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
   <DescribeSSLPoliciesResult>
@@ -1659,38 +1611,6 @@ SET_SUBNETS_TEMPLATE = """<SetSubnetsResponse xmlns="http://elasticloadbalancing
     <RequestId>{{ request_id }}</RequestId>
   </ResponseMetadata>
 </SetSubnetsResponse>"""
-
-MODIFY_LOADBALANCER_ATTRS_TEMPLATE = """<ModifyLoadBalancerAttributesResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
-  <ModifyLoadBalancerAttributesResult>
-    <Attributes>
-      {% for key, value in attrs.items() %}
-      <member>
-        {% if value == None %}<Value />{% else %}<Value>{{ value }}</Value>{% endif %}
-        <Key>{{ key }}</Key>
-      </member>
-      {% endfor %}
-    </Attributes>
-  </ModifyLoadBalancerAttributesResult>
-  <ResponseMetadata>
-    <RequestId>{{ request_id }}</RequestId>
-  </ResponseMetadata>
-</ModifyLoadBalancerAttributesResponse>"""
-
-DESCRIBE_LOADBALANCER_ATTRS_TEMPLATE = """<DescribeLoadBalancerAttributesResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
-  <DescribeLoadBalancerAttributesResult>
-    <Attributes>
-      {% for key, value in attrs.items() %}
-      <member>
-        {% if value == None %}<Value />{% else %}<Value>{{ value }}</Value>{% endif %}
-        <Key>{{ key }}</Key>
-      </member>
-      {% endfor %}
-    </Attributes>
-  </DescribeLoadBalancerAttributesResult>
-  <ResponseMetadata>
-    <RequestId>{{ request_id }}</RequestId>
-  </ResponseMetadata>
-</DescribeLoadBalancerAttributesResponse>"""
 
 
 MODIFY_TARGET_GROUP_TEMPLATE = """<ModifyTargetGroupResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
@@ -1759,36 +1679,3 @@ MODIFY_LISTENER_TEMPLATE = """<ModifyListenerResponse xmlns="http://elasticloadb
     <RequestId>{{ request_id }}</RequestId>
   </ResponseMetadata>
 </ModifyListenerResponse>"""
-
-
-DESCRIBE_LISTENER_ATTRIBUTES = """<DescribeListenerAttributesResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
-  <DescribeListenerAttributesResult>
-    <Attributes>
-      {% for attr, value in attributes.items() %}
-      <ListenerAttribute>
-        <Key>{{ attr }}</Key>
-        <Value>{{ value }}</Value>
-      </ListenerAttribute>
-      {% endfor %}
-    </Attributes>
-  </DescribeListenerAttributesResult>
-  <ResponseMetadata>
-    <RequestId>{{ request_id }}</RequestId>
-  </ResponseMetadata>
-</DescribeListenerAttributesResponse>"""
-
-MODIFY_LISTENER_ATTRIBUTES = """<ModifyListenerAttributesResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
-  <ModifyListenerAttributesResult>
-    <Attributes>
-      {% for attr, value in attributes.items() %}
-      <ListenerAttribute>
-        <Key>{{ attr }}</Key>
-        <Value>{{ value }}</Value>
-      </ListenerAttribute>
-      {% endfor %}
-    </Attributes>
-  </ModifyListenerAttributesResult>
-  <ResponseMetadata>
-    <RequestId>{{ request_id }}</RequestId>
-  </ResponseMetadata>
-</ModifyListenerAttributesResponse>"""
