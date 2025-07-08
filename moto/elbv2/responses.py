@@ -395,7 +395,7 @@ class ELBV2Response(BaseResponse):
     def elbv2_backend(self) -> ELBv2Backend:
         return elbv2_backends[self.current_account][self.region]
 
-    def create_load_balancer(self) -> str:
+    def create_load_balancer(self) -> ActionResult:
         params = self._get_params()
         load_balancer_name = params.get("Name")
         subnet_ids = self._get_multi_param("Subnets.member")
@@ -404,7 +404,6 @@ class ELBV2Response(BaseResponse):
         scheme = params.get("Scheme")
         loadbalancer_type = params.get("Type")
         tags = params.get("Tags")
-
         load_balancer = self.elbv2_backend.create_load_balancer(
             name=load_balancer_name,  # type: ignore
             security_groups=security_groups,
@@ -414,8 +413,8 @@ class ELBV2Response(BaseResponse):
             loadbalancer_type=loadbalancer_type,
             tags=tags,
         )
-        template = self.response_template(CREATE_LOAD_BALANCER_TEMPLATE)
-        return template.render(load_balancer=load_balancer)
+        result = {"LoadBalancers": [load_balancer]}
+        return ActionResult(result)
 
     def create_rule(self) -> str:
         params = self._get_params()
@@ -501,7 +500,7 @@ class ELBV2Response(BaseResponse):
         template = self.response_template(CREATE_LISTENER_TEMPLATE)
         return template.render(listener=listener)
 
-    def describe_load_balancers(self) -> str:
+    def describe_load_balancers(self) -> ActionResult:
         arns = self._get_multi_param("LoadBalancerArns.member")
         names = self._get_multi_param("Names.member")
         all_load_balancers = list(
@@ -520,9 +519,8 @@ class ELBV2Response(BaseResponse):
         next_marker = None
         if len(all_load_balancers) > start + page_size:
             next_marker = load_balancers_resp[-1].name
-
-        template = self.response_template(DESCRIBE_LOAD_BALANCERS_TEMPLATE)
-        return template.render(load_balancers=load_balancers_resp, marker=next_marker)
+        result = {"LoadBalancers": load_balancers_resp, "NextMarker": next_marker}
+        return ActionResult(result)
 
     def describe_rules(self) -> str:
         listener_arn = self._get_param("ListenerArn")
@@ -835,42 +833,6 @@ class ELBV2Response(BaseResponse):
         return ActionResult(result)
 
 
-CREATE_LOAD_BALANCER_TEMPLATE = """<CreateLoadBalancerResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
-  <CreateLoadBalancerResult>
-    <LoadBalancers>
-      <member>
-        <LoadBalancerArn>{{ load_balancer.arn }}</LoadBalancerArn>
-        <Scheme>{{ load_balancer.scheme }}</Scheme>
-        <LoadBalancerName>{{ load_balancer.name }}</LoadBalancerName>
-        <VpcId>{{ load_balancer.vpc_id }}</VpcId>
-        <CanonicalHostedZoneId>Z2P70J7EXAMPLE</CanonicalHostedZoneId>
-        <CreatedTime>{{ load_balancer.created_time }}</CreatedTime>
-        <AvailabilityZones>
-          {% for subnet in load_balancer.subnets %}
-          <member>
-            <SubnetId>{{ subnet.id }}</SubnetId>
-            <ZoneName>{{ subnet.availability_zone }}</ZoneName>
-          </member>
-          {% endfor %}
-        </AvailabilityZones>
-        <SecurityGroups>
-          {% for security_group in load_balancer.security_groups %}
-          <member>{{ security_group }}</member>
-          {% endfor %}
-        </SecurityGroups>
-        <DNSName>{{ load_balancer.dns_name }}</DNSName>
-        <State>
-          <Code>{{ load_balancer.state }}</Code>
-        </State>
-        <Type>{{ load_balancer.loadbalancer_type }}</Type>
-      </member>
-    </LoadBalancers>
-  </CreateLoadBalancerResult>
-  <ResponseMetadata>
-    <RequestId>{{ request_id }}</RequestId>
-  </ResponseMetadata>
-</CreateLoadBalancerResponse>"""
-
 CREATE_RULE_TEMPLATE = """<CreateRuleResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
   <CreateRuleResult>
     <Rules>
@@ -1006,48 +968,6 @@ CREATE_LISTENER_TEMPLATE = """<CreateListenerResponse xmlns="http://elasticloadb
   </ResponseMetadata>
 </CreateListenerResponse>"""
 
-
-DESCRIBE_LOAD_BALANCERS_TEMPLATE = """<DescribeLoadBalancersResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
-  <DescribeLoadBalancersResult>
-    <LoadBalancers>
-      {% for load_balancer in load_balancers %}
-      <member>
-        <LoadBalancerArn>{{ load_balancer.arn }}</LoadBalancerArn>
-        <Scheme>{{ load_balancer.scheme }}</Scheme>
-        <LoadBalancerName>{{ load_balancer.name }}</LoadBalancerName>
-        <VpcId>{{ load_balancer.vpc_id }}</VpcId>
-        <CanonicalHostedZoneId>Z2P70J7EXAMPLE</CanonicalHostedZoneId>
-        <CreatedTime>{{ load_balancer.created_time }}</CreatedTime>
-        <AvailabilityZones>
-          {% for subnet in load_balancer.subnets %}
-          <member>
-            <SubnetId>{{ subnet.id }}</SubnetId>
-            <ZoneName>{{ subnet.availability_zone }}</ZoneName>
-          </member>
-          {% endfor %}
-        </AvailabilityZones>
-        <SecurityGroups>
-          {% for security_group in load_balancer.security_groups %}
-          <member>{{ security_group }}</member>
-          {% endfor %}
-        </SecurityGroups>
-        <DNSName>{{ load_balancer.dns_name }}</DNSName>
-        <State>
-          <Code>{{ load_balancer.state }}</Code>
-        </State>
-        <Type>{{ load_balancer.loadbalancer_type }}</Type>
-        <IpAddressType>ipv4</IpAddressType>
-      </member>
-      {% endfor %}
-    </LoadBalancers>
-    {% if marker %}
-    <NextMarker>{{ marker }}</NextMarker>
-    {% endif %}
-  </DescribeLoadBalancersResult>
-  <ResponseMetadata>
-    <RequestId>{{ request_id }}</RequestId>
-  </ResponseMetadata>
-</DescribeLoadBalancersResponse>"""
 
 DESCRIBE_RULES_TEMPLATE = """<DescribeRulesResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
   <DescribeRulesResult>

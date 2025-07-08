@@ -700,6 +700,14 @@ class FakeLoadBalancer(CloudFormationModel):
         }
 
     @property
+    def load_balancer_state(self) -> dict[str, str]:
+        return {"Code": self.state}
+
+    @property
+    def availability_zones(self) -> list[AvailabilityZone]:
+        return [AvailabilityZone(subnet) for subnet in self.subnets]
+
+    @property
     def physical_resource_id(self) -> str:
         return self.arn
 
