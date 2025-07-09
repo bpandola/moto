@@ -69,10 +69,25 @@ class FakeHealthStatus(BaseModel):
     ):
         self.instance_id = instance_id
         self.port = port
-        self.health_port = health_port
+        self.health_check_port = health_port
         self.status = status
         self.reason = reason
         self.description = description
+
+    @property
+    def target(self) -> dict[str, str]:
+        return {
+            "Id": self.instance_id,
+            "Port": self.port,
+        }
+
+    @property
+    def target_health(self) -> dict[str, Optional[str]]:
+        return {
+            "State": self.status,
+            "Reason": self.reason,
+            "Description": self.description,
+        }
 
 
 class FakeTargetGroup(CloudFormationModel):

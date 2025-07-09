@@ -657,15 +657,14 @@ class ELBV2Response(BaseResponse):
         self.elbv2_backend.deregister_targets(target_group_arn, targets)
         return EmptyResult()
 
-    def describe_target_health(self) -> str:
+    def describe_target_health(self) -> ActionResult:
         target_group_arn = self._get_param("TargetGroupArn")
         targets = self._get_list_prefix("Targets.member")
         target_health_descriptions = self.elbv2_backend.describe_target_health(
             target_group_arn, targets
         )
-
-        template = self.response_template(DESCRIBE_TARGET_HEALTH_TEMPLATE)
-        return template.render(target_health_descriptions=target_health_descriptions)
+        result = {"TargetHealthDescriptions": target_health_descriptions}
+        return ActionResult(result)
 
     def set_rule_priorities(self) -> ActionResult:
         rule_priorities = self._get_list_prefix("RulePriorities.member")
@@ -937,37 +936,6 @@ DESCRIBE_LISTENERS_TEMPLATE = """<DescribeListenersResponse xmlns="http://elasti
     <RequestId>{{ request_id }}</RequestId>
   </ResponseMetadata>
 </DescribeListenersResponse>"""
-
-
-DESCRIBE_TARGET_HEALTH_TEMPLATE = """<DescribeTargetHealthResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
-  <DescribeTargetHealthResult>
-    <TargetHealthDescriptions>
-      {% for target_health in target_health_descriptions %}
-      <member>
-        {% if target_health.health_port %}<HealthCheckPort>{{ target_health.health_port }}</HealthCheckPort>{% endif %}
-        <TargetHealth>
-          <State>{{ target_health.status }}</State>
-          {% if target_health.reason %}
-            <Reason>{{ target_health.reason }}</Reason>
-          {% endif %}
-          {% if target_health.description %}
-            <Description>{{ target_health.description }}</Description>
-          {% endif %}
-        </TargetHealth>
-        <Target>
-          {% if target_health.port %}
-          <Port>{{ target_health.port }}</Port>
-          {% endif %}
-          <Id>{{ target_health.instance_id }}</Id>
-        </Target>
-      </member>
-      {% endfor %}
-    </TargetHealthDescriptions>
-  </DescribeTargetHealthResult>
-  <ResponseMetadata>
-    <RequestId>{{ request_id }}</RequestId>
-  </ResponseMetadata>
-</DescribeTargetHealthResponse>"""
 
 
 MODIFY_LISTENER_TEMPLATE = """<ModifyListenerResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
