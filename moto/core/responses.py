@@ -306,8 +306,8 @@ class BaseResponse(_TemplateEnvironmentMixin, ActionAuthenticatorMixin):
 
     @classmethod
     def dispatch(cls, *args: Any, **kwargs: Any) -> Any:  # type: ignore[misc]
-        from werkzeug.wrappers.request import Request
         from botocore.awsrequest import AWSPreparedRequest
+        from werkzeug.wrappers.request import Request
         
         assert isinstance(args[0], (AWSPreparedRequest, Request))    
         return cls()._dispatch(*args, **kwargs)
