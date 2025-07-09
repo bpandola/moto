@@ -3,7 +3,6 @@ from collections import OrderedDict
 from typing import Any, Dict, Iterable, List, Optional
 
 from botocore.exceptions import ParamValidationError
-from jinja2 import Template
 
 from moto.core.base_backend import BackendDict, BaseBackend
 from moto.core.common_models import BaseModel, CloudFormationModel
@@ -533,113 +532,6 @@ class FakeAction(BaseModel):
                 }
 
         self.__dict__.update(self.data)
-
-    def to_xml(self) -> str:
-        template = Template(
-            """<Type>{{ action.type }}</Type>
-            {% if "Order" in action.data %}
-            <Order>{{ action.data["Order"] }}</Order>
-            {% endif %}
-            {% if action.type == "forward" and "ForwardConfig" in action.data %}
-            <ForwardConfig>
-              <TargetGroups>
-                {% for target_group in action.data["ForwardConfig"]["TargetGroups"] %}
-                <member>
-                  <TargetGroupArn>{{ target_group["TargetGroupArn"] }}</TargetGroupArn>
-                  <Weight>{{ target_group["Weight"] }}</Weight>
-                </member>
-                {% endfor %}
-              </TargetGroups>
-              <TargetGroupStickinessConfig>
-                  <Enabled>{{ action.data["ForwardConfig"]["TargetGroupStickinessConfig"]["Enabled"] }}</Enabled>
-                  {% if "DurationSeconds" in action.data["ForwardConfig"]["TargetGroupStickinessConfig"] %}
-                  <DurationSeconds>{{ action.data["ForwardConfig"]["TargetGroupStickinessConfig"]["DurationSeconds"] }}</DurationSeconds>
-                  {% endif %}
-              </TargetGroupStickinessConfig>
-            </ForwardConfig>
-            {% endif %}
-            {% if action.type == "forward" and "ForwardConfig" not in action.data %}
-            <TargetGroupArn>{{ action.data["TargetGroupArn"] }}</TargetGroupArn>
-            {% elif action.type == "redirect" %}
-            <RedirectConfig>
-                <Protocol>{{ action.data["RedirectConfig"]["Protocol"] }}</Protocol>
-                <Port>{{ action.data["RedirectConfig"]["Port"] }}</Port>
-                <StatusCode>{{ action.data["RedirectConfig"]["StatusCode"] }}</StatusCode>
-                {% if action.data["RedirectConfig"]["Host"] %}<Host>{{ action.data["RedirectConfig"]["Host"] }}</Host>{% endif %}
-                {% if action.data["RedirectConfig"]["Path"] %}<Path>{{ action.data["RedirectConfig"]["Path"] }}</Path>{% endif %}
-                {% if action.data["RedirectConfig"]["Query"] %}<Query>{{ action.data["RedirectConfig"]["Query"] }}</Query>{% endif %}
-            </RedirectConfig>
-            {% elif action.type == "authenticate-cognito" %}
-            <AuthenticateCognitoConfig>
-                <UserPoolArn>{{ action.data["AuthenticateCognitoConfig"]["UserPoolArn"] }}</UserPoolArn>
-                <UserPoolClientId>{{ action.data["AuthenticateCognitoConfig"]["UserPoolClientId"] }}</UserPoolClientId>
-                <UserPoolDomain>{{ action.data["AuthenticateCognitoConfig"]["UserPoolDomain"] }}</UserPoolDomain>
-                {% if "SessionCookieName" in action.data["AuthenticateCognitoConfig"] %}
-                <SessionCookieName>{{ action.data["AuthenticateCognitoConfig"]["SessionCookieName"] }}</SessionCookieName>
-                {% endif %}
-                {% if "Scope" in action.data["AuthenticateCognitoConfig"] %}
-                <Scope>{{ action.data["AuthenticateCognitoConfig"]["Scope"] }}</Scope>
-                {% endif %}
-                {% if "SessionTimeout" in action.data["AuthenticateCognitoConfig"] %}
-                <SessionTimeout>{{ action.data["AuthenticateCognitoConfig"]["SessionTimeout"] }}</SessionTimeout>
-                {% endif %}
-                {% if action.data["AuthenticateCognitoConfig"].get("AuthenticationRequestExtraParams") %}
-                <AuthenticationRequestExtraParams>
-                    {% for entry in action.data["AuthenticateCognitoConfig"].get("AuthenticationRequestExtraParams", {}).get("entry", {}).values() %}
-                    <member>
-                        <key>{{ entry["key"] }}</key>
-                        <value>{{ entry["value"] }}</value>
-                    </member>
-                    {% endfor %}
-                </AuthenticationRequestExtraParams>
-                {% endif %}
-                {% if "OnUnauthenticatedRequest" in action.data["AuthenticateCognitoConfig"] %}
-                <OnUnauthenticatedRequest>{{ action.data["AuthenticateCognitoConfig"]["OnUnauthenticatedRequest"] }}</OnUnauthenticatedRequest>
-                {% endif %}
-            </AuthenticateCognitoConfig>
-            {% elif action.type == "authenticate-oidc" %}
-            <AuthenticateOidcConfig>
-              <AuthorizationEndpoint>{{ action.data["AuthenticateOidcConfig"]["AuthorizationEndpoint"] }}</AuthorizationEndpoint>
-              <ClientId>{{ action.data["AuthenticateOidcConfig"]["ClientId"] }}</ClientId>
-              {% if "ClientSecret" in action.data["AuthenticateOidcConfig"] %}
-              <ClientSecret>{{ action.data["AuthenticateOidcConfig"]["ClientSecret"] }}</ClientSecret>
-              {% endif %}
-              <Issuer>{{ action.data["AuthenticateOidcConfig"]["Issuer"] }}</Issuer>
-              <TokenEndpoint>{{ action.data["AuthenticateOidcConfig"]["TokenEndpoint"] }}</TokenEndpoint>
-              <UserInfoEndpoint>{{ action.data["AuthenticateOidcConfig"]["UserInfoEndpoint"] }}</UserInfoEndpoint>
-              {% if "OnUnauthenticatedRequest" in action.data["AuthenticateOidcConfig"] %}
-              <OnUnauthenticatedRequest>{{ action.data["AuthenticateOidcConfig"]["OnUnauthenticatedRequest"] }}</OnUnauthenticatedRequest>
-              {% endif %}
-              {% if "UseExistingClientSecret" in action.data["AuthenticateOidcConfig"] %}
-              <UseExistingClientSecret>{{ action.data["AuthenticateOidcConfig"]["UseExistingClientSecret"] }}</UseExistingClientSecret>
-              {% endif %}
-              {% if "SessionTimeout" in action.data["AuthenticateOidcConfig"] %}
-              <SessionTimeout>{{ action.data["AuthenticateOidcConfig"]["SessionTimeout"] }}</SessionTimeout>
-              {% endif %}
-              {% if "SessionCookieName" in action.data["AuthenticateOidcConfig"] %}
-              <SessionCookieName>{{ action.data["AuthenticateOidcConfig"]["SessionCookieName"] }}</SessionCookieName>
-              {% endif %}
-              {% if "Scope" in action.data["AuthenticateOidcConfig"] %}
-              <Scope>{{ action.data["AuthenticateOidcConfig"]["Scope"] }}</Scope>
-              {% endif %}
-              {% if action.data["AuthenticateOidcConfig"].get("AuthenticationRequestExtraParams") %}
-              <AuthenticationRequestExtraParams>
-                  {% for entry in action.data["AuthenticateOidcConfig"].get("AuthenticationRequestExtraParams", {}).get("entry", {}).values() %}
-                  <member><key>{{ entry["key"] }}</key><value>{{ entry["value"] }}</value></member>
-                  {% endfor %}
-              </AuthenticationRequestExtraParams>
-              {% endif %}
-            </AuthenticateOidcConfig>
-            {% elif action.type == "fixed-response" %}
-             <FixedResponseConfig>
-                <ContentType>{{ action.data["FixedResponseConfig"]["ContentType"] }}</ContentType>
-                <MessageBody>{{ action.data["FixedResponseConfig"]["MessageBody"] }}</MessageBody>
-                <StatusCode>{{ action.data["FixedResponseConfig"]["StatusCode"] }}</StatusCode>
-            </FixedResponseConfig>
-            {% endif %}
-            """
-        )
-        return template.render(action=self)
 
 
 class FakeBackend(BaseModel):
