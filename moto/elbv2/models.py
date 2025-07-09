@@ -574,6 +574,11 @@ class FakeLoadBalancer(CloudFormationModel):
         "zonal_shift.config.enabled",
     }
 
+    class Meta:
+        serialization_aliases = {
+            "Type": "loadbalancer_type"  # clashes with CloudFormation property
+        }
+
     def __init__(
         self,
         name: str,
@@ -599,7 +604,7 @@ class FakeLoadBalancer(CloudFormationModel):
         self.state = state
         self.loadbalancer_type = loadbalancer_type or "application"
 
-        self.stack = "ipv4"
+        self.ip_address_type = "ipv4"
         self.attrs = {
             # "access_logs.s3.enabled": "false",  # commented out for TF compatibility
             "access_logs.s3.bucket": None,
@@ -1695,7 +1700,7 @@ Member must satisfy regular expression pattern: {expression}"
                 "Internal load balancers cannot be dualstack",
             )
 
-        balancer.stack = ip_type
+        balancer.ip_address_type = ip_type
 
     def set_security_groups(self, arn: str, sec_groups: List[str]) -> None:
         balancer = self.load_balancers.get(arn)
