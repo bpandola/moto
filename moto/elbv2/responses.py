@@ -1,5 +1,7 @@
+from typing import Any
+
 from moto.core.exceptions import RESTError
-from moto.core.responses import ActionResult, BaseResponse, EmptyResult
+from moto.core.responses import TYPE_RESPONSE, ActionResult, BaseResponse, EmptyResult
 
 from .exceptions import ListenerOrBalancerMissingError, TargetGroupNotFoundError
 from .models import ELBv2Backend, elbv2_backends
@@ -391,6 +393,31 @@ class ELBV2Response(BaseResponse):
     def __init__(self) -> None:
         super().__init__(service_name="elbv2")
 
+    def _dispatch(self, request: Any, full_url: str, headers: Any) -> TYPE_RESPONSE:
+        from moto.rds.parser import QueryParser
+        from moto.rds.responses import (
+            AWSPreparedRequest,
+            get_service_model,
+            normalize_request,
+        )
+
+        self.setup_class(request, full_url, headers)
+
+        if isinstance(request, AWSPreparedRequest):
+            request = normalize_request(request)
+
+        self.action = request.values["Action"]
+
+        service_model = get_service_model(self.service_name)
+        self.operation_model = service_model.operation_model(self.action)
+
+        parser = QueryParser()  # type: ignore[no-untyped-call]
+        self.parameters = parser.parse(
+            {"query_params": request.values},
+            self.operation_model,  # type: ignore[no-untyped-call]
+        )
+        return self.call_action()
+
     @property
     def elbv2_backend(self) -> ELBv2Backend:
         return elbv2_backends[self.current_account][self.region]
@@ -416,18 +443,17 @@ class ELBV2Response(BaseResponse):
         result = {"LoadBalancers": [load_balancer]}
         return ActionResult(result)
 
-    def create_rule(self) -> str:
-        params = self._get_params()
-        rules = self.elbv2_backend.create_rule(
+    def create_rule(self) -> ActionResult:
+        params = self.parameters
+        rule = self.elbv2_backend.create_rule(
             listener_arn=params["ListenerArn"],
             conditions=params["Conditions"],
             priority=params["Priority"],
             actions=params["Actions"],
             tags=params.get("Tags"),
         )
-
-        template = self.response_template(CREATE_RULE_TEMPLATE)
-        return template.render(rules=rules)
+        result = {"Rules": [rule]}
+        return ActionResult(result)
 
     def create_target_group(self) -> ActionResult:
         params = self._get_params()
@@ -522,7 +548,7 @@ class ELBV2Response(BaseResponse):
         result = {"LoadBalancers": load_balancers_resp, "NextMarker": next_marker}
         return ActionResult(result)
 
-    def describe_rules(self) -> str:
+    def describe_rules(self) -> ActionResult:
         listener_arn = self._get_param("ListenerArn")
         rule_arns = (
             self._get_multi_param("RuleArns.member")
@@ -547,8 +573,8 @@ class ELBV2Response(BaseResponse):
 
         if len(all_rules) > start + page_size:
             next_marker = rules_resp[-1].arn
-        template = self.response_template(DESCRIBE_RULES_TEMPLATE)
-        return template.render(rules=rules_resp, marker=next_marker)
+        result = {"Rules": rules_resp, "NextMarker": next_marker}
+        return ActionResult(result)
 
     def describe_target_groups(self) -> ActionResult:
         load_balancer_arn = self._get_param("LoadBalancerArn")
@@ -600,16 +626,16 @@ class ELBV2Response(BaseResponse):
         self.elbv2_backend.delete_listener(arn)
         return EmptyResult()
 
-    def modify_rule(self) -> str:
+    def modify_rule(self) -> ActionResult:
         rule_arn = self._get_param("RuleArn")
-        params = self._get_params()
+        params = self.parameters
         conditions = params.get("Conditions", [])
         actions = params.get("Actions", [])
-        rules = self.elbv2_backend.modify_rule(
+        rule = self.elbv2_backend.modify_rule(
             rule_arn=rule_arn, conditions=conditions, actions=actions
         )
-        template = self.response_template(MODIFY_RULE_TEMPLATE)
-        return template.render(rules=rules)
+        result = {"Rules": [rule]}
+        return ActionResult(result)
 
     def modify_target_group_attributes(self) -> ActionResult:
         target_group_arn = self._get_param("TargetGroupArn")
@@ -641,13 +667,13 @@ class ELBV2Response(BaseResponse):
         template = self.response_template(DESCRIBE_TARGET_HEALTH_TEMPLATE)
         return template.render(target_health_descriptions=target_health_descriptions)
 
-    def set_rule_priorities(self) -> str:
+    def set_rule_priorities(self) -> ActionResult:
         rule_priorities = self._get_list_prefix("RulePriorities.member")
         for rule_priority in rule_priorities:
             rule_priority["priority"] = int(rule_priority["priority"])
         rules = self.elbv2_backend.set_rule_priorities(rule_priorities)
-        template = self.response_template(SET_RULE_PRIORITIES_TEMPLATE)
-        return template.render(rules=rules)
+        result = {"Rules": rules}
+        return ActionResult(result)
 
     def add_tags(self) -> ActionResult:
         resource_arns = self._get_multi_param("ResourceArns.member")
@@ -833,101 +859,6 @@ class ELBV2Response(BaseResponse):
         return ActionResult(result)
 
 
-CREATE_RULE_TEMPLATE = """<CreateRuleResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
-  <CreateRuleResult>
-    <Rules>
-      <member>
-        <IsDefault>{{ "true" if rules.is_default else "false" }}</IsDefault>
-        <Conditions>
-          {% for condition in rules.conditions %}
-          <member>
-            <Field>{{ condition["Field"] }}</Field>
-            {% if "Values" in condition %}
-            <Values>
-              {% for value in condition["Values"] %}
-              <member>{{ value }}</member>
-              {% endfor %}
-            </Values>
-            {% endif %}
-            {% if "HttpHeaderConfig" in condition %}
-            <HttpHeaderConfig>
-              <HttpHeaderName>{{ condition["HttpHeaderConfig"]["HttpHeaderName"] }}</HttpHeaderName>
-              <Values>
-                {% for value in condition["HttpHeaderConfig"]["Values"] %}
-                <member>{{ value }}</member>
-                {% endfor %}
-              </Values>
-            </HttpHeaderConfig>
-            {% endif %}
-            {% if "HttpRequestMethodConfig" in condition %}
-            <HttpRequestMethodConfig>
-              <Values>
-                {% for value in condition["HttpRequestMethodConfig"]["Values"] %}
-                <member>{{ value }}</member>
-                {% endfor %}
-              </Values>
-            </HttpRequestMethodConfig>
-            {% endif %}
-            {% if "QueryStringConfig" in condition %}
-            <QueryStringConfig>
-              <Values>
-                {% for value in condition["QueryStringConfig"]["Values"] %}
-                <member>
-                    <Key>{{ value["Key"] }}</Key>
-                    <Value>{{ value["Value"] }}</Value>
-                </member>
-                {% endfor %}
-              </Values>
-            </QueryStringConfig>
-            {% endif %}
-            {% if "SourceIpConfig" in condition %}
-            <SourceIpConfig>
-              <Values>
-                {% for value in condition["SourceIpConfig"]["Values"] %}
-                <member>{{ value }}</member>
-                {% endfor %}
-              </Values>
-            </SourceIpConfig>
-            {% endif %}
-            {% if "PathPatternConfig" in condition %}
-            <PathPatternConfig>
-              <Values>
-                {% for value in condition["PathPatternConfig"]["Values"] %}
-                <member>{{ value }}</member>
-                {% endfor %}
-              </Values>
-            </PathPatternConfig>
-            {% endif %}
-            {% if "HostHeaderConfig" in condition %}
-            <HostHeaderConfig>
-              <Values>
-                {% for value in condition["HostHeaderConfig"]["Values"] %}
-                <member>{{ value }}</member>
-                {% endfor %}
-              </Values>
-            </HostHeaderConfig>
-            {% endif %}
-          </member>
-          {% endfor %}
-        </Conditions>
-        <Priority>{{ rules.priority }}</Priority>
-        <RuleArn>{{ rules.arn }}</RuleArn>
-        <Actions>
-          {% for action in rules.actions %}
-          <member>
-            {{ action.to_xml() }}
-          </member>
-          {% endfor %}
-        </Actions>
-      </member>
-    </Rules>
-  </CreateRuleResult>
-  <ResponseMetadata>
-    <RequestId>{{ request_id }}</RequestId>
-  </ResponseMetadata>
-</CreateRuleResponse>"""
-
-
 CREATE_LISTENER_TEMPLATE = """<CreateListenerResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
   <CreateListenerResult>
     <Listeners>
@@ -969,106 +900,6 @@ CREATE_LISTENER_TEMPLATE = """<CreateListenerResponse xmlns="http://elasticloadb
 </CreateListenerResponse>"""
 
 
-DESCRIBE_RULES_TEMPLATE = """<DescribeRulesResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
-  <DescribeRulesResult>
-    <Rules>
-      {% for rule in rules %}
-      <member>
-        <IsDefault>{{ "true" if rule.is_default else "false" }}</IsDefault>
-        <Conditions>
-          {% for condition in rule.conditions %}
-          <member>
-            <Field>{{ condition["Field"] }}</Field>
-            {% if "HttpHeaderConfig" in condition %}
-            <HttpHeaderConfig>
-              <HttpHeaderName>{{ condition["HttpHeaderConfig"]["HttpHeaderName"] }}</HttpHeaderName>
-              <Values>
-                {% for value in condition["HttpHeaderConfig"]["Values"] %}
-                  <member>{{ value }}</member>
-                {% endfor %}
-              </Values>
-            </HttpHeaderConfig>
-            {% endif %}
-            {% if "HttpRequestMethodConfig" in condition %}
-            <HttpRequestMethodConfig>
-              <Values>
-                {% for value in condition["HttpRequestMethodConfig"]["Values"] %}
-                <member>{{ value }}</member>
-                {% endfor %}
-              </Values>
-            </HttpRequestMethodConfig>
-            {% endif %}
-            {% if "QueryStringConfig" in condition %}
-            <QueryStringConfig>
-              <Values>
-                {% for value in condition["QueryStringConfig"]["Values"] %}
-                <member>
-                    <Key>{{ value["Key"] }}</Key>
-                    <Value>{{ value["Value"] }}</Value>
-                </member>
-                {% endfor %}
-              </Values>
-            </QueryStringConfig>
-            {% endif %}
-            {% if "SourceIpConfig" in condition %}
-            <SourceIpConfig>
-              <Values>
-                {% for value in condition["SourceIpConfig"]["Values"] %}
-                <member>{{ value }}</member>
-                {% endfor %}
-              </Values>
-            </SourceIpConfig>
-            {% endif %}
-            {% if "PathPatternConfig" in condition %}
-            <PathPatternConfig>
-              <Values>
-                {% for value in condition["PathPatternConfig"]["Values"] %}
-                <member>{{ value }}</member>
-                {% endfor %}
-              </Values>
-            </PathPatternConfig>
-            {% endif %}
-            {% if "HostHeaderConfig" in condition %}
-            <HostHeaderConfig>
-              <Values>
-                {% for value in condition["HostHeaderConfig"]["Values"] %}
-                <member>{{ value }}</member>
-                {% endfor %}
-              </Values>
-            </HostHeaderConfig>
-            {% endif %}
-            {% if "Values" in condition %}
-            <Values>
-              {% for value in condition["Values"] %}
-              <member>{{ value }}</member>
-              {% endfor %}
-            </Values>
-            {% endif %}
-          </member>
-          {% endfor %}
-        </Conditions>
-        <Priority>{{ rule.priority }}</Priority>
-        <RuleArn>{{ rule.arn }}</RuleArn>
-        <Actions>
-          {% for action in rule.actions %}
-          <member>
-            {{ action.to_xml() }}
-          </member>
-          {% endfor %}
-        </Actions>
-      </member>
-      {% endfor %}
-    </Rules>
-    {% if marker %}
-    <NextMarker>{{ marker }}</NextMarker>
-    {% endif %}
-  </DescribeRulesResult>
-  <ResponseMetadata>
-    <RequestId>{{ request_id }}</RequestId>
-  </ResponseMetadata>
-</DescribeRulesResponse>"""
-
-
 DESCRIBE_LISTENERS_TEMPLATE = """<DescribeListenersResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
   <DescribeListenersResult>
     <Listeners>
@@ -1108,100 +939,6 @@ DESCRIBE_LISTENERS_TEMPLATE = """<DescribeListenersResponse xmlns="http://elasti
 </DescribeListenersResponse>"""
 
 
-MODIFY_RULE_TEMPLATE = """<ModifyRuleResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
-  <ModifyRuleResult>
-    <Rules>
-      <member>
-        <IsDefault>{{ "true" if rules.is_default else "false" }}</IsDefault>
-        <Conditions>
-          {% for condition in rules.conditions %}
-          <member>
-            <Field>{{ condition["Field"] }}</Field>
-            {% if "PathPatternConfig" in condition %}
-            <PathPatternConfig>
-              <Values>
-                {% for value in condition["PathPatternConfig"]["Values"] %}
-                <member>{{ value }}</member>
-                {% endfor %}
-              </Values>
-            </PathPatternConfig>
-            {% endif %}
-            {% if "HostHeaderConfig" in condition %}
-            <HostHeaderConfig>
-              <Values>
-                {% for value in condition["HostHeaderConfig"]["Values"] %}
-                <member>{{ value }}</member>
-                {% endfor %}
-              </Values>
-            </HostHeaderConfig>
-            {% endif %}
-            {% if "HttpHeaderConfig" in condition %}
-            <HttpHeaderConfig>
-              <HttpHeaderName>{{ condition["HttpHeaderConfig"]["HttpHeaderName"] }}</HttpHeaderName>
-              <Values>
-                {% for value in condition["HttpHeaderConfig"]["Values"] %}
-                <member>{{ value }}</member>
-                {% endfor %}
-              </Values>
-            </HttpHeaderConfig>
-            {% endif %}
-            {% if "HttpRequestMethodConfig" in condition %}
-            <HttpRequestMethodConfig>
-              <Values>
-                {% for value in condition["HttpRequestMethodConfig"]["Values"] %}
-                <member>{{ value }}</member>
-                {% endfor %}
-              </Values>
-            </HttpRequestMethodConfig>
-            {% endif %}
-            {% if "QueryStringConfig" in condition %}
-            <QueryStringConfig>
-              <Values>
-                {% for value in condition["QueryStringConfig"]["Values"] %}
-                <member>
-                    <Key>{{ value["Key"] }}</Key>
-                    <Value>{{ value["Value"] }}</Value>
-                </member>
-                {% endfor %}
-              </Values>
-            </QueryStringConfig>
-            {% endif %}
-            {% if "SourceIpConfig" in condition %}
-            <SourceIpConfig>
-              <Values>
-                {% for value in condition["SourceIpConfig"]["Values"] %}
-                <member>{{ value }}</member>
-                {% endfor %}
-              </Values>
-            </SourceIpConfig>
-            {% endif %}
-            {% if "Values" in condition %}
-            <Values>
-              {% for value in condition["Values"] %}
-              <member>{{ value }}</member>
-              {% endfor %}
-            </Values>
-            {% endif %}
-          </member>
-          {% endfor %}
-        </Conditions>
-        <Priority>{{ rules.priority }}</Priority>
-        <RuleArn>{{ rules.arn }}</RuleArn>
-        <Actions>
-          {% for action in rules.actions %}
-          <member>
-            {{ action.to_xml() }}
-          </member>
-          {% endfor %}
-        </Actions>
-      </member>
-    </Rules>
-  </ModifyRuleResult>
-  <ResponseMetadata>
-    <RequestId>{{ request_id }}</RequestId>
-  </ResponseMetadata>
-</ModifyRuleResponse>"""
-
 DESCRIBE_TARGET_HEALTH_TEMPLATE = """<DescribeTargetHealthResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
   <DescribeTargetHealthResult>
     <TargetHealthDescriptions>
@@ -1231,102 +968,6 @@ DESCRIBE_TARGET_HEALTH_TEMPLATE = """<DescribeTargetHealthResponse xmlns="http:/
     <RequestId>{{ request_id }}</RequestId>
   </ResponseMetadata>
 </DescribeTargetHealthResponse>"""
-
-SET_RULE_PRIORITIES_TEMPLATE = """<SetRulePrioritiesResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
-  <SetRulePrioritiesResult>
-    <Rules>
-      {% for rule in rules %}
-      <member>
-        <IsDefault>{{ "true" if rule.is_default else "false" }}</IsDefault>
-        <Conditions>
-          {% for condition in rule.conditions %}
-          <member>
-            <Field>{{ condition["Field"] }}</Field>
-            {% if "Values" in condition %}
-            <Values>
-              {% for value in condition["Values"] %}
-              <member>{{ value }}</member>
-              {% endfor %}
-            </Values>
-            {% endif %}
-            {% if "HttpHeaderConfig" in condition %}
-            <HttpHeaderConfig>
-              <HttpHeaderName>{{ condition["HttpHeaderConfig"]["HttpHeaderName"] }}</HttpHeaderName>
-              <Values>
-                {% for value in condition["HttpHeaderConfig"]["Values"] %}
-                <member>{{ value }}</member>
-                {% endfor %}
-              </Values>
-            </HttpHeaderConfig>
-            {% endif %}
-            {% if "HttpRequestMethodConfig" in condition %}
-            <HttpRequestMethodConfig>
-              <Values>
-                {% for value in condition["HttpRequestMethodConfig"]["Values"] %}
-                <member>{{ value }}</member>
-                {% endfor %}
-              </Values>
-            </HttpRequestMethodConfig>
-            {% endif %}
-            {% if "QueryStringConfig" in condition %}
-            <QueryStringConfig>
-              <Values>
-                {% for value in condition["QueryStringConfig"]["Values"] %}
-                <member>
-                    <Key>{{ value["Key"] }}</Key>
-                    <Value>{{ value["Value"] }}</Value>
-                </member>
-                {% endfor %}
-              </Values>
-            </QueryStringConfig>
-            {% endif %}
-            {% if "SourceIpConfig" in condition %}
-            <SourceIpConfig>
-              <Values>
-                {% for value in condition["SourceIpConfig"]["Values"] %}
-                <member>{{ value }}</member>
-                {% endfor %}
-              </Values>
-            </SourceIpConfig>
-            {% endif %}
-            {% if "PathPatternConfig" in condition %}
-            <PathPatternConfig>
-              <Values>
-                {% for value in condition["PathPatternConfig"]["Values"] %}
-                <member>{{ value }}</member>
-                {% endfor %}
-              </Values>
-            </PathPatternConfig>
-            {% endif %}
-            {% if "HostHeaderConfig" in condition %}
-            <HostHeaderConfig>
-              <Values>
-                {% for value in condition["HostHeaderConfig"]["Values"] %}
-                <member>{{ value }}</member>
-                {% endfor %}
-              </Values>
-            </HostHeaderConfig>
-            {% endif %}
-          </member>
-          {% endfor %}
-        </Conditions>
-        <Priority>{{ rule.priority }}</Priority>
-        <RuleArn>{{ rule.arn }}</RuleArn>
-        <Actions>
-          {% for action in rule.actions %}
-          <member>
-            {{ action.to_xml() }}
-          </member>
-          {% endfor %}
-        </Actions>
-      </member>
-      {% endfor %}
-    </Rules>
-  </SetRulePrioritiesResult>
-  <ResponseMetadata>
-    <RequestId>{{ request_id }}</RequestId>
-  </ResponseMetadata>
-</SetRulePrioritiesResponse>"""
 
 
 MODIFY_LISTENER_TEMPLATE = """<ModifyListenerResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">

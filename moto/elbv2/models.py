@@ -434,6 +434,7 @@ class FakeListenerRule(CloudFormationModel):
         self.conditions = conditions
         self.actions = actions
         self.priority = priority
+        self.is_default = False
 
     @property
     def physical_resource_id(self) -> str:
@@ -513,8 +514,10 @@ class FakeAction(BaseModel):
         if "ForwardConfig" in self.data:
             if "TargetGroupStickinessConfig" not in self.data["ForwardConfig"]:
                 self.data["ForwardConfig"]["TargetGroupStickinessConfig"] = {
-                    "Enabled": "false"
+                    "Enabled": False
                 }
+
+        self.__dict__.update(self.data)
 
     def to_xml(self) -> str:
         template = Template(
