@@ -378,14 +378,21 @@ def transform_limits(data: dict[str, str]) -> list[dict[str, str]]:
     return transformed
 
 
+def transform_certificates(data: list[str]) -> list[dict[str, str]]:
+    return [{"CertificateArn": cert} for cert in data]
+
+
 class ELBV2Response(BaseResponse):
     RESPONSE_KEY_PATH_TO_TRANSFORMER = {
+        "CreateListenerOutput.Listeners.Listener.Certificates": transform_certificates,
         "DescribeAccountLimitsOutput.Limits": transform_limits,
         "DescribeListenerAttributesOutput.Attributes": transform_dict,
+        "DescribeListenersOutput.Listeners.Listener.Certificates": transform_certificates,
         "DescribeLoadBalancerAttributesOutput.Attributes": transform_dict,
-        "DescribeTargetGroupAttributesOutput.Attributes": transform_dict,
         "DescribeTagsOutput.TagDescriptions.TagDescription.Tags": transform_dict,
+        "DescribeTargetGroupAttributesOutput.Attributes": transform_dict,
         "ModifyListenerAttributesOutput.Attributes": transform_dict,
+        "ModifyListenerOutput.Listeners.Listener.Certificates": transform_certificates,
         "ModifyLoadBalancerAttributesOutput.Attributes": transform_dict,
         "ModifyTargetGroupAttributesOutput.Attributes": transform_dict,
     }
@@ -497,7 +504,7 @@ class ELBV2Response(BaseResponse):
         result = {"TargetGroups": [target_group]}
         return ActionResult(result)
 
-    def create_listener(self) -> str:
+    def create_listener(self) -> ActionResult:
         params = self._get_params()
         load_balancer_arn = self._get_param("LoadBalancerArn")
         protocol = self._get_param("Protocol")
@@ -508,7 +515,7 @@ class ELBV2Response(BaseResponse):
             certificate = certificates[0].get("certificate_arn")
         else:
             certificate = None
-        default_actions = params.get("DefaultActions", [])
+        default_actions = self.parameters.get("DefaultActions", [])
         alpn_policy = params.get("AlpnPolicy", [])
         tags = params.get("Tags")
 
@@ -523,8 +530,8 @@ class ELBV2Response(BaseResponse):
             tags=tags,
         )
 
-        template = self.response_template(CREATE_LISTENER_TEMPLATE)
-        return template.render(listener=listener)
+        result = {"Listeners": [listener]}
+        return ActionResult(result)
 
     def describe_load_balancers(self) -> ActionResult:
         arns = self._get_multi_param("LoadBalancerArns.member")
@@ -594,7 +601,7 @@ class ELBV2Response(BaseResponse):
         result = {"Attributes": target_group.attributes}
         return ActionResult(result)
 
-    def describe_listeners(self) -> str:
+    def describe_listeners(self) -> ActionResult:
         load_balancer_arn = self._get_param("LoadBalancerArn")
         listener_arns = self._get_multi_param("ListenerArns.member")
         if not load_balancer_arn and not listener_arns:
@@ -603,8 +610,8 @@ class ELBV2Response(BaseResponse):
         listeners = self.elbv2_backend.describe_listeners(
             load_balancer_arn, listener_arns
         )
-        template = self.response_template(DESCRIBE_LISTENERS_TEMPLATE)
-        return template.render(listeners=listeners)
+        result = {"Listeners": listeners}
+        return ActionResult(result)
 
     def delete_load_balancer(self) -> ActionResult:
         arn = self._get_param("LoadBalancerArn")
@@ -796,13 +803,13 @@ class ELBV2Response(BaseResponse):
         result = {"TargetGroups": [target_group]}
         return ActionResult(result)
 
-    def modify_listener(self) -> str:
+    def modify_listener(self) -> ActionResult:
         arn = self._get_param("ListenerArn")
         port = self._get_param("Port")
         protocol = self._get_param("Protocol")
         ssl_policy = self._get_param("SslPolicy")
         certificates = self._get_list_prefix("Certificates.member")
-        default_actions = self._get_params().get("DefaultActions", [])
+        default_actions = self.parameters.get("DefaultActions", [])
 
         # Should really move SSL Policies to models
         if ssl_policy is not None and ssl_policy not in [
@@ -814,8 +821,8 @@ class ELBV2Response(BaseResponse):
             arn, port, protocol, ssl_policy, certificates, default_actions
         )
 
-        template = self.response_template(MODIFY_LISTENER_TEMPLATE)
-        return template.render(listener=listener)
+        result = {"Listeners": [listener]}
+        return ActionResult(result)
 
     def add_listener_certificates(self) -> ActionResult:
         arn = self._get_param("ListenerArn")
@@ -856,117 +863,3 @@ class ELBV2Response(BaseResponse):
     def describe_capacity_reservation(self) -> ActionResult:
         result = {"CapacityReservationState": ["provisioned"]}
         return ActionResult(result)
-
-
-CREATE_LISTENER_TEMPLATE = """<CreateListenerResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
-  <CreateListenerResult>
-    <Listeners>
-      <member>
-        <LoadBalancerArn>{{ listener.load_balancer_arn }}</LoadBalancerArn>
-        <Protocol>{{ listener.protocol }}</Protocol>
-        {% if listener.certificates %}
-        <Certificates>
-          {% for cert in listener.certificates %}
-          <member>
-            <CertificateArn>{{ cert }}</CertificateArn>
-          </member>
-          {% endfor %}
-        </Certificates>
-        {% endif %}
-        {% if listener.port %}
-        <Port>{{ listener.port }}</Port>
-        {% endif %}
-        <SslPolicy>{{ listener.ssl_policy }}</SslPolicy>
-        <ListenerArn>{{ listener.arn }}</ListenerArn>
-        <DefaultActions>
-          {% for action in listener.default_actions %}
-          <member>
-            {{ action.to_xml() }}
-          </member>
-          {% endfor %}
-        </DefaultActions>
-        <AlpnPolicy>
-          {% for policy in listener.alpn_policy %}
-          <member>{{ policy }}</member>
-          {% endfor %}
-        </AlpnPolicy>
-      </member>
-    </Listeners>
-  </CreateListenerResult>
-  <ResponseMetadata>
-    <RequestId>{{ request_id }}</RequestId>
-  </ResponseMetadata>
-</CreateListenerResponse>"""
-
-
-DESCRIBE_LISTENERS_TEMPLATE = """<DescribeListenersResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
-  <DescribeListenersResult>
-    <Listeners>
-      {% for listener in listeners %}
-      <member>
-        <LoadBalancerArn>{{ listener.load_balancer_arn }}</LoadBalancerArn>
-        <Protocol>{{ listener.protocol }}</Protocol>
-        {% if listener.certificate %}
-        <Certificates>
-          <member>
-            <CertificateArn>{{ listener.certificate }}</CertificateArn>
-          </member>
-        </Certificates>
-        {% endif %}
-        {% if listener.port %}<Port>{{ listener.port }}</Port>{% endif %}
-        <SslPolicy>{{ listener.ssl_policy }}</SslPolicy>
-        <ListenerArn>{{ listener.arn }}</ListenerArn>
-        <DefaultActions>
-          {% for action in listener.default_actions %}
-          <member>
-            {{ action.to_xml() }}
-          </member>
-          {% endfor %}
-        </DefaultActions>
-        <AlpnPolicy>
-          {% for policy in listener.alpn_policy %}
-          <member>{{ policy }}</member>
-          {% endfor %}
-        </AlpnPolicy>
-      </member>
-      {% endfor %}
-    </Listeners>
-  </DescribeListenersResult>
-  <ResponseMetadata>
-    <RequestId>{{ request_id }}</RequestId>
-  </ResponseMetadata>
-</DescribeListenersResponse>"""
-
-
-MODIFY_LISTENER_TEMPLATE = """<ModifyListenerResponse xmlns="http://elasticloadbalancing.amazonaws.com/doc/2015-12-01/">
-  <ModifyListenerResult>
-    <Listeners>
-      <member>
-        <LoadBalancerArn>{{ listener.load_balancer_arn }}</LoadBalancerArn>
-        <Protocol>{{ listener.protocol }}</Protocol>
-        {% if listener.certificates %}
-        <Certificates>
-          {% for cert in listener.certificates %}
-          <member>
-            <CertificateArn>{{ cert["certificate_arn"] }}</CertificateArn>
-          </member>
-          {% endfor %}
-        </Certificates>
-        {% endif %}
-        <Port>{{ listener.port }}</Port>
-        <SslPolicy>{{ listener.ssl_policy }}</SslPolicy>
-        <ListenerArn>{{ listener.arn }}</ListenerArn>
-        <DefaultActions>
-          {% for action in listener.default_actions %}
-          <member>
-            {{ action.to_xml() }}
-          </member>
-          {% endfor %}
-        </DefaultActions>
-      </member>
-    </Listeners>
-  </ModifyListenerResult>
-  <ResponseMetadata>
-    <RequestId>{{ request_id }}</RequestId>
-  </ResponseMetadata>
-</ModifyListenerResponse>"""

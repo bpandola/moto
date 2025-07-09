@@ -1969,7 +1969,7 @@ Member must satisfy regular expression pattern: {expression}"
                     )
                 listener.certificate = default_cert_arn
                 # TODO: Calling describe_listener_certificates after this operation returns a wrong result
-                listener.certificates = certificates  # type: ignore[assignment]
+                listener.certificates = [c["certificate_arn"] for c in certificates]
             elif len(certificates) == 0 and len(listener.certificates) == 0:  # type: ignore[arg-type]
                 raise RESTError(
                     "CertificateWereNotPassed",
