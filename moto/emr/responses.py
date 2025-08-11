@@ -1,5 +1,5 @@
 import re
-from typing import Any, Dict, List, Pattern
+from typing import Any, List, Pattern
 
 from moto.core.responses import ActionResult, BaseResponse, EmptyResult
 
@@ -15,8 +15,6 @@ class ElasticMapReduceResponse(BaseResponse):
         re.compile(r"elasticmapreduce\.(.+?)\.amazonaws\.com"),
         re.compile(r"(.+?)\.elasticmapreduce\.amazonaws\.com"),
     ]
-
-    # aws_service_spec = AWSServiceSpec("data/emr/2009-03-31/service-2.json")
 
     def __init__(self) -> None:
         super().__init__(service_name="emr")
@@ -36,12 +34,6 @@ class ElasticMapReduceResponse(BaseResponse):
     def add_instance_groups(self) -> ActionResult:
         jobflow_id = self._get_param("JobFlowId")
         instance_groups = self._get_param("InstanceGroups", [])
-        # for item in instance_groups:
-        #     item["instance_count"] = int(item["instance_count"])
-        #     # Adding support to EbsConfiguration
-        #     self._parse_ebs_configuration(item)
-        #     # Adding support for auto_scaling_policy
-        #     Unflattener.unflatten_complex_params(item, "auto_scaling_policy")
         fake_groups = self.backend.add_instance_groups(jobflow_id, instance_groups)
         result = {"InstanceGroups": fake_groups}
         return ActionResult(result)
@@ -166,8 +158,6 @@ class ElasticMapReduceResponse(BaseResponse):
 
     def modify_instance_groups(self) -> ActionResult:
         instance_groups = self._get_param("InstanceGroups", [])
-        # for item in instance_groups:
-        #     item["instance_count"] = int(item["instance_count"])
         self.backend.modify_instance_groups(instance_groups)
         return EmptyResult()
 
@@ -210,8 +200,7 @@ class ElasticMapReduceResponse(BaseResponse):
                 "Instances.AdditionalSlaveSecurityGroups", []
             ),
         )
-        # instance_attrs = self._get_param("Instances", {})
-        # instance_attrs["availability_zone"] = instance_attrs.get("Placement", {}).get("AvailabilityZone")
+
         kwargs = dict(
             name=self._get_param("Name"),
             log_uri=self._get_param("LogUri"),
@@ -227,35 +216,12 @@ class ElasticMapReduceResponse(BaseResponse):
             instance_attrs=instance_attrs,
         )
 
-        bootstrap_actions = self._get_list_prefix("BootstrapActions.member")
         bootstrap_actions = self._get_param("BootstrapActions", [])
         if bootstrap_actions:
-            # for ba in bootstrap_actions:
-            # args = []
-            # idx = 1
-            # keyfmt = "script_bootstrap_action._args.member.{0}"
-            # key = keyfmt.format(idx)
-            # while key in ba:
-            #     args.append(ba.pop(key))
-            #     idx += 1
-            #     key = keyfmt.format(idx)
-            # ba["args"] = args
-            # ba["script_path"] = ba.pop("script_bootstrap_action._path")
             kwargs["bootstrap_actions"] = bootstrap_actions
 
-        configurations = self._get_list_prefix("Configurations.member")
         configurations = self._get_param("Configurations", [])
         if configurations:
-            # for idx, config in enumerate(configurations, 1):
-            #     for key in list(config.keys()):
-            #         if key.startswith("properties."):
-            #             config.pop(key)
-            #     config["properties"] = {}
-            #     map_items = self._get_map_prefix(
-            #         f"Configurations.member.{idx}.Properties.entry"
-            #     )
-            #     config["properties"] = map_items
-
             kwargs["configurations"] = configurations
 
         release_label = self._get_param("ReleaseLabel")
@@ -295,39 +261,11 @@ class ElasticMapReduceResponse(BaseResponse):
         if security_configuration:
             kwargs["security_configuration"] = security_configuration
 
-        kerberos_attributes: Dict[str, Any] = {}
         kerberos_attributes = self._get_param("KerberosAttributes", {})
         kwargs["kerberos_attributes"] = kerberos_attributes
 
-        # realm = self._get_param("KerberosAttributes.Realm")
-        # if realm:
-        #     kerberos_attributes["Realm"] = realm
-        #
-        # kdc_admin_password = self._get_param("KerberosAttributes.KdcAdminPassword")
-        # if kdc_admin_password:
-        #     kerberos_attributes["KdcAdminPassword"] = kdc_admin_password
-        #
-        # cross_realm_principal_password = self._get_param(
-        #     "KerberosAttributes.CrossRealmTrustPrincipalPassword"
-        # )
-        # if cross_realm_principal_password:
-        #     kerberos_attributes["CrossRealmTrustPrincipalPassword"] = (
-        #         cross_realm_principal_password
-        #     )
-        #
-        # ad_domain_join_user = self._get_param("KerberosAttributes.ADDomainJoinUser")
-        # if ad_domain_join_user:
-        #     kerberos_attributes["ADDomainJoinUser"] = ad_domain_join_user
-        #
-        # ad_domain_join_password = self._get_param(
-        #     "KerberosAttributes.ADDomainJoinPassword"
-        # )
-        # if ad_domain_join_password:
-        #     kerberos_attributes["ADDomainJoinPassword"] = ad_domain_join_password
-
         cluster = self.backend.run_job_flow(**kwargs)
 
-        applications = self._get_list_prefix("Applications.member")
         applications = self._get_param("Applications", [])
         if applications:
             self.backend.add_applications(cluster.id, applications)
@@ -336,16 +274,8 @@ class ElasticMapReduceResponse(BaseResponse):
                 cluster.id, [{"Name": "Hadoop", "Version": "0.18"}]
             )
 
-        instance_groups = self._get_list_prefix("Instances.InstanceGroups.member")
-        instance_groups = instance_attrs.get("InstanceGroups", [])
         instance_groups = self._get_param("Instances.InstanceGroups", [])
         if instance_groups:
-            # for ig in instance_groups:
-            # ig["instance_count"] = int(ig["instance_count"])
-            # # Adding support to EbsConfiguration
-            # self._parse_ebs_configuration(ig)
-            # # Adding support for auto_scaling_policy
-            # Unflattener.unflatten_complex_params(ig, "auto_scaling_policy")
             instance_group_result = self.backend.add_instance_groups(
                 cluster.id, instance_groups
             )
@@ -356,7 +286,6 @@ class ElasticMapReduceResponse(BaseResponse):
 
         # TODO: Instances also must be created when `Instances.InstanceType` and `Instances.InstanceCount` are specified in the request.
 
-        tags = self._get_list_prefix("Tags.member")
         tags = self._get_param("Tags", [])
         if tags:
             self.backend.add_tags(
@@ -367,83 +296,6 @@ class ElasticMapReduceResponse(BaseResponse):
             "ClusterArn": cluster.arn,
         }
         return ActionResult(result)
-
-    def _has_key_prefix(self, key_prefix: str, value: Dict[str, Any]) -> bool:
-        for key in value:  # iter on both keys and values
-            if key.startswith(key_prefix):
-                return True
-        return False
-
-    def _parse_ebs_configuration(self, instance_group: Dict[str, Any]) -> None:
-        key_ebs_config = "ebs_configuration"
-        ebs_configuration = dict()
-        # Filter only EBS config keys
-        for key in instance_group:
-            if key.startswith(key_ebs_config):
-                ebs_configuration[key] = instance_group[key]
-
-        if len(ebs_configuration) > 0:
-            # Key that should be extracted
-            ebs_optimized = "ebs_optimized"
-            ebs_block_device_configs = "ebs_block_device_configs"
-            volume_specification = "volume_specification"
-            size_in_gb = "size_in_gb"
-            volume_type = "volume_type"
-            iops = "iops"
-            volumes_per_instance = "volumes_per_instance"
-
-            key_ebs_optimized = f"{key_ebs_config}._{ebs_optimized}"
-            # EbsOptimized config
-            if key_ebs_optimized in ebs_configuration:
-                instance_group.pop(key_ebs_optimized)
-                ebs_configuration[ebs_optimized] = ebs_configuration.pop(
-                    key_ebs_optimized
-                )
-
-            # Ebs Blocks
-            ebs_blocks = []
-            idx = 1
-            keyfmt = f"{key_ebs_config}._{ebs_block_device_configs}.member.{{}}"
-            key = keyfmt.format(idx)
-            while self._has_key_prefix(key, ebs_configuration):
-                vlespc_keyfmt = f"{key}._{volume_specification}._{{}}"
-                vol_size = vlespc_keyfmt.format(size_in_gb)
-                vol_iops = vlespc_keyfmt.format(iops)
-                vol_type = vlespc_keyfmt.format(volume_type)
-
-                ebs_block: Dict[str, Any] = dict()
-                ebs_block[volume_specification] = dict()
-                if vol_size in ebs_configuration:
-                    instance_group.pop(vol_size)
-                    ebs_block[volume_specification][size_in_gb] = int(
-                        ebs_configuration.pop(vol_size)
-                    )
-                if vol_iops in ebs_configuration:
-                    instance_group.pop(vol_iops)
-                    ebs_block[volume_specification][iops] = ebs_configuration.pop(
-                        vol_iops
-                    )
-                if vol_type in ebs_configuration:
-                    instance_group.pop(vol_type)
-                    ebs_block[volume_specification][volume_type] = (
-                        ebs_configuration.pop(vol_type)
-                    )
-
-                per_instance = f"{key}._{volumes_per_instance}"
-                if per_instance in ebs_configuration:
-                    instance_group.pop(per_instance)
-                    ebs_block[volumes_per_instance] = int(
-                        ebs_configuration.pop(per_instance)
-                    )
-
-                if len(ebs_block) > 0:
-                    ebs_blocks.append(ebs_block)
-                idx += 1
-                key = keyfmt.format(idx)
-
-            if len(ebs_blocks) > 0:
-                ebs_configuration[ebs_block_device_configs] = ebs_blocks
-            instance_group[key_ebs_config] = ebs_configuration
 
     def set_termination_protection(self) -> ActionResult:
         termination_protection = self._get_bool_param("TerminationProtected")
