@@ -320,6 +320,7 @@ class Step(BaseModel):
 
     @property
     def config(self) -> dict[str, Any]:
+        assert True
         config = {
             "ActionOnFailure": self.action_on_failure,
             "HadoopJarStep": self.hadoop_jar_step,
