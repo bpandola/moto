@@ -181,7 +181,11 @@ class RequestParser(object):
     MAP_TYPE = dict
 
     def __init__(
-        self, timestamp_parser=None, blob_parser=None, output_null_values=None
+        self,
+        timestamp_parser=None,
+        blob_parser=None,
+        output_null_values=None,
+        map_type=None,
     ):
         if timestamp_parser is None:
             timestamp_parser = DEFAULT_TIMESTAMP_PARSER
@@ -191,6 +195,8 @@ class RequestParser(object):
         self._blob_parser = blob_parser
         self._event_stream_parser = None
         self.output_null_values = True if output_null_values else False
+        if map_type is not None:
+            self.MAP_TYPE = map_type
 
     def _default_blob_parser(self, value):
         # Blobs are always returned as bytes type (this matters on python3).
@@ -282,7 +288,7 @@ class QueryParser(RequestParser):
             always be present.
 
         """
-        parsed = {}
+        parsed = self.MAP_TYPE()
         action = self._parse_action(request_dict, service_model)
         operation_model = service_model.operation_model(action)
         parsed["action"] = action
@@ -290,7 +296,7 @@ class QueryParser(RequestParser):
         return parsed
 
     def get_parameters(self, request_dict, operation_model):
-        parsed = {}
+        parsed = self.MAP_TYPE()
         shape = operation_model.input_shape
         if shape is None:
             return parsed
@@ -481,7 +487,7 @@ class BaseJSONParser(RequestParser):
                 # we should be returning this unchanged, instead of as an
                 # empty dict.
                 return None
-            final_parsed = {}
+            final_parsed = self.MAP_TYPE()
             for member_name in member_shapes:
                 member_shape = member_shapes[member_name]
                 json_name = member_shape.serialization.get("name", member_name)
@@ -493,7 +499,7 @@ class BaseJSONParser(RequestParser):
         return final_parsed
 
     def _handle_map(self, shape, value):
-        parsed = {}
+        parsed = self.MAP_TYPE()
         key_shape = shape.key
         value_shape = shape.value
         for key, value in value.items():
@@ -534,7 +540,7 @@ class JSONParser(BaseJSONParser):
         return target
 
     def _do_parse(self, request_dict, shape):
-        parsed = {}
+        parsed = self.MAP_TYPE()
         if shape is not None:
             parsed = self._handle_json_body(request_dict["body"], shape)
         return parsed
