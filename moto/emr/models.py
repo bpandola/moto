@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from functools import cache, cached_property
 from typing import Any, Dict, List, Optional, Tuple
-
-from dateutil.parser import parse as dtparse
 
 from moto.core.base_backend import BackendDict, BaseBackend
 from moto.core.common_models import BaseModel, CloudFormationModel
@@ -26,6 +24,16 @@ from .utils import (
 )
 
 EXAMPLE_AMI_ID = "ami-12c6146b"
+
+
+def make_utc(dt: datetime) -> datetime:
+    """
+    Convert a naive datetime to an aware datetime in UTC.
+    If the datetime is already aware, it will be converted to UTC.
+    """
+    if dt.tzinfo is None:
+        return dt
+    return dt.astimezone(timezone.utc).replace(tzinfo=None)
 
 
 class Application(BaseModel):
@@ -925,8 +933,8 @@ class ElasticMapReduceBackend(BaseBackend):
         self,
         job_flow_ids: Optional[List[str]] = None,
         job_flow_states: Optional[List[str]] = None,
-        created_after: Optional[str] = None,
-        created_before: Optional[str] = None,
+        created_after: Optional[datetime] = None,
+        created_before: Optional[datetime] = None,
     ) -> List[Cluster]:
         clusters = list(self.clusters.values())
 
@@ -939,15 +947,11 @@ class ElasticMapReduceBackend(BaseBackend):
             clusters = [c for c in clusters if c.state in job_flow_states]
         if created_after:
             clusters = [
-                c
-                for c in clusters
-                if c.creation_datetime > dtparse(created_after).replace(tzinfo=None)
+                c for c in clusters if c.creation_datetime > make_utc(created_after)
             ]
         if created_before:
             clusters = [
-                c
-                for c in clusters
-                if c.creation_datetime < dtparse(created_before).replace(tzinfo=None)
+                c for c in clusters if c.creation_datetime < make_utc(created_before)
             ]
 
         # Amazon EMR can return a maximum of 512 job flow descriptions
@@ -988,8 +992,8 @@ class ElasticMapReduceBackend(BaseBackend):
     def list_clusters(
         self,
         cluster_states: Optional[List[str]] = None,
-        created_after: Optional[str] = None,
-        created_before: Optional[str] = None,
+        created_after: Optional[datetime] = None,
+        created_before: Optional[datetime] = None,
         marker: Optional[str] = None,
     ) -> Tuple[List[Cluster], Optional[str]]:
         max_items = 50
@@ -998,15 +1002,11 @@ class ElasticMapReduceBackend(BaseBackend):
             clusters = [c for c in clusters if c.state in cluster_states]
         if created_after:
             clusters = [
-                c
-                for c in clusters
-                if c.creation_datetime > dtparse(created_after).replace(tzinfo=None)
+                c for c in clusters if c.creation_datetime > make_utc(created_after)
             ]
         if created_before:
             clusters = [
-                c
-                for c in clusters
-                if c.creation_datetime < dtparse(created_before).replace(tzinfo=None)
+                c for c in clusters if c.creation_datetime < make_utc(created_before)
             ]
         clusters = sorted(clusters, key=lambda x: x.id)
         start_idx = 0 if marker is None else int(marker)
