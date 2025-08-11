@@ -34,7 +34,8 @@ from werkzeug.exceptions import HTTPException
 from moto import settings
 from moto.core.common_types import TYPE_IF_NONE, TYPE_RESPONSE
 from moto.core.exceptions import DryRunClientError, ServiceException
-from moto.core.parsers import PROTOCOL_PARSERS, XFormedDict
+from moto.core.parse import PROTOCOL_PARSERS
+from moto.core.parsers import XFormedDict
 from moto.core.request import normalize_request
 from moto.core.serialize import SERIALIZERS, ResponseSerializer, XFormedAttributePicker
 from moto.core.utils import (
@@ -653,7 +654,7 @@ class BaseResponse(_TemplateEnvironmentMixin, ActionAuthenticatorMixin):
         protocol = service_model.protocol
         parser_cls = PROTOCOL_PARSERS[protocol]
         parser = parser_cls(map_type=XFormedDict)  # type: ignore[no-untyped-call]
-        parsed = parser.parse(
+        parsed = parser.get_parameters(
             {
                 "query_params": normalized_request.values,
                 "headers": normalized_request.headers,
