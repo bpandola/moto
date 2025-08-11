@@ -47,10 +47,23 @@ class Application(BaseModel):
 
 
 class BootstrapAction(BaseModel):
-    def __init__(self, args: List[str], name: str, script_path: str):
-        self.args = args or []
+    def __init__(self, name: str, script_bootstrap_action: dict[str, Any]):
         self.name = name
-        self.script_path = script_path
+        self.script_bootstrap_action = script_bootstrap_action
+
+    @property
+    def script_path(self) -> Optional[str]:
+        """
+        Returns the script path from the script_bootstrap_action.
+        """
+        return self.script_bootstrap_action.get("path")
+
+    @property
+    def args(self) -> List[str]:
+        """
+        Returns the arguments from the script_bootstrap_action.
+        """
+        return self.script_bootstrap_action.get("args", [])
 
 
 class Instance(BaseModel):
@@ -534,15 +547,7 @@ class Cluster(CloudFormationModel):
     def bootstrap_action_detail_list(self) -> list[dict[str, Any]]:
         details = []
         for bootstrap_action in self.bootstrap_actions:
-            member = {
-                "BootstrapActionConfig": {
-                    "Name": bootstrap_action.name,
-                    "ScriptBootstrapAction": {
-                        "Args": bootstrap_action.args,
-                        "Path": bootstrap_action.script_path,
-                    },
-                }
-            }
+            member = {"BootstrapActionConfig": bootstrap_action}
             details.append(member)
         return details
 
