@@ -308,18 +308,24 @@ class Step(BaseModel):
         self,
         state: str,
         name: str = "",
-        jar: str = "",
-        args: Optional[List[str]] = None,
-        properties: Optional[Dict[str, str]] = None,
+        hadoop_jar_step: Optional[Dict[str, Any]] = None,
+        # jar: str = "",
+        # args: Optional[List[str]] = None,
+        # properties: Optional[Dict[str, str]] = None,
         action_on_failure: str = "TERMINATE_CLUSTER",
     ):
         self.id = random_step_id()
 
         self.action_on_failure = action_on_failure
-        self.args = args or []
         self.name = name
-        self.jar = jar
-        self.properties = properties or {}
+        if hadoop_jar_step is not None:
+            self.jar = hadoop_jar_step.get("Jar", "")
+            self.args = hadoop_jar_step.get("Args", [])
+            self.properties = hadoop_jar_step.get("Properties", {})
+        else:
+            self.jar = ""
+            self.args = []
+            self.properties = {}
 
         self.creation_date_time = utcnow()
         self.end_date_time = None
@@ -329,19 +335,18 @@ class Step(BaseModel):
 
     @property
     def config(self) -> dict[str, Any]:
+        assert True
         config = {
             "ActionOnFailure": self.action_on_failure,
             "HadoopJarStep": {
                 "Jar": self.jar,
                 "Args": self.args,
-                "Properties": [
-                    {"Key": k, "Value": v} for k, v in self.properties.items()
-                ],
+                "Properties": self.properties,
             },
             "Name": self.name,
             "Jar": self.jar,
             "Args": self.args,
-            "Properties": self.properties,
+            "Properties": {p["Key"]: p["Value"] for p in self.properties},
         }
         return config
 
