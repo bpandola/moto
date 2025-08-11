@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from functools import cache, cached_property
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -18,22 +18,13 @@ from moto.utilities.utils import CamelToUnderscoresWalker, get_partition, load_r
 
 from .utils import (
     EmrSecurityGroupManager,
+    make_utc,
     random_cluster_id,
     random_instance_group_id,
     random_step_id,
 )
 
 EXAMPLE_AMI_ID = "ami-12c6146b"
-
-
-def make_utc(dt: datetime) -> datetime:
-    """
-    Convert a naive datetime to an aware datetime in UTC.
-    If the datetime is already aware, it will be converted to UTC.
-    """
-    if dt.tzinfo is None:
-        return dt
-    return dt.astimezone(timezone.utc).replace(tzinfo=None)
 
 
 class Application(BaseModel):
@@ -309,23 +300,17 @@ class Step(BaseModel):
         state: str,
         name: str = "",
         hadoop_jar_step: Optional[Dict[str, Any]] = None,
-        # jar: str = "",
-        # args: Optional[List[str]] = None,
-        # properties: Optional[Dict[str, str]] = None,
         action_on_failure: str = "TERMINATE_CLUSTER",
     ):
         self.id = random_step_id()
 
         self.action_on_failure = action_on_failure
         self.name = name
-        if hadoop_jar_step is not None:
-            self.jar = hadoop_jar_step.get("Jar", "")
-            self.args = hadoop_jar_step.get("Args", [])
-            self.properties = hadoop_jar_step.get("Properties", {})
-        else:
-            self.jar = ""
-            self.args = []
-            self.properties = {}
+
+        self.hadoop_jar_step = hadoop_jar_step or {}
+        self.jar = self.hadoop_jar_step.get("Jar", "")
+        self.args = self.hadoop_jar_step.get("Args", [])
+        self.properties = self.hadoop_jar_step.get("Properties", {})
 
         self.creation_date_time = utcnow()
         self.end_date_time = None
@@ -335,14 +320,9 @@ class Step(BaseModel):
 
     @property
     def config(self) -> dict[str, Any]:
-        assert True
         config = {
             "ActionOnFailure": self.action_on_failure,
-            "HadoopJarStep": {
-                "Jar": self.jar,
-                "Args": self.args,
-                "Properties": self.properties,
-            },
+            "HadoopJarStep": self.hadoop_jar_step,
             "Name": self.name,
             "Jar": self.jar,
             "Args": self.args,
