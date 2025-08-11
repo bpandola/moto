@@ -755,6 +755,11 @@ class BaseResponse(_TemplateEnvironmentMixin, ActionAuthenticatorMixin):
         return headers, body
 
     def _get_param(self, param_name: str, if_none: Any = None) -> Any:
+        if self.automated_parameter_parsing:
+            from moto.core.utils import get_value
+
+            value = get_value(self.params, param_name, default=if_none)
+            return value
         val = self.querystring.get(param_name)
         if val is not None:
             return val[0]
