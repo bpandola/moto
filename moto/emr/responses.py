@@ -21,6 +21,7 @@ class ElasticMapReduceResponse(BaseResponse):
 
     def __init__(self) -> None:
         super().__init__(service_name="emr")
+        self.automated_parameter_parsing = True
 
     def get_region_from_url(self, request: Any, full_url: str) -> str:
         for regex in ElasticMapReduceResponse.emr_region_regex:
