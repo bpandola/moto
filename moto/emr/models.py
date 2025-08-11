@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from functools import cache, cached_property
 from typing import Any, Optional
 
@@ -24,6 +24,16 @@ from .utils import (
 )
 
 EXAMPLE_AMI_ID = "ami-12c6146b"
+
+
+def make_utc(dt: datetime) -> datetime:
+    """
+    Convert a naive datetime to an aware datetime in UTC.
+    If the datetime is already aware, it will be converted to UTC.
+    """
+    if dt.tzinfo is None:
+        return dt
+    return dt.astimezone(timezone.utc).replace(tzinfo=None)
 
 
 class Application(BaseModel):
