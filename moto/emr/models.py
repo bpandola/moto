@@ -486,7 +486,7 @@ class Cluster(CloudFormationModel):
         self.slave_security_group = instance_attrs.get(
             "emr_managed_slave_security_group"
         )
-        self.termination_protected = instance_attrs.get("termination_protected")
+        self.termination_protected = instance_attrs.get("termination_protected", False)
 
         self.release_label = release_label
         self.requested_ami_version = requested_ami_version
