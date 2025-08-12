@@ -338,8 +338,7 @@ class QueryParser(RequestParser):
 
     def _handle_list(self, shape, node, prefix=""):
         # The query protocol serializes empty lists as an empty string.
-        value = self._parse_shape(shape.member, node, prefix)
-        if value == "":
+        if node.get(prefix, UNDEFINED) == "":
             return []
 
         if self._is_shape_flattened(shape):
