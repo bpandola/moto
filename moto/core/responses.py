@@ -650,21 +650,18 @@ class BaseResponse(_TemplateEnvironmentMixin, ActionAuthenticatorMixin):
         assert isinstance(request, (AWSPreparedRequest, Request)), str(request)
         normalized_request = normalize_request(request)
         service_model = get_service_model(self.service_name)
-        action = self._get_action()
-        parsed: Any = {}
-        if action:
-            operation_model = service_model.operation_model(self._get_action())
-            protocol = service_model.protocol
-            parser_cls = PROTOCOL_PARSERS[protocol]
-            parser = parser_cls(map_type=XFormedDict)  # type: ignore[no-untyped-call]
-            parsed = parser.get_parameters(
-                {
-                    "query_params": normalized_request.values,
-                    "headers": normalized_request.headers,
-                    "body": normalized_request.data,
-                },
-                operation_model,
-            )  # type: ignore[no-untyped-call]
+        operation_model = service_model.operation_model(self._get_action())
+        protocol = service_model.protocol
+        parser_cls = PROTOCOL_PARSERS[protocol]
+        parser = parser_cls(map_type=XFormedDict)  # type: ignore[no-untyped-call]
+        parsed = parser.get_parameters(
+            {
+                "query_params": normalized_request.values,
+                "headers": normalized_request.headers,
+                "body": normalized_request.data,
+            },
+            operation_model,
+        )  # type: ignore[no-untyped-call]
         self.params = cast(Any, parsed)
 
     def serialized(self, action_result: ActionResult) -> TYPE_RESPONSE:
