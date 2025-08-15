@@ -1,6 +1,7 @@
 # mypy: ignore-errors
 from collections import OrderedDict
 from collections.abc import Mapping, MutableMapping
+from typing import Any
 
 from botocore import xform_name
 from botocore.utils import parse_timestamp
@@ -183,6 +184,17 @@ class XFormedDict(MutableMapping):
     def original_items(self):
         """Like iteritems(), but with all PascalCase keys."""
         return ((keyval[0], keyval[1]) for (_, keyval) in self._store.items())
+
+    def original_dict(self) -> dict[str, Any]:
+        """Return a dict with all PascalCase keys."""
+        original_dict = {}
+        for _, keyval in self._store.items():
+            key = keyval[0]
+            value = keyval[1]
+            if isinstance(value, XFormedDict):
+                value = value.original_dict()
+            original_dict[key] = value
+        return original_dict
 
     def __eq__(self, other):
         if isinstance(other, Mapping):
