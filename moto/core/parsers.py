@@ -1,7 +1,7 @@
 # mypy: ignore-errors
 from collections import OrderedDict
 from collections.abc import Mapping, MutableMapping
-from typing import Any
+from typing import Any, Optional
 
 from botocore import xform_name
 from botocore.utils import parse_timestamp
@@ -154,7 +154,9 @@ class XFormedDict(MutableMapping):
 
     """
 
-    def __init__(self, data=None, **kwargs):
+    def __init__(
+        self, data: Optional[dict[str, Any]] = None, **kwargs: dict[str, Any]
+    ) -> None:
         self._xform_cache = {}
         self._store = OrderedDict()
         if data is None:
