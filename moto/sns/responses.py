@@ -462,6 +462,7 @@ class SNSResponse(BaseResponse):
     @staticmethod
     def serve_pem(request: Any, full_url: str, headers: Any) -> TYPE_RESPONSE:
         sns = SNSResponse()
+        sns.automated_parameter_parsing = False
         sns.setup_class(request, full_url, headers)
         key_name = full_url.split("/")[-1]
         key = sns.backend._message_public_keys[key_name]
