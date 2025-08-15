@@ -190,7 +190,7 @@ class ElastiCacheResponse(BaseResponse):
     def create_cache_subnet_group(self) -> ActionResult:
         cache_subnet_group_name = self._get_param("CacheSubnetGroupName")
         cache_subnet_group_description = self._get_param("CacheSubnetGroupDescription")
-        subnet_ids = self._get_multi_param_dict("SubnetIds").get("SubnetIdentifier", [])
+        subnet_ids = self._get_param("SubnetIds", [])
         tags = self._get_param("Tags", [])
         cache_subnet_group = self.elasticache_backend.create_cache_subnet_group(
             cache_subnet_group_name=cache_subnet_group_name,
