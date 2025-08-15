@@ -1,3 +1,4 @@
+import base64
 import re
 from collections import defaultdict
 from typing import Any, Dict
@@ -5,6 +6,7 @@ from typing import Any, Dict
 from moto.core.responses import TYPE_RESPONSE, ActionResult, BaseResponse, EmptyResult
 from moto.core.utils import camelcase_to_underscores
 
+from ..core.parsers import XFormedDict
 from .exceptions import InvalidParameterValue, SNSInvalidParameter, SNSNotFoundError
 from .models import SNSBackend, sns_backends
 from .utils import is_e164
@@ -25,6 +27,7 @@ class SNSResponse(BaseResponse):
 
     def __init__(self) -> None:
         super().__init__(service_name="sns")
+        self.automated_parameter_parsing = True
 
     @property
     def backend(self) -> SNSBackend:
@@ -39,9 +42,10 @@ class SNSResponse(BaseResponse):
         return {tag["key"]: tag["value"] for tag in tags}
 
     def _parse_message_attributes(self) -> Dict[str, Any]:
-        message_attributes = self._get_object_map(
-            "MessageAttributes.entry", name="Name", value="Value"
-        )
+        message_attributes = self._get_param("MessageAttributes", {})
+        if isinstance(message_attributes, XFormedDict):
+            message_attributes = message_attributes.original_dict()
+
         return self._transform_message_attributes(message_attributes)
 
     def _transform_message_attributes(
@@ -86,7 +90,7 @@ class SNSResponse(BaseResponse):
                                 f"Could not cast message attribute '{name}' value to number."
                             )
             elif "BinaryValue" in value:
-                transform_value = value["BinaryValue"]
+                transform_value = base64.b64encode(value["BinaryValue"]).decode()
             if transform_value == "":
                 raise InvalidParameterValue(
                     f"The message attribute '{name}' must contain non-empty "
@@ -239,18 +243,14 @@ class SNSResponse(BaseResponse):
 
     def publish_batch(self) -> ActionResult:
         topic_arn = self._get_param("TopicArn")
-        publish_batch_request_entries = self._get_multi_param(
-            "PublishBatchRequestEntries.member"
+        publish_batch_request_entries = self._get_param(
+            "PublishBatchRequestEntries", []
         )
         for entry in publish_batch_request_entries:
             if "MessageAttributes" in entry:
-                # Convert into the same format as the regular publish-method
-                # FROM: [{'Name': 'a', 'Value': {'DataType': 'String', 'StringValue': 'v'}}]
-                # TO  : {'name': {'DataType': 'Number', 'StringValue': '123'}}
-                msg_attrs = {y["Name"]: y["Value"] for y in entry["MessageAttributes"]}
                 # Use the same validation/processing as the regular publish-method
                 entry["MessageAttributes"] = self._transform_message_attributes(
-                    msg_attrs
+                    entry["MessageAttributes"]
                 )
         successful, failed = self.backend.publish_batch(
             topic_arn=topic_arn,
