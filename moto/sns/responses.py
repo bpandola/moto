@@ -33,19 +33,17 @@ class SNSResponse(BaseResponse):
     def backend(self) -> SNSBackend:
         return sns_backends[self.current_account][self.region]
 
-    def _get_attributes(self) -> Dict[str, str]:
-        attributes = self._get_list_prefix("Attributes.entry")
-        return dict((attribute["key"], attribute["value"]) for attribute in attributes)
+    def _get_attributes(self) -> Dict[str, Any]:
+        attributes = self._get_param("Attributes", XFormedDict())
+        return attributes.original_dict()
 
     def _get_tags(self) -> Dict[str, str]:
-        tags = self._get_list_prefix("Tags.member")
+        tags = self._get_param("Tags", [])
         return {tag["key"]: tag["value"] for tag in tags}
 
     def _parse_message_attributes(self) -> Dict[str, Any]:
-        message_attributes = self._get_param("MessageAttributes", {})
-        if isinstance(message_attributes, XFormedDict):
-            message_attributes = message_attributes.original_dict()
-
+        message_attributes = self._get_param("MessageAttributes", XFormedDict())
+        message_attributes = message_attributes.original_dict()
         return self._transform_message_attributes(message_attributes)
 
     def _transform_message_attributes(
@@ -400,8 +398,8 @@ class SNSResponse(BaseResponse):
     def add_permission(self) -> ActionResult:
         topic_arn = self._get_param("TopicArn")
         label = self._get_param("Label")
-        aws_account_ids = self._get_multi_param("AWSAccountId.member.")
-        action_names = self._get_multi_param("ActionName.member.")
+        aws_account_ids = self._get_param("AWSAccountId", [])
+        action_names = self._get_param("ActionName", [])
         self.backend.add_permission(
             region_name=self.region,
             topic_arn=topic_arn,
@@ -455,7 +453,7 @@ class SNSResponse(BaseResponse):
 
     def untag_resource(self) -> ActionResult:
         arn = self._get_param("ResourceArn")
-        tag_keys = self._get_multi_param("TagKeys.member")
+        tag_keys = self._get_param("TagKeys", [])
         self.backend.untag_resource(arn, tag_keys)
         return EmptyResult()
 
