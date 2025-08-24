@@ -1,4 +1,5 @@
 import json
+import math
 from datetime import datetime, timedelta
 from typing import Any, Dict, Iterable, List, Optional, SupportsFloat, Tuple
 
@@ -996,7 +997,7 @@ class CloudWatchBackend(BaseBackend):
         :raises: InvalidParameterCombination
         """
         # basic validation of input
-        if metric.get("Value") == "NaN":
+        if math.isnan(metric.get("Value", float())):
             # single value
             raise InvalidParameterValue(
                 f"The value NaN for parameter MetricData.member.{query_num}.Value is invalid."
