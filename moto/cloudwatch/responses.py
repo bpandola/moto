@@ -41,9 +41,7 @@ class CloudWatchResponse(BaseResponse):
             for metric in metrics:
                 metric_dimensions = []
                 dims = (
-                    metric.get("MetricStat", {})
-                    .get("Metric", {})
-                    .get("Dimensions.member", [])
+                    metric.get("MetricStat", {}).get("Metric", {}).get("Dimensions", [])
                 )
                 for dim in dims:
                     metric_dimensions.append(
