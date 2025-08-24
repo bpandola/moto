@@ -39,6 +39,7 @@ class IamResponse(BaseResponse):
 
     def __init__(self) -> None:
         super().__init__(service_name="iam")
+        self.automated_parameter_parsing = True
 
     @property
     def backend(self) -> IAMBackend:
@@ -101,7 +102,7 @@ class IamResponse(BaseResponse):
         path = self._get_param("Path")
         policy_document = self._get_param("PolicyDocument")
         policy_name = self._get_param("PolicyName")
-        tags = self._get_multi_param("Tags.member")
+        tags = self._get_param("Tags", [])
         policy = self.backend.create_policy(
             description, path, policy_document, policy_name, tags
         )
@@ -257,7 +258,7 @@ class IamResponse(BaseResponse):
         assume_role_policy_document = self._get_param("AssumeRolePolicyDocument")
         permissions_boundary = self._get_param("PermissionsBoundary")
         description = self._get_param("Description")
-        tags = self._get_multi_param("Tags.member")
+        tags = self._get_param("Tags", [])
         max_session_duration = self._get_param("MaxSessionDuration", 3600)
 
         role = self.backend.create_role(
@@ -349,7 +350,7 @@ class IamResponse(BaseResponse):
     def create_policy_version(self) -> ActionResult:
         policy_arn = self._get_param("PolicyArn")
         policy_document = self._get_param("PolicyDocument")
-        set_as_default = self._get_param("SetAsDefault")
+        set_as_default = self._get_param("SetAsDefault", False)
         policy_version = self.backend.create_policy_version(
             policy_arn, policy_document, set_as_default
         )
@@ -380,7 +381,7 @@ class IamResponse(BaseResponse):
 
     def tag_policy(self) -> ActionResult:
         policy_arn = self._get_param("PolicyArn")
-        tags = self._get_multi_param("Tags.member")
+        tags = self._get_param("Tags", [])
 
         self.backend.tag_policy(policy_arn, tags)
 
@@ -388,7 +389,7 @@ class IamResponse(BaseResponse):
 
     def untag_policy(self) -> ActionResult:
         policy_arn = self._get_param("PolicyArn")
-        tag_keys = self._get_multi_param("TagKeys.member")
+        tag_keys = self._get_param("TagKeys", [])
 
         self.backend.untag_policy(policy_arn, tag_keys)
 
@@ -404,7 +405,7 @@ class IamResponse(BaseResponse):
     def create_instance_profile(self) -> ActionResult:
         profile_name = self._get_param("InstanceProfileName")
         path = self._get_param("Path", "/")
-        tags = self._get_multi_param("Tags.member")
+        tags = self._get_param("Tags", [])
 
         profile = self.backend.create_instance_profile(
             profile_name, path, role_names=[], tags=tags
@@ -594,7 +595,7 @@ class IamResponse(BaseResponse):
     def create_user(self) -> ActionResult:
         user_name = self._get_param("UserName")
         path = self._get_param("Path")
-        tags = self._get_multi_param("Tags.member")
+        tags = self._get_param("Tags", [])
         user = self.backend.create_user(
             self.region, user_name=user_name, path=path, tags=tags
         )
@@ -932,7 +933,7 @@ class IamResponse(BaseResponse):
         return ActionResult({})
 
     def get_account_authorization_details(self) -> ActionResult:
-        filter_param = self._get_multi_param("Filter.member")
+        filter_param = self._get_param("Filter", [])
         account_details = self.backend.get_account_authorization_details(filter_param)
         result = {
             "UserDetailList": account_details["users"],
@@ -1025,7 +1026,7 @@ class IamResponse(BaseResponse):
 
     def tag_role(self) -> ActionResult:
         role_name = self._get_param("RoleName")
-        tags = self._get_multi_param("Tags.member")
+        tags = self._get_param("Tags", [])
 
         self.backend.tag_role(role_name, tags)
 
@@ -1033,7 +1034,7 @@ class IamResponse(BaseResponse):
 
     def untag_role(self) -> ActionResult:
         role_name = self._get_param("RoleName")
-        tag_keys = self._get_multi_param("TagKeys.member")
+        tag_keys = self._get_param("TagKeys", [])
 
         self.backend.untag_role(role_name, tag_keys)
 
@@ -1041,9 +1042,9 @@ class IamResponse(BaseResponse):
 
     def create_open_id_connect_provider(self) -> ActionResult:
         open_id_provider_url = self._get_param("Url")
-        thumbprint_list = self._get_multi_param("ThumbprintList.member")
-        client_id_list = self._get_multi_param("ClientIDList.member")
-        tags = self._get_multi_param("Tags.member")
+        thumbprint_list = self._get_param("ThumbprintList", [])
+        client_id_list = self._get_param("ClientIDList", [])
+        tags = self._get_param("Tags", [])
 
         open_id_provider = self.backend.create_open_id_connect_provider(
             open_id_provider_url, thumbprint_list, client_id_list, tags
@@ -1054,7 +1055,7 @@ class IamResponse(BaseResponse):
 
     def update_open_id_connect_provider_thumbprint(self) -> ActionResult:
         open_id_provider_arn = self._get_param("OpenIDConnectProviderArn")
-        thumbprint_list = self._get_multi_param("ThumbprintList.member")
+        thumbprint_list = self._get_param("ThumbprintList", [])
 
         self.backend.update_open_id_connect_provider_thumbprint(
             open_id_provider_arn, thumbprint_list
@@ -1064,7 +1065,7 @@ class IamResponse(BaseResponse):
 
     def tag_open_id_connect_provider(self) -> ActionResult:
         open_id_provider_arn = self._get_param("OpenIDConnectProviderArn")
-        tags = self._get_multi_param("Tags.member")
+        tags = self._get_param("Tags", [])
 
         self.backend.tag_open_id_connect_provider(open_id_provider_arn, tags)
 
@@ -1072,7 +1073,7 @@ class IamResponse(BaseResponse):
 
     def untag_open_id_connect_provider(self) -> ActionResult:
         open_id_provider_arn = self._get_param("OpenIDConnectProviderArn")
-        tag_keys = self._get_multi_param("TagKeys.member")
+        tag_keys = self._get_param("TagKeys", [])
 
         self.backend.untag_open_id_connect_provider(open_id_provider_arn, tag_keys)
 
@@ -1162,7 +1163,7 @@ class IamResponse(BaseResponse):
 
     def tag_user(self) -> ActionResult:
         name = self._get_param("UserName")
-        tags = self._get_multi_param("Tags.member")
+        tags = self._get_param("Tags", [])
 
         self.backend.tag_user(name, tags)
 
@@ -1170,7 +1171,7 @@ class IamResponse(BaseResponse):
 
     def untag_user(self) -> ActionResult:
         name = self._get_param("UserName")
-        tag_keys = self._get_multi_param("TagKeys.member")
+        tag_keys = self._get_param("TagKeys", [])
 
         self.backend.untag_user(name, tag_keys)
 
@@ -1204,7 +1205,7 @@ class IamResponse(BaseResponse):
 
     def tag_instance_profile(self) -> ActionResult:
         instance_profile_name = self._get_param("InstanceProfileName")
-        tags = self._get_multi_param("Tags.member")
+        tags = self._get_param("Tags", [])
 
         self.backend.tag_instance_profile(
             instance_profile_name=instance_profile_name,
@@ -1214,7 +1215,7 @@ class IamResponse(BaseResponse):
 
     def untag_instance_profile(self) -> ActionResult:
         instance_profile_name = self._get_param("InstanceProfileName")
-        tags = self._get_multi_param("TagKeys.member")
+        tags = self._get_param("TagKeys", [])
 
         self.backend.untag_instance_profile(
             instance_profile_name=instance_profile_name,
