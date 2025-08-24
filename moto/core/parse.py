@@ -513,6 +513,13 @@ class BaseJSONParser(RequestParser):
     def _handle_timestamp(self, shape, value):
         return self._timestamp_parser(value)
 
+    def _handle_float(self, shape, value):
+        if value is UNDEFINED:
+            return value
+        return float(value)
+
+    _handle_double = _handle_float
+
     def _parse_body_as_json(self, body_contents):
         if not body_contents:
             return {}
