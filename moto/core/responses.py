@@ -650,7 +650,11 @@ class BaseResponse(_TemplateEnvironmentMixin, ActionAuthenticatorMixin):
         normalized_request = normalize_request(request)
         service_model = get_service_model(self.service_name)
         operation_model = service_model.operation_model(self._get_action())
-        protocol = service_model.protocol
+        protocol = (
+            service_model.protocol
+            if service_model.protocol != "smithy-rpc-v2-cbor"
+            else "json"
+        )
         parser_cls = PROTOCOL_PARSERS[protocol]
         parser = parser_cls(map_type=XFormedDict)  # type: ignore[no-untyped-call]
         parsed = parser.parse(
@@ -666,7 +670,11 @@ class BaseResponse(_TemplateEnvironmentMixin, ActionAuthenticatorMixin):
     def serialized(self, action_result: ActionResult) -> TYPE_RESPONSE:
         service_model = get_service_model(self.service_name)
         operation_model = service_model.operation_model(self._get_action())
-        protocol = service_model.protocol
+        protocol = (
+            service_model.protocol
+            if service_model.protocol != "smithy-rpc-v2-cbor"
+            else "json"
+        )
         protocol += "-json" if protocol == "query" and self.request_json else ""
         serializer_cls = SERIALIZERS[protocol]
         context = ActionContext(
