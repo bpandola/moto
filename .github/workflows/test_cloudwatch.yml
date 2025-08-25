@@ -1,0 +1,46 @@
+# Run separate test cases to verify CloudWatch works with multiple botocore versions (/multiple response-types, QUERY and JSON)
+#
+name: "CloudWatch Protocol Tests"
+
+on:
+  push:
+    branches:
+      - "cloudwatch-protocol-tests"
+  pull_request:
+    branches:
+      - "master"
+    paths:
+      - ".github/workflows/test_cloudwatch.yml"
+
+jobs:
+  test-cloudwatch:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v5
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+
+    - name: Update pip
+      run: |
+        python -m pip install --upgrade pip
+
+    - name: Install project dependencies
+      run: |
+        pip install -r requirements-dev.txt
+
+    - name: Run Tests with Query Protocol
+      run: |
+        pip install botocore==1.40.16
+        pytest -sv tests/test_cloudwatch
+
+    - name: Run Tests with JSON Protocol
+      run: |
+        curl -L -o Boto3CliV1Artifacts.zip "https://d1l1rpjfz23h36.cloudfront.net/pr2qwos6sy8mfx2/Python_Boto_v3/Boto3CliV1Artifacts.zip"
+        unzip Boto3CliV1Artifacts.zip
+        pip install botocore-1.39.7-py3-none-any.whl
+        pytest -sv tests/test_cloudwatch
