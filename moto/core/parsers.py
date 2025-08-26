@@ -164,19 +164,12 @@ class QueryParser:
 
 class JSONParser:
     DEFAULT_ENCODING = "utf-8"
-
     MAP_TYPE = dict
 
-    def __init__(
-        self,
-        timestamp_parser=None,
-        output_null_values=None,
-        map_type=None,
-    ):
+    def __init__(self, timestamp_parser=None, map_type=None):
         if timestamp_parser is None:
             timestamp_parser = parse_timestamp
         self._timestamp_parser = timestamp_parser
-        self.output_null_values = True if output_null_values else False
         if map_type is not None:
             self.MAP_TYPE = map_type
 
@@ -185,9 +178,32 @@ class JSONParser:
         parsed = self._do_parse(request_dict, shape)
         return parsed if parsed is not UNDEFINED else {}
 
+    def _do_parse(self, request_dict, shape):
+        parsed = self.MAP_TYPE()
+        if shape is not None:
+            parsed = self._handle_json_body(request_dict["body"], shape)
+        return parsed
+
+    def _handle_json_body(self, raw_body, shape):
+        parsed_json = self._parse_body_as_json(raw_body)
+        return self._parse_shape(shape, parsed_json)
+
+    def _parse_body_as_json(self, body_contents):
+        if not body_contents:
+            return {}
+        body = body_contents.decode(self.DEFAULT_ENCODING)
+        original_parsed = json.loads(body)
+        return original_parsed
+
     def _parse_shape(self, shape, node):
         handler = getattr(self, "_handle_%s" % shape.type_name, self._default_handle)
         return handler(shape, node)
+
+    def _default_handle(self, _, value):
+        return value
+
+    def _handle_float(self, _, value):
+        return float(value) if value is not UNDEFINED else value
 
     def _handle_list(self, shape, node):
         parsed = []
@@ -196,8 +212,15 @@ class JSONParser:
             parsed.append(self._parse_shape(member_shape, item))
         return parsed
 
-    def _default_handle(self, _, value):
-        return value
+    def _handle_map(self, shape, value):
+        parsed = self.MAP_TYPE()
+        key_shape = shape.key
+        value_shape = shape.value
+        for key, value in value.items():
+            actual_key = self._parse_shape(key_shape, key)
+            actual_value = self._parse_shape(value_shape, value)
+            parsed[actual_key] = actual_value
+        return parsed
 
     def _handle_structure(self, shape, value):
         member_shapes = shape.members
@@ -212,40 +235,10 @@ class JSONParser:
                 )
         return final_parsed
 
-    def _handle_map(self, shape, value):
-        parsed = self.MAP_TYPE()
-        key_shape = shape.key
-        value_shape = shape.value
-        for key, value in value.items():
-            actual_key = self._parse_shape(key_shape, key)
-            actual_value = self._parse_shape(value_shape, value)
-            parsed[actual_key] = actual_value
-        return parsed
-
     def _handle_timestamp(self, _, value):
         return self._timestamp_parser(value)
 
-    def _handle_float(self, _, value):
-        return float(value) if value is not UNDEFINED else value
-
     _handle_double = _handle_float
-
-    def _parse_body_as_json(self, body_contents):
-        if not body_contents:
-            return {}
-        body = body_contents.decode(self.DEFAULT_ENCODING)
-        original_parsed = json.loads(body)
-        return original_parsed
-
-    def _do_parse(self, request_dict, shape):
-        parsed = self.MAP_TYPE()
-        if shape is not None:
-            parsed = self._handle_json_body(request_dict["body"], shape)
-        return parsed
-
-    def _handle_json_body(self, raw_body, shape):
-        parsed_json = self._parse_body_as_json(raw_body)
-        return self._parse_shape(shape, parsed_json)
 
 
 PROTOCOL_PARSERS = {
