@@ -44,16 +44,10 @@ class BootstrapAction(BaseModel):
 
     @property
     def script_path(self) -> Optional[str]:
-        """
-        Returns the script path from the script_bootstrap_action.
-        """
         return self.script_bootstrap_action.get("path")
 
     @property
     def args(self) -> List[str]:
-        """
-        Returns the arguments from the script_bootstrap_action.
-        """
         return self.script_bootstrap_action.get("args", [])
 
 
