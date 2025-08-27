@@ -116,16 +116,22 @@ Each call to ``parse()`` returns a dict has this form::
 
 """
 
+from __future__ import annotations
+
 import base64
 import json
 import logging
 import re
 from collections import defaultdict
+from typing import TYPE_CHECKING, Any, TypedDict
 from urllib.parse import urlparse
 from xml.etree import ElementTree as ETree
 from xml.etree.ElementTree import ParseError as XMLParseError
 
 from botocore.utils import is_json_value_header, parse_timestamp
+
+if TYPE_CHECKING:
+    from botocore.model import OperationModel, ServiceModel
 
 LOG = logging.getLogger(__name__)
 
@@ -162,39 +168,37 @@ class ResponseParserError(Exception):
 UNDEFINED = object()
 
 
-class RequestParser(object):
-    """Base class for response parsing.
+class RequestDict(TypedDict):
+    url_path: str
+    method: str
+    headers: dict[str, Any]
+    body: str
+    values: dict[str, Any]
 
-    This class represents the interface that all ResponseParsers for the
-    various protocols must implement.
 
-    This class will take an HTTP response and a model shape and parse the
-    HTTP response into a dictionary.
+class ParsedDict(TypedDict):
+    action: str
+    params: dict[str, Any]
 
-    There is a single public method exposed: ``parse``.  See the ``parse``
-    docstring for more info.
 
-    """
-
+class RequestParser:
     DEFAULT_ENCODING = "utf-8"
-
     MAP_TYPE = dict
 
     def __init__(
         self,
+        service_model: ServiceModel,
         timestamp_parser=None,
         blob_parser=None,
-        output_null_values=None,
         map_type=None,
     ):
+        self.service_model = service_model
         if timestamp_parser is None:
             timestamp_parser = DEFAULT_TIMESTAMP_PARSER
         self._timestamp_parser = timestamp_parser
         if blob_parser is None:
             blob_parser = self._default_blob_parser
         self._blob_parser = blob_parser
-        self._event_stream_parser = None
-        self.output_null_values = True if output_null_values else False
         if map_type is not None:
             self.MAP_TYPE = map_type
 
@@ -204,45 +208,26 @@ class RequestParser(object):
         # blob contains binary data that actually can't be decoded.
         return base64.b64decode(value)
 
-    def _parse_action(self, request_dict, service_model):
+    def _parse_action(self, request_dict: RequestDict) -> str:
         raise NotImplementedError()
 
-    def parse(self, request_dict, service_model):
-        """Parse the HTTP response given a shape.
-
-        :param request_dict: The HTTP response dictionary.  This is a dictionary
-            that represents the HTTP request.  The dictionary must have the
-            following keys, ``body``, ``headers``.
-
-        :param service_model: The model shape describing the expected output.
-        :return: Returns a dictionary representing the parsed response
-            described by the model.  In addition to the shape described from
-            the model, each response will also have a ``ResponseMetadata``
-            which contains metadata about the response, which contains at least
-            two keys containing ``RequestId`` and ``HTTPStatusCode``.  Some
-            responses may populate additional keys, but ``RequestId`` will
-            always be present.
-
-        """
-        parsed = {}
-        action = self._parse_action(request_dict, service_model)
-        operation_model = service_model.operation_model(action)
-        parsed["action"] = action
-        parsed["kwargs"] = self.get_parameters(request_dict, operation_model)
-        return parsed
-
-    def get_parameters(self, request_dict, operation_model):
-        try:
-            parsed_uri = urlparse(operation_model.http["requestUri"])
-            uri_regexp = self.uri_to_regexp(parsed_uri.path)
-            match = re.match(uri_regexp, request_dict["url_path"])
-            self.uri_match = match
-        except Exception:
-            pass
+    def _parse_params(
+        self, request_dict: RequestDict, operation_model: OperationModel
+    ) -> dict[str, Any]:
         shape = operation_model.input_shape
         if shape is None:
             return {}
         parsed = self._do_parse(request_dict, operation_model.input_shape)
+        return parsed
+
+    def parse(self, request_dict: RequestDict) -> ParsedDict:
+        action = self._parse_action(request_dict)
+        operation_model = self.service_model.operation_model(action)
+        params = self._parse_params(request_dict, operation_model)
+        parsed: ParsedDict = {
+            "action": action,
+            "params": params,
+        }
         return parsed
 
     def _do_parse(self, request_dict, shape):
@@ -264,38 +249,9 @@ class RequestParser(object):
     def _default_handle(self, shape, value):
         return value
 
-    def _timestamp_unixtimestamp(self, value):
-        return int(value)
-
 
 class QueryParser(RequestParser):
-    TIMESTAMP_FORMAT = "iso8601"
-
-    def parse(self, request_dict, service_model):
-        """Parse the HTTP response given a shape.
-
-        :param request_dict: The HTTP response dictionary.  This is a dictionary
-            that represents the HTTP request.  The dictionary must have the
-            following keys, ``body``, ``headers``.
-
-        :param service_model: The model shape describing the expected output.
-        :return: Returns a dictionary representing the parsed response
-            described by the model.  In addition to the shape described from
-            the model, each response will also have a ``ResponseMetadata``
-            which contains metadata about the response, which contains at least
-            two keys containing ``RequestId`` and ``HTTPStatusCode``.  Some
-            responses may populate additional keys, but ``RequestId`` will
-            always be present.
-
-        """
-        parsed = self.MAP_TYPE()
-        action = self._parse_action(request_dict, service_model)
-        operation_model = service_model.operation_model(action)
-        parsed["action"] = action
-        parsed["kwargs"] = self.get_parameters(request_dict, operation_model)
-        return parsed
-
-    def get_parameters(self, request_dict, operation_model):
+    def _parse_params(self, request_dict, operation_model):
         parsed = self.MAP_TYPE()
         shape = operation_model.input_shape
         if shape is None:
@@ -303,12 +259,12 @@ class QueryParser(RequestParser):
         parsed = self._do_parse(request_dict, shape)
         return parsed if parsed is not UNDEFINED else {}
 
-    def _parse_action(self, request_dict, service_model):
-        params = request_dict["query_params"]
+    def _parse_action(self, request_dict):
+        params = request_dict["values"]
         return params.get("Action", "UnknownAction")
 
     def _do_parse(self, request_dict, shape):
-        parsed = self._parse_shape(shape, request_dict["query_params"])
+        parsed = self._parse_shape(shape, request_dict["values"])
         return parsed if parsed is not UNDEFINED else {}
 
     def _parse_shape(self, shape, node, prefix=""):
@@ -537,10 +493,10 @@ class BaseJSONParser(RequestParser):
 
 
 class JSONParser(BaseJSONParser):
-    def _parse_action(self, request_dict, service_model):
+    def _parse_action(self, request_dict):
         headers = request_dict["headers"]
         target = headers.get("X-Amz-Target", "UnknownOperation")
-        target_prefix = service_model.metadata.get("targetPrefix")
+        target_prefix = self.service_model.metadata.get("targetPrefix")
         if target_prefix:
             target = target.replace(f"{target_prefix}.", "")
         return target
@@ -560,6 +516,16 @@ class JSONParser(BaseJSONParser):
 
 
 class BaseRestParser(RequestParser):
+    def _parse_params(self, request_dict, operation_model):
+        try:
+            parsed_uri = urlparse(operation_model.http["requestUri"])
+            uri_regexp = self.uri_to_regexp(parsed_uri.path)
+            match = re.match(uri_regexp, request_dict["url_path"])
+            self.uri_match = match
+        except Exception:
+            pass
+        return super()._parse_params(request_dict, operation_model)
+
     def uri_to_regexp(self, uri):
         """converts uri w/ placeholder to regexp
         '/cars/{carName}/drivers/{DriverName}' -> '^/cars/.*/drivers/[^/]*$'
@@ -590,11 +556,11 @@ class BaseRestParser(RequestParser):
         )
         return regexp
 
-    def _parse_action(self, request_dict, service_model):
+    def _parse_action(self, request_dict):
         method_urls = defaultdict(lambda: defaultdict(str))
-        op_names = service_model.operation_names
+        op_names = self.service_model.operation_names
         for op_name in op_names:
-            op_model = service_model.operation_model(op_name)
+            op_model = self.service_model.operation_model(op_name)
             _method = op_model.http["method"]
             parsed_uri = urlparse(op_model.http["requestUri"])
             uri_regexp = self.uri_to_regexp(parsed_uri.path)
@@ -677,7 +643,7 @@ class BaseRestParser(RequestParser):
                         # do nothing if param is not found
                         pass
             elif location == "querystring":
-                qs = response["query_params"]
+                qs = response["values"]
                 member_name = member_shape.serialization.get("name", name)
                 if member_shape.type_name == "list":
                     # this is for our poor man's multidict and then a real multidict
@@ -750,9 +716,7 @@ class RestJSONParser(BaseRestParser, BaseJSONParser):
 
 
 class BaseXMLParser(RequestParser):
-    def __init__(self, timestamp_parser=None, blob_parser=None):
-        super().__init__(timestamp_parser, blob_parser)
-        self._namespace_re = re.compile("{.*}")
+    _namespace_re = re.compile("{.*}")
 
     def _handle_map(self, shape, node):
         parsed = {}
