@@ -208,10 +208,10 @@ class RequestParser:
         # blob contains binary data that actually can't be decoded.
         return base64.b64decode(value)
 
-    def _parse_action(self, request_dict: RequestDict) -> str:
+    def parse_action(self, request_dict: RequestDict) -> str:
         raise NotImplementedError()
 
-    def _parse_params(
+    def parse_params(
         self, request_dict: RequestDict, operation_model: OperationModel
     ) -> dict[str, Any]:
         shape = operation_model.input_shape
@@ -221,9 +221,9 @@ class RequestParser:
         return parsed
 
     def parse(self, request_dict: RequestDict) -> ParsedDict:
-        action = self._parse_action(request_dict)
+        action = self.parse_action(request_dict)
         operation_model = self.service_model.operation_model(action)
-        params = self._parse_params(request_dict, operation_model)
+        params = self.parse_params(request_dict, operation_model)
         parsed: ParsedDict = {
             "action": action,
             "params": params,
@@ -251,7 +251,7 @@ class RequestParser:
 
 
 class QueryParser(RequestParser):
-    def _parse_params(self, request_dict, operation_model):
+    def parse_params(self, request_dict, operation_model):
         parsed = self.MAP_TYPE()
         shape = operation_model.input_shape
         if shape is None:
@@ -259,7 +259,7 @@ class QueryParser(RequestParser):
         parsed = self._do_parse(request_dict, shape)
         return parsed if parsed is not UNDEFINED else {}
 
-    def _parse_action(self, request_dict):
+    def parse_action(self, request_dict):
         values = request_dict["values"]
         action = values["Action"]
         return action
@@ -494,7 +494,7 @@ class BaseJSONParser(RequestParser):
 
 
 class JSONParser(BaseJSONParser):
-    def _parse_action(self, request_dict):
+    def parse_action(self, request_dict):
         headers = request_dict["headers"]
         target = headers.get("X-Amz-Target", "UnknownOperation")
         target_prefix = self.service_model.metadata.get("targetPrefix")
@@ -517,7 +517,7 @@ class JSONParser(BaseJSONParser):
 
 
 class BaseRestParser(RequestParser):
-    def _parse_params(self, request_dict, operation_model):
+    def parse_params(self, request_dict, operation_model):
         try:
             parsed_uri = urlparse(operation_model.http["requestUri"])
             uri_regexp = self.uri_to_regexp(parsed_uri.path)
@@ -525,7 +525,7 @@ class BaseRestParser(RequestParser):
             self.uri_match = match
         except Exception:
             pass
-        return super()._parse_params(request_dict, operation_model)
+        return super().parse_params(request_dict, operation_model)
 
     def uri_to_regexp(self, uri):
         """converts uri w/ placeholder to regexp
@@ -557,7 +557,7 @@ class BaseRestParser(RequestParser):
         )
         return regexp
 
-    def _parse_action(self, request_dict):
+    def parse_action(self, request_dict):
         method_urls = defaultdict(lambda: defaultdict(str))
         op_names = self.service_model.operation_names
         for op_name in op_names:
