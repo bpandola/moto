@@ -89,7 +89,7 @@
     ]
   },
   {
-    "description": "Serialize other scalar types",
+    "description": "Deserialize other scalar types",
     "metadata": {
       "protocol": "rest-xml",
       "apiVersion": "2014-01-01"

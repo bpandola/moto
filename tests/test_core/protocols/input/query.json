@@ -304,7 +304,7 @@
     ]
   },
   {
-    "description": "Serialize flattened map type",
+    "description": "Deserialize flattened map type",
     "metadata": {
       "protocol": "query",
       "apiVersion": "2014-01-01"
@@ -464,7 +464,7 @@
     ]
   },
   {
-    "description": "Serialize map type",
+    "description": "Deserialize map type",
     "metadata": {
       "protocol": "query",
       "apiVersion": "2014-01-01"
@@ -516,7 +516,7 @@
     ]
   },
   {
-    "description": "Serialize map type with locationName",
+    "description": "Deserialize map type with locationName",
     "metadata": {
       "protocol": "query",
       "apiVersion": "2014-01-01"
