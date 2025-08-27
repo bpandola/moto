@@ -234,10 +234,10 @@ class RequestParser:
         raise NotImplementedError("%s._do_parse" % self.__class__.__name__)
 
     def _parse_shape(self, shape, node):
-        handler = getattr(self, "_handle_%s" % shape.type_name, self._default_handle)
+        handler = getattr(self, "_parse_%s" % shape.type_name, self._default_handle)
         return handler(shape, node)
 
-    def _handle_list(self, shape, node):
+    def _parse_list(self, shape, node):
         # Enough implementations share list serialization that it's moved
         # up here in the base class.
         parsed = []
@@ -260,15 +260,16 @@ class QueryParser(RequestParser):
         return parsed if parsed is not UNDEFINED else {}
 
     def _parse_action(self, request_dict):
-        params = request_dict["values"]
-        return params.get("Action", "UnknownAction")
+        values = request_dict["values"]
+        action = values["Action"]
+        return action
 
     def _do_parse(self, request_dict, shape):
         parsed = self._parse_shape(shape, request_dict["values"])
         return parsed if parsed is not UNDEFINED else {}
 
     def _parse_shape(self, shape, node, prefix=""):
-        handler = getattr(self, "_handle_%s" % shape.type_name, self._default_handle)
+        handler = getattr(self, "_parse_%s" % shape.type_name, self._default_handle)
         return handler(shape, node, prefix)
 
     def _gonna_recurse(self, query_params, prefix):
@@ -276,7 +277,7 @@ class QueryParser(RequestParser):
             return False
         return not any([param_key.startswith(prefix) for param_key in query_params])
 
-    def _handle_structure(self, shape, query_params, prefix=""):
+    def _parse_structure(self, shape, query_params, prefix=""):
         if self._gonna_recurse(query_params, prefix):
             return UNDEFINED
         parsed = self.MAP_TYPE()
@@ -292,7 +293,7 @@ class QueryParser(RequestParser):
                 parsed[parsed_key] = value
         return parsed if parsed != {} else UNDEFINED
 
-    def _handle_list(self, shape, node, prefix=""):
+    def _parse_list(self, shape, node, prefix=""):
         # The query protocol serializes empty lists as an empty string.
         if node.get(prefix, UNDEFINED) == "":
             return []
@@ -318,7 +319,7 @@ class QueryParser(RequestParser):
             i += 1
         return parsed_list if parsed_list != [] else UNDEFINED
 
-    def _handle_map(self, shape, query_params, prefix=""):
+    def _parse_map(self, shape, query_params, prefix=""):
         if self._is_shape_flattened(shape):
             full_prefix = prefix
         else:
@@ -341,21 +342,21 @@ class QueryParser(RequestParser):
             i += 1
         return parsed_map if parsed_map != {} else UNDEFINED
 
-    def _handle_blob(self, shape, query_params, prefix=""):
+    def _parse_blob(self, shape, query_params, prefix=""):
         # Blob args must be base64 encoded.
         value = self._default_handle(shape, query_params, prefix)
         if value is UNDEFINED:
             return value
         return self._blob_parser(value)
 
-    def _handle_timestamp(self, shape, query_params, prefix=""):
+    def _parse_timestamp(self, shape, query_params, prefix=""):
         value = self._default_handle(shape, query_params, prefix)
         if value is UNDEFINED:
             return value
         return self._timestamp_parser(value)
         # return self._convert_str_to_timestamp(value)
 
-    def _handle_boolean(self, shape, query_params, prefix=""):
+    def _parse_boolean(self, shape, query_params, prefix=""):
         value = self._default_handle(shape, query_params, prefix)
         if value is True or value is False:
             return value
@@ -365,20 +366,20 @@ class QueryParser(RequestParser):
             pass
         return UNDEFINED
 
-    def _handle_integer(self, shape, query_params, prefix=""):
+    def _parse_integer(self, shape, query_params, prefix=""):
         value = self._default_handle(shape, query_params, prefix)
         if value is UNDEFINED:
             return value
         return int(value)
 
-    def _handle_float(self, shape, query_params, prefix=""):
+    def _parse_float(self, shape, query_params, prefix=""):
         value = self._default_handle(shape, query_params, prefix)
         if value is UNDEFINED:
             return value
         return float(value)
 
-    _handle_double = _handle_float
-    _handle_long = _handle_integer
+    _parse_double = _parse_float
+    _parse_long = _parse_integer
 
     def _default_handle(self, shape, value, prefix=""):
         default_value = shape.metadata.get("default", UNDEFINED)
@@ -417,7 +418,7 @@ class EC2QueryParser(QueryParser):
         else:
             return default_name
 
-    def _handle_list(self, shape, node, prefix=""):
+    def _parse_list(self, shape, node, prefix=""):
         parsed_list = []
         i = 1
         while True:
@@ -432,7 +433,7 @@ class EC2QueryParser(QueryParser):
 
 
 class BaseJSONParser(RequestParser):
-    def _handle_structure(self, shape, value):
+    def _parse_structure(self, shape, value):
         if shape.is_document_type:
             final_parsed = value
         else:
@@ -453,7 +454,7 @@ class BaseJSONParser(RequestParser):
                     )
         return final_parsed
 
-    def _handle_map(self, shape, value):
+    def _parse_map(self, shape, value):
         parsed = self.MAP_TYPE()
         key_shape = shape.key
         value_shape = shape.value
@@ -463,18 +464,18 @@ class BaseJSONParser(RequestParser):
             parsed[actual_key] = actual_value
         return parsed
 
-    def _handle_blob(self, shape, value):
+    def _parse_blob(self, shape, value):
         return self._blob_parser(value)
 
-    def _handle_timestamp(self, shape, value):
+    def _parse_timestamp(self, shape, value):
         return self._timestamp_parser(value)
 
-    def _handle_float(self, shape, value):
+    def _parse_float(self, shape, value):
         if value is UNDEFINED:
             return value
         return float(value)
 
-    _handle_double = _handle_float
+    _parse_double = _parse_float
 
     def _parse_body_as_json(self, body_contents):
         if not body_contents:
@@ -504,10 +505,10 @@ class JSONParser(BaseJSONParser):
     def _do_parse(self, request_dict, shape):
         parsed = self.MAP_TYPE()
         if shape is not None:
-            parsed = self._handle_json_body(request_dict["body"], shape)
+            parsed = self._parse_json_body(request_dict["body"], shape)
         return parsed
 
-    def _handle_json_body(self, raw_body, shape):
+    def _parse_json_body(self, raw_body, shape):
         # The json.loads() gives us the primitive JSON types,
         # but we need to traverse the parsed JSON data to convert
         # to richer types (blobs, timestamps, etc.
@@ -680,22 +681,22 @@ class BaseRestParser(RequestParser):
         # of parsing.
         raise NotImplementedError("_initial_body_parse")
 
-    def _handle_list(self, shape, node):
+    def _parse_list(self, shape, node):
         location = shape.serialization.get("location")
         if location == "header" and not isinstance(node, list):
             # List in headers may be a comma separated string as per RFC7230
             node = [e.strip() for e in node.split(",")]
-        return super()._handle_list(shape, node)
+        return super()._parse_list(shape, node)
 
 
 class RestJSONParser(BaseRestParser, BaseJSONParser):
     def _initial_body_parse(self, body_contents):
         return self._parse_body_as_json(body_contents)
 
-    # def _handle_integer(self, shape, value):
+    # def _parse_integer(self, shape, value):
     #     return int(value)
 
-    def _handle_string(self, shape, value):
+    def _parse_string(self, shape, value):
         parsed = value
         if is_json_value_header(shape):
             decoded = base64.b64decode(value).decode(self.DEFAULT_ENCODING)
@@ -703,7 +704,7 @@ class RestJSONParser(BaseRestParser, BaseJSONParser):
         return parsed
 
     # Has to handle text from query string or JSON value
-    def _handle_boolean(self, shape, value):
+    def _parse_boolean(self, shape, value):
         if value is True or value is False:
             return value
         try:
@@ -712,13 +713,13 @@ class RestJSONParser(BaseRestParser, BaseJSONParser):
             pass
         return UNDEFINED
 
-    # _handle_long = _handle_integer
+    # _parse_long = _parse_integer
 
 
 class BaseXMLParser(RequestParser):
     _namespace_re = re.compile("{.*}")
 
-    def _handle_map(self, shape, node):
+    def _parse_map(self, shape, node):
         parsed = {}
         key_shape = shape.key
         value_shape = shape.value
@@ -742,17 +743,17 @@ class BaseXMLParser(RequestParser):
     def _node_tag(self, node):
         return self._namespace_re.sub("", node.tag)
 
-    def _handle_list(self, shape, node):
+    def _parse_list(self, shape, node):
         # When we use _build_name_to_xml_node, repeated elements are aggregated
         # into a list.  However, we can't tell the difference between a scalar
         # value and a single element flattened list.  So before calling the
-        # real _handle_list, we know that "node" should actually be a list if
+        # real _parse_list, we know that "node" should actually be a list if
         # it's flattened, and if it's not, then we make it a one element list.
         if shape.serialization.get("flattened") and not isinstance(node, list):
             node = [node]
-        return super()._handle_list(shape, node)
+        return super()._parse_list(shape, node)
 
-    def _handle_structure(self, shape, node):
+    def _parse_structure(self, shape, node):
         parsed = {}
         members = shape.members
         xml_dict = self._build_name_to_xml_node(node)
@@ -834,26 +835,26 @@ class BaseXMLParser(RequestParser):
         return root
 
     @_text_content
-    def _handle_boolean(self, shape, value):
+    def _parse_boolean(self, shape, value):
         if value == "true":
             return True
         else:
             return False
 
     @_text_content
-    def _handle_float(self, shape, text):
+    def _parse_float(self, shape, text):
         return float(text)
 
     @_text_content
-    def _handle_timestamp(self, shape, text):
+    def _parse_timestamp(self, shape, text):
         return self._timestamp_parser(text)
 
     @_text_content
-    def _handle_integer(self, shape, text):
+    def _parse_integer(self, shape, text):
         return int(text)
 
     @_text_content
-    def _handle_string(self, shape, text):
+    def _parse_string(self, shape, text):
         parsed = text
         # This if might be duplicated in JSON parser - can we consolidate?
         if is_json_value_header(shape):
@@ -862,12 +863,12 @@ class BaseXMLParser(RequestParser):
         return parsed
 
     @_text_content
-    def _handle_blob(self, shape, text):
+    def _parse_blob(self, shape, text):
         return self._blob_parser(text)
 
-    _handle_character = _handle_string
-    _handle_double = _handle_float
-    _handle_long = _handle_integer
+    _parse_character = _parse_string
+    _parse_double = _parse_float
+    _parse_long = _parse_integer
 
 
 class RestXMLParser(BaseRestParser, BaseXMLParser):
@@ -877,8 +878,8 @@ class RestXMLParser(BaseRestParser, BaseXMLParser):
         return self._parse_xml_string_to_dom(body_contents)
 
     @_text_content
-    def _handle_string(self, shape, text):
-        text = super()._handle_string(shape, text)
+    def _parse_string(self, shape, text):
+        text = super()._parse_string(shape, text)
         return text
 
 
