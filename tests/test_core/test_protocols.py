@@ -101,13 +101,12 @@ def _create_request_dict(given, serialized):
     query_string = parsed_uri.query
     url_path = parsed_uri.path
     body = serialized["body"]
-    query_params = _build_query_params(query_string, serialized["body"], headers)
+    values = _build_query_params(query_string, serialized["body"], headers)
     request_dict = {
         "method": method,
         "body": body,
         "headers": headers,
-        "query_string": query_string,
-        "query_params": query_params,
+        "values": values,
         "url_path": url_path,
     }
     return request_dict
@@ -123,13 +122,14 @@ def test_input_compliance(json_description: dict, case: dict, protocol: str):
     model = ServiceModel(service_description)
     protocol_parser = PROTOCOL_PARSERS[protocol]
     parser = protocol_parser(
+        model,
         blob_parser=_compliance_blob_parser,
         timestamp_parser=_compliance_timestamp_parser,
     )
     request_dict = _create_request_dict(case["given"], case["serialized"])
-    parsed = parser.parse(request_dict, model)
+    parsed = parser.parse(request_dict)
     assert parsed["action"] == operation_name
-    assert parsed["kwargs"] == case.get("params", {})
+    assert parsed["params"] == case.get("params", {})
 
 
 @pytest.mark.parametrize(
