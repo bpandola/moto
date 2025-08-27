@@ -1,7 +1,6 @@
 import copy
 import re
 import string
-from datetime import datetime, timezone
 from typing import Any, Dict, Iterator, List, Tuple
 
 from moto.core.utils import iso_8601_datetime_with_milliseconds
@@ -23,11 +22,6 @@ def random_step_id() -> str:
 
 def random_instance_group_id() -> str:
     return f"i-{random_id()}"
-
-
-def make_utc(dt: datetime) -> datetime:
-    """Convert an aware datetime to naive UTC."""
-    return dt.astimezone(timezone.utc).replace(tzinfo=None)
 
 
 class ReleaseLabel:

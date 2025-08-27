@@ -3,12 +3,20 @@ import base64
 import json
 from collections import OrderedDict
 from collections.abc import Mapping, MutableMapping
+from datetime import timezone
 from typing import Any, Optional
 
 from botocore import xform_name
-from botocore.utils import parse_timestamp
+from botocore.utils import parse_timestamp as botocore_parse_timestamp
 
 UNDEFINED = object()  # Sentinel to signal the absence of a field in the input
+
+
+def parse_timestamp(value: str):
+    """Parse a timestamp and return a naive datetime object in UTC with no tzinfo."""
+    parsed = botocore_parse_timestamp(value)
+    as_naive_utc = parsed.astimezone(timezone.utc).replace(tzinfo=None)
+    return as_naive_utc
 
 
 class QueryParser:

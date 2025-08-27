@@ -18,7 +18,6 @@ from moto.utilities.utils import CamelToUnderscoresWalker, get_partition, load_r
 
 from .utils import (
     EmrSecurityGroupManager,
-    make_utc,
     random_cluster_id,
     random_instance_group_id,
     random_step_id,
@@ -930,13 +929,9 @@ class ElasticMapReduceBackend(BaseBackend):
         if job_flow_states:
             clusters = [c for c in clusters if c.state in job_flow_states]
         if created_after:
-            clusters = [
-                c for c in clusters if c.creation_datetime > make_utc(created_after)
-            ]
+            clusters = [c for c in clusters if c.creation_datetime > created_after]
         if created_before:
-            clusters = [
-                c for c in clusters if c.creation_datetime < make_utc(created_before)
-            ]
+            clusters = [c for c in clusters if c.creation_datetime < created_before]
 
         # Amazon EMR can return a maximum of 512 job flow descriptions
         return sorted(clusters, key=lambda x: x.id)[:512]
@@ -985,13 +980,9 @@ class ElasticMapReduceBackend(BaseBackend):
         if cluster_states:
             clusters = [c for c in clusters if c.state in cluster_states]
         if created_after:
-            clusters = [
-                c for c in clusters if c.creation_datetime > make_utc(created_after)
-            ]
+            clusters = [c for c in clusters if c.creation_datetime > created_after]
         if created_before:
-            clusters = [
-                c for c in clusters if c.creation_datetime < make_utc(created_before)
-            ]
+            clusters = [c for c in clusters if c.creation_datetime < created_before]
         clusters = sorted(clusters, key=lambda x: x.id)
         start_idx = 0 if marker is None else int(marker)
         marker = (
