@@ -627,7 +627,7 @@
     ]
   },
   {
-    "description": "Serialize blobs in body",
+    "description": "Deserialize blobs in body",
     "metadata": {
       "protocol": "rest-json",
       "apiVersion": "2014-01-01"
@@ -1416,7 +1416,7 @@
     ]
   },
   {
-    "description": "Serializes document with standalone primitive as part of the JSON request payload with no escaping.",
+    "description": "Deserializes document with standalone primitive as part of the JSON request payload with no escaping.",
     "metadata": {
       "protocol": "rest-json",
       "apiVersion": "2014-01-01"
@@ -1534,7 +1534,7 @@
     ]
   },
   {
-    "description": "Serializes inline documents as part of the JSON request payload with no escaping.",
+    "description": "Deserializes inline documents as part of the JSON request payload with no escaping.",
     "metadata": {
       "protocol": "rest-json",
       "apiVersion": "2014-01-01"
@@ -1576,7 +1576,7 @@
     ]
   },
   {
-    "description": "Serializes aggregate documents as part of the JSON request payload with no escaping.",
+    "description": "Deserializes aggregate documents as part of the JSON request payload with no escaping.",
     "metadata": {
       "protocol": "rest-json",
       "apiVersion": "2014-01-01"

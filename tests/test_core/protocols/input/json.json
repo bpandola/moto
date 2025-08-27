@@ -577,7 +577,7 @@
     ]
   },
   {
-    "description": "Serializes document with standalone primitive type in a JSON request.",
+    "description": "Deserializes document with standalone primitive type in a JSON request.",
     "metadata": {
       "protocol": "json",
       "jsonVersion": "1.1",
@@ -711,7 +711,7 @@
     ]
   },
   {
-    "description": "Serializes inline document in a JSON request.",
+    "description": "Deserializes inline document in a JSON request.",
     "metadata": {
       "protocol": "json",
       "jsonVersion": "1.1",
@@ -757,7 +757,7 @@
     ]
   },
   {
-    "description": "Serializes aggregate documents in a JSON request.",
+    "description": "Deserializes aggregate documents in a JSON request.",
     "metadata": {
       "protocol": "json",
       "jsonVersion": "1.1",
