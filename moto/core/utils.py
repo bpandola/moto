@@ -245,16 +245,15 @@ def utcfromtimestamp(value: int) -> datetime.datetime:
 def utcnow() -> datetime.datetime:
     # Python 3.12 starts throwing deprecation warnings for utcnow()
     # The docs recommend to use now(UTC) instead
-    #
-    # now(UTC) creates an aware datetime - but utcnow() creates a naive datetime
-    # That's why we have to `replace(tzinfo=None)` to make now(UTC) naive.
     if PYTHON_311:
         # Only available from 3.11
         from datetime import UTC  # type: ignore
 
-        return datetime.datetime.now(UTC).replace(tzinfo=None)
+        return datetime.datetime.now(UTC)
     else:
-        return datetime.datetime.utcnow()
+        naive = datetime.datetime.utcnow()
+        aware = naive.replace(tzinfo=datetime.timezone.utc)
+        return aware
 
 
 def path_url(url: str) -> str:
