@@ -181,6 +181,13 @@ class ParsedDict(TypedDict):
     params: dict[str, Any]
 
 
+def default_blob_parser(value):
+    # Some blobs contain binary data that can't be decoded,
+    # so we return bytes and let We don't decode this to a str because it's entirely possible that the
+    # blob contains binary data that actually can't be decoded.
+    return base64.b64decode(value)
+
+
 class RequestParser:
     DEFAULT_ENCODING = "utf-8"
     MAP_TYPE = dict
@@ -197,16 +204,10 @@ class RequestParser:
             timestamp_parser = DEFAULT_TIMESTAMP_PARSER
         self._timestamp_parser = timestamp_parser
         if blob_parser is None:
-            blob_parser = self._default_blob_parser
+            blob_parser = default_blob_parser
         self._blob_parser = blob_parser
         if map_type is not None:
             self.MAP_TYPE = map_type
-
-    def _default_blob_parser(self, value):
-        # Blobs are always returned as bytes type (this matters on python3).
-        # We don't decode this to a str because it's entirely possible that the
-        # blob contains binary data that actually can't be decoded.
-        return base64.b64decode(value)
 
     def parse_action(self, request_dict: RequestDict) -> str:
         raise NotImplementedError()
