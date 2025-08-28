@@ -555,13 +555,13 @@ class BaseResponse(_TemplateEnvironmentMixin, ActionAuthenticatorMixin):
         parser = parser_cls(map_type=self.PROTOCOL_PARSER_MAP_TYPE)  # type: ignore[no-untyped-call]
         parsed = parser.parse(
             {
-                "query_params": normalized_request.values,
+                "values": normalized_request.values,
                 "headers": normalized_request.headers,
                 "body": normalized_request.data,
-            },
-            operation_model,
+            }
         )  # type: ignore[no-untyped-call]
-        self.params = cast(Any, parsed)
+        assert parsed["action"] == self._get_action()
+        self.params = cast(Any, parsed["params"])
 
     def determine_response_protocol(self, service_model: ServiceModel) -> str:
         content_type = self.headers.get("Content-Type", "")
