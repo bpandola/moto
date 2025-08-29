@@ -6,9 +6,11 @@ from urllib.parse import urlparse
 from werkzeug.wrappers import Request
 
 from moto.core.utils import gzip_decompress
+from moto.utilities.constants import JSON_TYPES
 
 if TYPE_CHECKING:
     from botocore.awsrequest import AWSPreparedRequest
+    from botocore.model import ServiceModel
 
 
 def normalize_request(request: AWSPreparedRequest | Request) -> Request:
@@ -29,3 +31,15 @@ def normalize_request(request: AWSPreparedRequest | Request) -> Request:
         headers=[(k, v) for k, v in request.headers.items()],
     )
     return normalized_request
+
+
+def determine_request_protocol(request: Request, service_model: ServiceModel) -> str:
+    supported_protocols = service_model.metadata.get("protocols", [])
+    if len(supported_protocols) <= 1:
+        return str(service_model.protocol)
+    content_type = request.content_type
+    if content_type in JSON_TYPES:
+        return "json"
+    elif content_type.startswith("application/x-www-form-urlencoded"):
+        return "query"
+    return str(service_model.protocol)
