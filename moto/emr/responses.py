@@ -19,6 +19,7 @@ class ElasticMapReduceResponse(BaseResponse):
     RESPONSE_KEY_PATH_TO_TRANSFORMER = {
         "Properties": lambda x: x.original_dict() if hasattr(x, "original_dict") else x,
     }
+
     def __init__(self) -> None:
         super().__init__(service_name="emr")
         self.automated_parameter_parsing = True
