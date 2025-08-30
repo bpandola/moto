@@ -53,7 +53,7 @@ class ElasticMapReduceResponse(BaseResponse):
     def add_tags(self) -> ActionResult:
         cluster_id = self._get_param("ResourceId")
         tags = self._get_param("Tags", [])
-        tags = {d["key"]: d["value"] for d in tags}
+        tags = {d["Key"]: d["Value"] for d in tags}
         self.backend.add_tags(cluster_id, tags)
         return EmptyResult()
 

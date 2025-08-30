@@ -296,15 +296,12 @@ class Step(BaseModel):
         action_on_failure: str = "TERMINATE_CLUSTER",
     ):
         self.id = random_step_id()
-
         self.action_on_failure = action_on_failure
         self.name = name
-
         self.hadoop_jar_step = hadoop_jar_step or {}
         self.jar = self.hadoop_jar_step.get("Jar", "")
         self.args = self.hadoop_jar_step.get("Args", [])
         self.properties = self.hadoop_jar_step.get("Properties", {})
-
         self.creation_date_time = utcnow()
         self.end_date_time = None
         self.ready_date_time = None
