@@ -18,7 +18,6 @@ from moto.utilities.utils import CamelToUnderscoresWalker, get_partition, load_r
 
 from .utils import (
     EmrSecurityGroupManager,
-    make_utc,
     random_cluster_id,
     random_instance_group_id,
     random_step_id,

@@ -1,7 +1,6 @@
 import copy
 import re
 import string
-from datetime import datetime, timezone
 from typing import Any, Dict, Iterator, List, Tuple
 
 from moto.core.utils import iso_8601_datetime_with_milliseconds

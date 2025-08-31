@@ -34,7 +34,8 @@ from werkzeug.exceptions import HTTPException
 from moto import settings
 from moto.core.common_types import TYPE_IF_NONE, TYPE_RESPONSE
 from moto.core.exceptions import DryRunClientError, ServiceException
-from moto.core.parsers import PROTOCOL_PARSERS
+from moto.core.parse import PROTOCOL_PARSERS
+from moto.core.parsers import XFormedDict
 from moto.core.request import determine_request_protocol, normalize_request
 from moto.core.serialize import SERIALIZERS, ResponseSerializer, XFormedAttributePicker
 from moto.core.utils import (
@@ -633,7 +634,6 @@ class BaseResponse(_TemplateEnvironmentMixin, ActionAuthenticatorMixin):
         assert isinstance(request, (AWSPreparedRequest, Request)), str(request)
         normalized_request = normalize_request(request)
         service_model = get_service_model(self.service_name)
-        operation_model = service_model.operation_model(self._get_action())
         protocol = determine_request_protocol(
             service_model, normalized_request.content_type
         )
@@ -641,9 +641,11 @@ class BaseResponse(_TemplateEnvironmentMixin, ActionAuthenticatorMixin):
         parser = parser_cls(service_model, map_type=XFormedDict)  # type: ignore[no-untyped-call]
         parsed = parser.parse(
             {
+                "method": normalized_request.method,
                 "values": normalized_request.values,
-                "headers": normalized_request.headers,
-                "body": normalized_request.data,
+                "headers": normalized_request.headers,  # type: ignore[typeddict-item]
+                "body": normalized_request.data,  # type: ignore[typeddict-item]
+                "url_path": normalized_request.path,
             }
         )  # type: ignore[no-untyped-call]
         assert parsed["action"] == self._get_action()
