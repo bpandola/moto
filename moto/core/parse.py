@@ -123,17 +123,30 @@ import json
 import logging
 import re
 from collections import defaultdict
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, TypedDict
 from urllib.parse import urlparse
 from xml.etree import ElementTree as ETree
 from xml.etree.ElementTree import ParseError as XMLParseError
 
-from botocore.utils import is_json_value_header, parse_timestamp
+from botocore.utils import is_json_value_header
+from botocore.utils import parse_timestamp as botocore_parse_timestamp
 
 if TYPE_CHECKING:
     from botocore.model import OperationModel, ServiceModel
 
 LOG = logging.getLogger(__name__)
+
+
+def parse_timestamp(value: str) -> datetime:
+    """Parse a timestamp and return a naive datetime object in UTC.
+    This matches Moto's internal representation of timestamps, based
+    on moto.core.utils.utcnow().
+    """
+    parsed = botocore_parse_timestamp(value)
+    as_naive_utc = parsed.astimezone(timezone.utc).replace(tzinfo=None)
+    return as_naive_utc
+
 
 DEFAULT_TIMESTAMP_PARSER = parse_timestamp
 
