@@ -25,11 +25,6 @@ def random_instance_group_id() -> str:
     return f"i-{random_id()}"
 
 
-def make_utc(dt: datetime) -> datetime:
-    """Convert an aware datetime to naive UTC."""
-    return dt.astimezone(timezone.utc).replace(tzinfo=None)
-
-
 class ReleaseLabel:
     version_re = re.compile(r"^emr-(\d+)\.(\d+)\.(\d+)$")
 

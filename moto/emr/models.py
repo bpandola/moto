@@ -44,16 +44,10 @@ class BootstrapAction(BaseModel):
 
     @property
     def script_path(self) -> Optional[str]:
-        """
-        Returns the script path from the script_bootstrap_action.
-        """
         return self.script_bootstrap_action.get("path")
 
     @property
     def args(self) -> List[str]:
-        """
-        Returns the arguments from the script_bootstrap_action.
-        """
         return self.script_bootstrap_action.get("args", [])
 
 
@@ -303,15 +297,12 @@ class Step(BaseModel):
         action_on_failure: str = "TERMINATE_CLUSTER",
     ):
         self.id = random_step_id()
-
         self.action_on_failure = action_on_failure
         self.name = name
-
         self.hadoop_jar_step = hadoop_jar_step or {}
         self.jar = self.hadoop_jar_step.get("Jar", "")
         self.args = self.hadoop_jar_step.get("Args", [])
         self.properties = self.hadoop_jar_step.get("Properties", {})
-
         self.creation_date_time = utcnow()
         self.end_date_time = None
         self.ready_date_time = None
@@ -936,13 +927,9 @@ class ElasticMapReduceBackend(BaseBackend):
         if job_flow_states:
             clusters = [c for c in clusters if c.state in job_flow_states]
         if created_after:
-            clusters = [
-                c for c in clusters if c.creation_datetime > make_utc(created_after)
-            ]
+            clusters = [c for c in clusters if c.creation_datetime > created_after]
         if created_before:
-            clusters = [
-                c for c in clusters if c.creation_datetime < make_utc(created_before)
-            ]
+            clusters = [c for c in clusters if c.creation_datetime < created_before]
 
         # Amazon EMR can return a maximum of 512 job flow descriptions
         return sorted(clusters, key=lambda x: x.id)[:512]
@@ -991,13 +978,9 @@ class ElasticMapReduceBackend(BaseBackend):
         if cluster_states:
             clusters = [c for c in clusters if c.state in cluster_states]
         if created_after:
-            clusters = [
-                c for c in clusters if c.creation_datetime > make_utc(created_after)
-            ]
+            clusters = [c for c in clusters if c.creation_datetime > created_after]
         if created_before:
-            clusters = [
-                c for c in clusters if c.creation_datetime < make_utc(created_before)
-            ]
+            clusters = [c for c in clusters if c.creation_datetime < created_before]
         clusters = sorted(clusters, key=lambda x: x.id)
         start_idx = 0 if marker is None else int(marker)
         marker = (
