@@ -20,20 +20,24 @@ def test_sqs_list_identities():
     # See: https://github.com/getmoto/moto/issues/866
 
     for queue_name in ("testqueue", "otherqueue.fifo"):
-        res = test_client.put(f"/?Action=CreateQueue&QueueName={queue_name}",headers=headers)
+        res = test_client.put(
+            f"/?Action=CreateQueue&QueueName={queue_name}", headers=headers
+        )
 
         res = test_client.put(
-            f"/123/{queue_name}?MessageBody=test-message&Action=SendMessage",headers=headers
+            f"/123/{queue_name}?MessageBody=test-message&Action=SendMessage",
+            headers=headers,
         )
 
         res = test_client.get(
-            f"/123/{queue_name}?Action=ReceiveMessage&MaxNumberOfMessages=1",headers=headers
+            f"/123/{queue_name}?Action=ReceiveMessage&MaxNumberOfMessages=1",
+            headers=headers,
         )
 
         message = re.search("<Body>(.*?)</Body>", res.data.decode("utf-8")).groups()[0]
         assert message == "test-message"
 
-    res = test_client.get("/?Action=ListQueues&QueueNamePrefix=other",headers=headers)
+    res = test_client.get("/?Action=ListQueues&QueueNamePrefix=other", headers=headers)
     assert b"otherqueue.fifo" in res.data
     assert b"testqueue" not in res.data
 
@@ -60,7 +64,8 @@ def test_messages_polling():
         count = 0
         while count < 5:
             msg_res = test_client.get(
-                "/123/testqueue?Action=ReceiveMessage&MaxNumberOfMessages=1&WaitTimeSeconds=5",headers=headers
+                "/123/testqueue?Action=ReceiveMessage&MaxNumberOfMessages=1&WaitTimeSeconds=5",
+                headers=headers,
             )
             new_msgs = re.findall("<Body>(.*?)</Body>", msg_res.data.decode("utf-8"))
             count += len(new_msgs)
