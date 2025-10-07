@@ -129,6 +129,12 @@ class ErrorShape(StructureShape):
         code = str(super().error_code)
         return code
 
+    @property
+    def error_message(self) -> str:
+        error_info = self.metadata.get("error", {})
+        error_message = error_info.get("message", "")
+        return error_message
+
     @classmethod
     def from_existing_shape(cls, shape: Shape) -> ErrorShape:
         return cls(shape.name, shape._shape_model, shape._shape_resolver)  # type: ignore[attr-defined]
@@ -686,6 +692,10 @@ class BaseXMLSerializer(ResponseSerializer):
         serialized["Type"] = "Sender" if shape.is_sender_fault else "Receiver"
         serialized["Code"] = shape.error_code
         message = getattr(error, "message", None)
+        if "awsQueryCompatible" in self.service_model.metadata:
+            # Override error message to match AWS Query API behavior
+            if shape.error_message:
+                message = shape.error_message
         if message is not None:
             serialized["Message"] = message
         # Serialize any error model attributes.
