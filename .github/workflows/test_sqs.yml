@@ -69,6 +69,6 @@ jobs:
         if: ${{ matrix.test-server-mode == 'true' }}
         uses: actions/upload-artifact@v4
         with:
-          name: motoserver-${{ matrix.aws-sdk == 'botocore==1.29.126 boto3==1.26.126' && 'query-protocol' || 'json-protocol' }}
+          name: motoserver-with-client-using-${{ matrix.protocol }}-protocol
           path: |
             serverlogs/*
