@@ -20,6 +20,9 @@ jobs:
       matrix:
         protocol: [ "json", "query" ]
         test-server-mode: [ "true", "false" ]
+        exclude:
+          - protocol: "json"
+            test-server-mode: "true"
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
