@@ -20,6 +20,7 @@ jobs:
       matrix:
         protocol: [ "json", "query" ]
         test-server-mode: [ "true", "false" ]
+        # TODO: Remove this exclusion when JSON protocol support is released.
         exclude:
           - protocol: "json"
             test-server-mode: "true"
