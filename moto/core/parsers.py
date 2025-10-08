@@ -22,6 +22,13 @@ def parse_timestamp(value: str) -> datetime:
     return as_naive_utc
 
 
+def default_blob_parser(value):
+    # Blobs are always returned as bytes type (this matters on python3).
+    # We don't decode this to a str because it's entirely possible that the
+    # blob contains binary data that actually can't be decoded.
+    return base64.b64decode(value)
+
+
 class QueryParser:
     TIMESTAMP_FORMAT = "iso8601"
 
@@ -32,16 +39,10 @@ class QueryParser:
             timestamp_parser = parse_timestamp
         self._timestamp_parser = timestamp_parser
         if blob_parser is None:
-            blob_parser = self._default_blob_parser
+            blob_parser = default_blob_parser
         self._blob_parser = blob_parser
         if map_type is not None:
             self.MAP_TYPE = map_type
-
-    def _default_blob_parser(self, value):
-        # Blobs are always returned as bytes type (this matters on python3).
-        # We don't decode this to a str because it's entirely possible that the
-        # blob contains binary data that actually can't be decoded.
-        return base64.b64decode(value)
 
     def parse(self, request_dict, operation_model):
         shape = operation_model.input_shape
@@ -177,10 +178,13 @@ class JSONParser:
     DEFAULT_ENCODING = "utf-8"
     MAP_TYPE = dict
 
-    def __init__(self, timestamp_parser=None, map_type=None):
+    def __init__(self, timestamp_parser=None, blob_parser=None, map_type=None):
         if timestamp_parser is None:
             timestamp_parser = parse_timestamp
         self._timestamp_parser = timestamp_parser
+        if blob_parser is None:
+            blob_parser = default_blob_parser
+        self._blob_parser = blob_parser
         if map_type is not None:
             self.MAP_TYPE = map_type
 
@@ -212,6 +216,13 @@ class JSONParser:
 
     def _default_handle(self, _, value):
         return value
+
+    def _handle_blob(self, shape, value):
+        # Blob args must be base64 encoded.
+        value = self._default_handle(shape, value)
+        if value is UNDEFINED:
+            return value
+        return self._blob_parser(value)
 
     def _handle_float(self, _, value):
         return float(value) if value is not UNDEFINED else value
