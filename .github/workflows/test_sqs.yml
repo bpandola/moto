@@ -13,7 +13,7 @@ on:
 
 jobs:
   test-sqs-protocols:
-    name: ${{ matrix.aws-sdk == 'botocore==1.29.126 boto3==1.26.126' && 'Query Protocol' || 'JSON Protocol' }}
+    name: ${{ (matrix.aws-sdk == 'botocore==1.29.126 boto3==1.26.126' && 'Query Protocol' || 'JSON Protocol') && (matrix.test-server-mode == 'true' && 'Server Mode' || 'Decorator Mode') || (matrix.test-server-mode == 'true' && 'Server Mode' || 'Decorator Mode') }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
