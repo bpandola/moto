@@ -11,6 +11,9 @@ on:
     - cron: '00 12 * * 0'
   workflow_dispatch:
 
+env:
+  python-version: "3.12"
+
 jobs:
   test-sqs-protocols:
     name: "${{ matrix.protocol }} protocol, server mode: ${{ matrix.test-server-mode }}"
@@ -25,16 +28,16 @@ jobs:
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      - name: Set up Python 3.12
+      - name: Set up Python ${{ env.python-version }}
         uses: actions/setup-python@v6
         with:
-          python-version: "3.12"
+          python-version: ${{ env.python-version }}
       - name: Start MotoServer
         if: ${{ matrix.test-server-mode == 'true' }}
         run: |
           pip install build
           python -m build
-          docker run --rm -t --name motoserver -e TEST_SERVER_MODE=true -e MOTO_EC2_LOAD_DEFAULT_AMIS=false -e AWS_SECRET_ACCESS_KEY=server_secret -e AWS_ACCESS_KEY_ID=server_key -v `pwd`:/moto -p 5000:5000 -v /var/run/docker.sock:/var/run/docker.sock python:${{ matrix.python-version }}-slim /moto/scripts/ci_moto_server.sh &
+          docker run --rm -t --name motoserver -e TEST_SERVER_MODE=true -e MOTO_EC2_LOAD_DEFAULT_AMIS=false -e AWS_SECRET_ACCESS_KEY=server_secret -e AWS_ACCESS_KEY_ID=server_key -v `pwd`:/moto -p 5000:5000 -v /var/run/docker.sock:/var/run/docker.sock python:${{ env.python-version }}-slim /moto/scripts/ci_moto_server.sh &
           python scripts/ci_wait_for_server.py
       - name: Update pip
         run: |
