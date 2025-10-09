@@ -141,9 +141,9 @@ class ErrorShape(StructureShape):
 
 
 class ShapeHelpersMixin:
-    @staticmethod
-    def get_serialized_name(shape: Shape, default_name: str) -> str:
-        return shape.serialization.get("name", default_name)
+    # @staticmethod
+    # def get_serialized_name(shape: Shape, default_name: str) -> str:
+    #     return shape.serialization.get("name", default_name)
 
     @staticmethod
     def is_flattened(shape: Shape) -> bool:
@@ -269,6 +269,10 @@ class HeaderSerializer(ShapeHelpersMixin):
         if isinstance(value, str):
             value = value.encode(self.DEFAULT_ENCODING)
         return base64.b64encode(value).strip().decode(self.DEFAULT_ENCODING)
+
+    @staticmethod
+    def get_serialized_name(shape: Shape, default_name: str) -> str:
+        return shape.serialization.get("name", default_name)
 
 
 class ResponseSerializer(ShapeHelpersMixin):
@@ -512,6 +516,9 @@ class ResponseSerializer(ShapeHelpersMixin):
 
     _serialize_type_double = _serialize_type_float
 
+    def get_serialized_name(self, shape: Shape, default_name: str) -> str:
+        return shape.serialization.get("name", default_name)
+
 
 class BaseJSONSerializer(ResponseSerializer):
     APPLICATION_AMZ_JSON = "application/x-amz-json-{version}"
@@ -693,9 +700,13 @@ class BaseXMLSerializer(ResponseSerializer):
         serialized["Code"] = shape.error_code
         message = getattr(error, "message", None)
         if "awsQueryCompatible" in self.service_model.metadata:
-            # Override error message to match AWS Query API behavior
-            if shape.error_message:
-                message = shape.error_message
+            overrides = self.service_model.metadata["awsQueryCompatible"]
+            if shape.name in overrides["shapes"]:
+                message_override = (
+                    overrides["shapes"][shape.name].get("error", {}).get("message")
+                )
+                if message_override:
+                    message = message_override
         if message is not None:
             serialized["Message"] = message
         # Serialize any error model attributes.
@@ -911,7 +922,9 @@ class QuerySerializer(BaseXMLSerializer):
         response_key = f"{self.operation_model.name}Response"
         response_wrapper = {response_key: {}}
         if shape is not None:
-            result_key = shape.serialization.get("resultWrapper", f"{shape.name}Result")
+            result_key = self.get_result_key(
+                shape
+            )  # shape.serialization.get("resultWrapper", f"{shape.name}Result")
             response_wrapper[response_key][result_key] = serialized_result
         response_wrapper[response_key]["ResponseMetadata"] = {
             "RequestId": self.context.request_id
@@ -941,6 +954,25 @@ class QuerySerializer(BaseXMLSerializer):
             self._default_serialize(serialized, map_list, shape, key)
         else:
             self._default_serialize(serialized, {"entry": map_list}, shape, key)
+
+    def query_compatible_model_data(self) -> dict[str, Any]:
+        return self.service_model._service_description.get("awsQueryCompatible", {})  # type: ignore[attr-defined]
+
+    def get_result_key(self, shape: StructureShape) -> str:
+        query_compatible_data = self.query_compatible_model_data()
+        if shape.name in query_compatible_data.get("shapes", {}):
+            query_shape = query_compatible_data["shapes"][shape.name]
+            if "resultWrapper" in query_shape.get("structure", {}):
+                return query_shape["structure"]["resultWrapper"]
+        return shape.serialization.get("resultWrapper", f"{shape.name}Result")
+
+    def get_serialized_name(self, shape: Shape, default_name: str) -> str:
+        query_compatible_data = self.query_compatible_model_data()
+        if shape.name in query_compatible_data.get("shapes", {}):
+            query_shape = query_compatible_data["shapes"][shape.name]
+            if "locationName" in query_shape.get("member", {}):
+                return query_shape["member"]["locationName"]
+        return shape.serialization.get("name", default_name)
 
 
 class QueryJSONSerializer(QuerySerializer):
