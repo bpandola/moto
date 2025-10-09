@@ -44,7 +44,6 @@ from moto.core.utils import (
     gzip_decompress,
     method_names_from_class,
     params_sort_function,
-    query_compatible_service_model,
 )
 from moto.utilities.aws_headers import gen_amzn_requestid_long
 from moto.utilities.utils import get_partition
@@ -637,18 +636,15 @@ class BaseResponse(_TemplateEnvironmentMixin, ActionAuthenticatorMixin):
         protocol = determine_request_protocol(
             service_model, normalized_request.content_type
         )
-        if protocol == "query" and "awsQueryCompatible" in service_model.metadata:
-            service_model = query_compatible_service_model(service_model)
         operation_model = service_model.operation_model(self._get_action())
         parser_cls = PROTOCOL_PARSERS[protocol]
-        parser = parser_cls(map_type=XFormedDict)  # type: ignore[no-untyped-call]
+        parser = parser_cls(operation_model, map_type=XFormedDict)  # type: ignore[no-untyped-call]
         parsed = parser.parse(  # type: ignore[attr-defined]
             {
                 "query_params": normalized_request.values,
                 "headers": normalized_request.headers,
                 "body": normalized_request.data,
-            },
-            operation_model,
+            }
         )  # type: ignore[no-untyped-call]
         self.params = cast(Any, parsed)
 
@@ -662,8 +658,8 @@ class BaseResponse(_TemplateEnvironmentMixin, ActionAuthenticatorMixin):
     def serialized(self, action_result: ActionResult) -> TYPE_RESPONSE:
         service_model = get_service_model(self.service_name)
         protocol = self.determine_response_protocol(service_model)
-        if protocol == "query" and "awsQueryCompatible" in service_model.metadata:
-            service_model = query_compatible_service_model(service_model)
+        # if protocol == "query" and "awsQueryCompatible" in service_model.metadata:
+        #     service_model = query_compatible_service_model(service_model)
         operation_model = service_model.operation_model(self._get_action())
         serializer_cls = SERIALIZERS[protocol]
         context = ActionContext(

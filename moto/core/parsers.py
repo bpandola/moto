@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 from botocore import xform_name
+from botocore.model import OperationModel
 from botocore.utils import parse_timestamp as botocore_parse_timestamp
 
 UNDEFINED = object()  # Sentinel to signal the absence of a field in the input
@@ -29,12 +30,18 @@ def default_blob_parser(value):
     return base64.b64decode(value)
 
 
-class QueryParser:
-    TIMESTAMP_FORMAT = "iso8601"
-
+class ProtocolInputParser:
     MAP_TYPE = dict
 
-    def __init__(self, timestamp_parser=None, blob_parser=None, map_type=None):
+    def __init__(
+        self,
+        operation_model: OperationModel,
+        timestamp_parser=None,
+        blob_parser=None,
+        map_type=None,
+    ):
+        self.operation_model = operation_model
+        self.service_model = operation_model.service_model
         if timestamp_parser is None:
             timestamp_parser = parse_timestamp
         self._timestamp_parser = timestamp_parser
@@ -44,8 +51,13 @@ class QueryParser:
         if map_type is not None:
             self.MAP_TYPE = map_type
 
-    def parse(self, request_dict, operation_model):
-        shape = operation_model.input_shape
+    def parse(self, request_dict):
+        raise NotImplementedError()
+
+
+class QueryParser(ProtocolInputParser):
+    def parse(self, request_dict):
+        shape = self.operation_model.input_shape
         if shape is None:
             return {}
         parsed = self._do_parse(request_dict, shape)
@@ -164,6 +176,15 @@ class QueryParser:
         return value.get(prefix, default_value)
 
     def _get_serialized_name(self, shape, default_name):
+        query_compatible_data = self.service_model.metadata.get(
+            "awsQueryCompatible", {}
+        )
+        if shape.name in query_compatible_data.get("shapes", {}):
+            query_shape = query_compatible_data["shapes"][shape.name]
+            if "locationName" in query_shape:
+                return query_shape["locationName"]
+            if "locationName" in query_shape.get("member", {}):
+                return query_shape["member"]["locationName"]
         return shape.serialization.get("name", default_name)
 
     def _parsed_key_name(self, member_name):
@@ -174,22 +195,11 @@ class QueryParser:
         return shape.serialization.get("flattened")
 
 
-class JSONParser:
+class JSONParser(ProtocolInputParser):
     DEFAULT_ENCODING = "utf-8"
-    MAP_TYPE = dict
 
-    def __init__(self, timestamp_parser=None, blob_parser=None, map_type=None):
-        if timestamp_parser is None:
-            timestamp_parser = parse_timestamp
-        self._timestamp_parser = timestamp_parser
-        if blob_parser is None:
-            blob_parser = default_blob_parser
-        self._blob_parser = blob_parser
-        if map_type is not None:
-            self.MAP_TYPE = map_type
-
-    def parse(self, request_dict, operation_model):
-        shape = operation_model.input_shape
+    def parse(self, request_dict):
+        shape = self.operation_model.input_shape
         parsed = self._do_parse(request_dict, shape)
         return parsed if parsed is not UNDEFINED else {}
 
