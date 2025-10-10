@@ -99,12 +99,11 @@ class QueryParser(ProtocolInputParser):
 
         if self._is_shape_flattened(shape):
             list_prefix = prefix
-            if shape.member.serialization.get("name"):
-                name = self._get_serialized_name(shape.member, default_name="")
-                # Replace '.Original' with '.{name}'.
-                list_prefix = ".".join(prefix.split(".")[:-1] + [name])
+            location_name = self._get_serialized_name(shape.member, None)
+            if location_name is not None:
+                list_prefix = ".".join(prefix.split(".")[:-1] + [location_name])
         else:
-            list_name = shape.member.serialization.get("name", "member")
+            list_name = self._get_serialized_name(shape.member, "member")
             list_prefix = f"{prefix}.{list_name}"
         parsed_list = []
         i = 1
