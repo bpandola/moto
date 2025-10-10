@@ -35,13 +35,10 @@ class ProtocolInputParser:
 
     def __init__(
         self,
-        operation_model: OperationModel,
         timestamp_parser=None,
         blob_parser=None,
         map_type=None,
     ):
-        self.operation_model = operation_model
-        self.service_model = operation_model.service_model
         if timestamp_parser is None:
             timestamp_parser = parse_timestamp
         self._timestamp_parser = timestamp_parser
@@ -51,13 +48,13 @@ class ProtocolInputParser:
         if map_type is not None:
             self.MAP_TYPE = map_type
 
-    def parse(self, request_dict):
+    def parse(self, request_dict, operation_model: OperationModel):
         raise NotImplementedError()
 
 
 class QueryParser(ProtocolInputParser):
-    def parse(self, request_dict):
-        shape = self.operation_model.input_shape
+    def parse(self, request_dict, operation_model: OperationModel):
+        shape = operation_model.input_shape
         if shape is None:
             return {}
         parsed = self._do_parse(request_dict, shape)
@@ -192,8 +189,8 @@ class QueryParser(ProtocolInputParser):
 class JSONParser(ProtocolInputParser):
     DEFAULT_ENCODING = "utf-8"
 
-    def parse(self, request_dict):
-        shape = self.operation_model.input_shape
+    def parse(self, request_dict, operation_model: OperationModel):
+        shape = operation_model.input_shape
         parsed = self._do_parse(request_dict, shape)
         return parsed if parsed is not UNDEFINED else {}
 
