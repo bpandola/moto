@@ -633,10 +633,10 @@ class BaseResponse(_TemplateEnvironmentMixin, ActionAuthenticatorMixin):
         assert isinstance(request, (AWSPreparedRequest, Request)), str(request)
         normalized_request = normalize_request(request)
         service_model = get_service_model(self.service_name)
+        operation_model = service_model.operation_model(self._get_action())
         protocol = determine_request_protocol(
             service_model, normalized_request.content_type
         )
-        operation_model = service_model.operation_model(self._get_action())
         parser_cls = PROTOCOL_PARSERS[protocol]
         parser = parser_cls(map_type=XFormedDict)  # type: ignore[no-untyped-call]
         parsed = parser.parse(
@@ -658,8 +658,8 @@ class BaseResponse(_TemplateEnvironmentMixin, ActionAuthenticatorMixin):
 
     def serialized(self, action_result: ActionResult) -> TYPE_RESPONSE:
         service_model = get_service_model(self.service_name)
-        protocol = self.determine_response_protocol(service_model)
         operation_model = service_model.operation_model(self._get_action())
+        protocol = self.determine_response_protocol(service_model)
         serializer_cls = SERIALIZERS[protocol]
         context = ActionContext(
             service_model, operation_model, serializer_cls, self.__class__
