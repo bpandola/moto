@@ -24,13 +24,12 @@ def parse_timestamp(value: str) -> datetime:
 
 
 def default_blob_parser(value):
-    # Blobs are always returned as bytes type (this matters on python3).
     # We don't decode this to a str because it's entirely possible that the
     # blob contains binary data that actually can't be decoded.
     return base64.b64decode(value)
 
 
-class ProtocolInputParser:
+class RequestParser:
     MAP_TYPE = dict
 
     def __init__(
@@ -52,7 +51,7 @@ class ProtocolInputParser:
         raise NotImplementedError()
 
 
-class QueryParser(ProtocolInputParser):
+class QueryParser(RequestParser):
     def parse(self, request_dict, operation_model: OperationModel):
         shape = operation_model.input_shape
         if shape is None:
@@ -142,7 +141,6 @@ class QueryParser(ProtocolInputParser):
         return value if value is UNDEFINED else self._timestamp_parser(value)
 
     def _handle_blob(self, shape, query_params, prefix=""):
-        # Blob args must be base64 encoded.
         value = self._default_handle(shape, query_params, prefix)
         if value is UNDEFINED:
             return value
@@ -186,7 +184,7 @@ class QueryParser(ProtocolInputParser):
         return shape.serialization.get("flattened")
 
 
-class JSONParser(ProtocolInputParser):
+class JSONParser(RequestParser):
     DEFAULT_ENCODING = "utf-8"
 
     def parse(self, request_dict, operation_model: OperationModel):
@@ -219,7 +217,6 @@ class JSONParser(ProtocolInputParser):
         return value
 
     def _handle_blob(self, shape, value):
-        # Blob args must be base64 encoded.
         value = self._default_handle(shape, value)
         if value is UNDEFINED:
             return value
