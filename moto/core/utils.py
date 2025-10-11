@@ -11,7 +11,6 @@ from urllib.parse import ParseResult, urlparse
 from botocore.exceptions import ClientError
 from botocore.model import ServiceModel
 
-from .. import MOTO_ROOT
 from ..settings import get_s3_custom_endpoints
 from .common_types import TYPE_RESPONSE
 from .constants import MISSING
@@ -468,9 +467,7 @@ def get_equivalent_url_in_aws_domain(url: str) -> Tuple[ParseResult, bool]:
 
 @cache
 def get_service_model(service_name: str) -> ServiceModel:
-    if "moto" not in Loader.BUILTIN_EXTRAS_TYPES:
-        Loader.BUILTIN_EXTRAS_TYPES.append("moto")
-    loader = create_loader(search_path_string=MOTO_ROOT)
+    loader = create_loader()
     model = loader.load_service_model(service_name, "service-2")
     service_model = ServiceModel(model, service_name)
     return service_model
