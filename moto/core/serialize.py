@@ -925,14 +925,6 @@ class QuerySerializer(BaseXMLSerializer):
         else:
             self._default_serialize(serialized, {"entry": map_list}, shape, key)
 
-    @staticmethod
-    def get_serialized_name(shape: Shape, default_name: str) -> str:
-        shape_data = getattr(shape, "_shape_model", {})
-        query_compatible_name = shape_data.get("locationNameForQueryCompatibility")
-        if query_compatible_name:
-            return query_compatible_name
-        return shape.serialization.get("name", default_name)
-
 
 class QueryJSONSerializer(QuerySerializer):
     """Specialized case for query protocol requests that contain ContentType=JSON parameter."""
@@ -1050,6 +1042,45 @@ class EC2Serializer(QuerySerializer):
         return resp
 
 
+class SqsQueryResponseSerializer(QuerySerializer):
+    CHAR_TO_MARK = {'"': '__marker__"__marker__', "\r": "__marker__-r__marker__"}
+    CHAR_TO_ESCAPE = {
+        '"': "&quot;",
+        "\r": "&#xD;",
+    }
+
+    def mark(self, value: str) -> str:
+        for char, marker in self.CHAR_TO_MARK.items():
+            value = value.replace(char, marker)
+        return value
+
+    def escape(self, value: str) -> str:
+        for char, escaped in self.CHAR_TO_ESCAPE.items():
+            value = value.replace(self.CHAR_TO_MARK[char], escaped)
+        return value
+
+    def _default_serialize(
+        self, serialized: Serialized, value: Any, shape: Shape, key: str
+    ) -> None:
+        if isinstance(value, str):
+            value = self.mark(value)
+        serialization_key = self.get_serialized_name(shape, key)
+        serialized[serialization_key] = value
+
+    def _serialize_body(self, body: Serialized) -> str:
+        body_encoded = super()._serialize_body(body)
+        escaped_string = self.escape(body_encoded)
+        return escaped_string
+
+    @staticmethod
+    def get_serialized_name(shape: Shape, default_name: str) -> str:
+        shape_data = getattr(shape, "_shape_model", {})
+        query_compatible_name = shape_data.get("locationNameForQueryCompatibility")
+        if query_compatible_name:
+            return query_compatible_name
+        return shape.serialization.get("name", default_name)
+
+
 SERIALIZERS = {
     "ec2": EC2Serializer,
     "json": JSONSerializer,
@@ -1058,6 +1089,18 @@ SERIALIZERS = {
     "rest-json": RestJSONSerializer,
     "rest-xml": RestXMLSerializer,
 }
+SERVICE_SPECIFIC_SERIALIZERS = {
+    "sqs": {
+        "query": SqsQueryResponseSerializer,
+    }
+}
+
+
+def get_serializer_class(service_name: str, protocol: str) -> type[ResponseSerializer]:
+    if service_name in SERVICE_SPECIFIC_SERIALIZERS:
+        if protocol in SERVICE_SPECIFIC_SERIALIZERS[service_name]:
+            return SERVICE_SPECIFIC_SERIALIZERS[service_name][protocol]
+    return SERIALIZERS[protocol]
 
 
 @dataclass
