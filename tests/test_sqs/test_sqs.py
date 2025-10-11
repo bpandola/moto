@@ -1892,7 +1892,10 @@ def test_delete_message_batch_with_duplicates():
     with pytest.raises(ClientError) as e:
         client.delete_message_batch(QueueUrl=queue_url, Entries=entries)
     ex = e.value
-    assert ex.response["Error"]["Code"] == "BatchEntryIdsNotDistinct"
+    assert (
+        ex.response["Error"]["Code"]
+        == "AWS.SimpleQueueService.BatchEntryIdsNotDistinct"
+    )
 
     # no messages are deleted
     messages = client.receive_message(QueueUrl=queue_url, WaitTimeSeconds=0).get(
@@ -3246,6 +3249,11 @@ def test_message_has_windows_return():
 
     messages = queue.receive_messages()
     assert len(messages) == 1
+    if LooseVersion(BOTOCORE_VERSION) <= LooseVersion("1.29.126"):
+        # XML parsers, according to the XML specification, normalize line endings during parsing.
+        # This normalization process translates carriage return and line feed sequences (\r\n)
+        # and standalone carriage returns (\r) into a single line feed character (\n).
+        message = message.replace("\r\n", "\n").replace("\r", "\n")
     assert re.match(message, messages[0].body)
 
 

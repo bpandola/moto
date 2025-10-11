@@ -129,6 +129,12 @@ class ErrorShape(StructureShape):
         code = str(super().error_code)
         return code
 
+    @property
+    def error_message(self) -> str:
+        error_info = self.metadata.get("error", {})
+        error_message = error_info.get("message", "")
+        return error_message
+
     @classmethod
     def from_existing_shape(cls, shape: Shape) -> ErrorShape:
         return cls(shape.name, shape._shape_model, shape._shape_resolver)  # type: ignore[attr-defined]
@@ -575,7 +581,11 @@ class BaseJSONSerializer(ResponseSerializer):
         error: Exception,
         shape: ErrorShape,
     ) -> None:
-        error_code = self._get_protocol_specific_error_code(shape.error_code)
+        error_code = shape.error_code
+        if "awsQueryCompatible" in self.service_model.metadata:
+            if shape.name != error_code:
+                error_code = shape.name
+        error_code = self._get_protocol_specific_error_code(error_code)
         serialized["__type"] = error_code
         message = getattr(error, "message", None) or str(error)
         if shape is not None:
@@ -682,6 +692,13 @@ class BaseXMLSerializer(ResponseSerializer):
         serialized["Type"] = "Sender" if shape.is_sender_fault else "Receiver"
         serialized["Code"] = shape.error_code
         message = getattr(error, "message", None)
+        message_override = (
+            getattr(shape, "_shape_model", {})
+            .get("error", {})
+            .get("messageForQueryCompatibility", None)
+        )
+        if message_override:
+            message = message_override
         if message is not None:
             serialized["Message"] = message
         # Serialize any error model attributes.
@@ -907,6 +924,14 @@ class QuerySerializer(BaseXMLSerializer):
             self._default_serialize(serialized, map_list, shape, key)
         else:
             self._default_serialize(serialized, {"entry": map_list}, shape, key)
+
+    @staticmethod
+    def get_serialized_name(shape: Shape, default_name: str) -> str:
+        shape_data = getattr(shape, "_shape_model", {})
+        query_compatible_name = shape_data.get("locationNameForQueryCompatibility")
+        if query_compatible_name:
+            return query_compatible_name
+        return shape.serialization.get("name", default_name)
 
 
 class QueryJSONSerializer(QuerySerializer):
