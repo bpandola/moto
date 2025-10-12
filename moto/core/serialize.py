@@ -395,13 +395,16 @@ class ResponseSerializer(ShapeHelpersMixin):
         return self._value_picker(context)
 
     def _get_error_shape(self, error: Exception) -> ErrorShape:
-        error_code = getattr(error, "code", MISSING)
+        error_code = getattr(error, "code", "UnknownError")
         error_name = error.__class__.__name__
         error_shapes = cast(list[ErrorShape], self.service_model.error_shapes)
         for error_shape in error_shapes:
             if error_shape.error_code == error_code:
                 break
             if error_shape.name in [error_code, error_name]:
+                break
+            aliases = error_shape.metadata.get("error", {}).get("aliasCodes", [])
+            if error_code in aliases or error_name in aliases:
                 break
         else:
             error_shape = None
@@ -418,7 +421,7 @@ class ResponseSerializer(ShapeHelpersMixin):
                     "code": error_code,
                 },
             }
-            error_shape = ErrorShape(error_name, generic_error_model)
+            error_shape = ErrorShape(error_code, generic_error_model)
         else:
             error_shape = ErrorShape.from_existing_shape(error_shape)
         return error_shape
@@ -575,7 +578,11 @@ class BaseJSONSerializer(ResponseSerializer):
         service_metadata = self.operation_model.service_model.metadata
         json_version = service_metadata.get("jsonVersion")
         error_code = error.name
-        prefix = error.namespace or service_metadata.get("errorNamespace")
+        prefix = (
+            error.namespace
+            or service_metadata.get("errorNamespace")
+            or service_metadata.get("targetPrefix")
+        )
         if json_version == "1.0" and prefix is not None:
             error_code = prefix + "#" + error_code
         return error_code
