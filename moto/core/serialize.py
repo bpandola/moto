@@ -135,6 +135,10 @@ class ErrorShape(StructureShape):
         error_message = error_info.get("message", "")
         return error_message
 
+    @property
+    def namespace(self) -> Optional[str]:
+        return self.metadata.get("error", {}).get("namespace")
+
     @classmethod
     def from_existing_shape(cls, shape: Shape) -> ErrorShape:
         return cls(shape.name, shape._shape_model, shape._shape_resolver)  # type: ignore[attr-defined]
@@ -540,7 +544,7 @@ class BaseJSONSerializer(ResponseSerializer):
             "httpStatusCode", self.DEFAULT_ERROR_RESPONSE_CODE
         )
         resp["status_code"] = status_code
-        error_code = self._get_protocol_specific_error_code(shape.error_code)
+        error_code = self._get_protocol_specific_error_code(shape)
         resp["headers"]["X-Amzn-Errortype"] = error_code
         resp["headers"]["Content-Type"] = self._get_protocol_specific_content_type()
         self._serialize_query_compatible_error_to_response(resp, shape)
@@ -565,12 +569,13 @@ class BaseJSONSerializer(ResponseSerializer):
 
     def _get_protocol_specific_error_code(
         self,
-        error_code: str,
+        error: ErrorShape,
     ) -> str:
         # https://smithy.io/2.0/aws/protocols/aws-json-1_1-protocol.html#operation-error-serialization
         service_metadata = self.operation_model.service_model.metadata
         json_version = service_metadata.get("jsonVersion")
-        prefix = service_metadata.get("targetPrefix")
+        error_code = error.name
+        prefix = error.namespace or service_metadata.get("errorNamespace")
         if json_version == "1.0" and prefix is not None:
             error_code = prefix + "#" + error_code
         return error_code
@@ -581,11 +586,7 @@ class BaseJSONSerializer(ResponseSerializer):
         error: Exception,
         shape: ErrorShape,
     ) -> None:
-        error_code = shape.error_code
-        if "awsQueryCompatible" in self.service_model.metadata:
-            if shape.name != error_code:
-                error_code = shape.name
-        error_code = self._get_protocol_specific_error_code(error_code)
+        error_code = self._get_protocol_specific_error_code(shape)
         serialized["__type"] = error_code
         message = getattr(error, "message", None) or str(error)
         if shape is not None:

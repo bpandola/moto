@@ -378,7 +378,13 @@ def _verify_unknown_queue_error(e, op_name="GetQueueUrl", status_code=400):
     assert e.value.operation_name == op_name
     assert response["ResponseMetadata"]["HTTPStatusCode"] == status_code
     assert "AWS.SimpleQueueService.NonExistentQueue" == response["Error"]["Code"]
-
+    headers = response["ResponseMetadata"]["HTTPHeaders"]
+    if "x-amzn-errortype" in headers:
+        expected_value = "com.amazonaws.sqs#QueueDoesNotExist"
+        assert headers["x-amzn-errortype"] == expected_value
+    if "x-amzn-query-error" in headers:
+        expected_value = "AWS.SimpleQueueService.NonExistentQueue;Sender"
+        assert headers["x-amzn-query-error"] == expected_value
     if LooseVersion(BOTOCORE_VERSION) >= LooseVersion("1.34.90"):
         assert response["Error"]["Message"] == "The specified queue does not exist."
     else:
@@ -491,7 +497,7 @@ def test_message_with_invalid_attributes():
             },
         )
     ex = e.value
-    assert ex.response["Error"]["Code"] == "MessageAttributesInvalid"
+    assert ex.response["Error"]["Code"] == "InvalidParameterValue"
     assert ex.response["Error"]["Message"] == (
         "The message attribute name 'öther_encodings' is invalid. "
         "Attribute name can contain A-Z, a-z, 0-9, underscore (_), "
@@ -589,7 +595,7 @@ def test_message_with_attributes_invalid_datatype():
             },
         )
     ex = e.value
-    assert ex.response["Error"]["Code"] == "MessageAttributesInvalid"
+    assert ex.response["Error"]["Code"] == "InvalidParameterValue"
     assert ex.response["Error"]["Message"] == (
         "The message attribute 'timestamp' has an invalid message "
         "attribute type, the set of supported type "
