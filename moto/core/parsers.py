@@ -24,8 +24,8 @@ def parse_timestamp(value: str) -> datetime:
 
 
 def default_blob_parser(value):
-    # We don't decode this to a str because it's entirely possible that the
-    # blob contains binary data that actually can't be decoded.
+    # We don't decode this to a str because it's possible that
+    # the blob contains binary data that can't be decoded.
     return base64.b64decode(value)
 
 
