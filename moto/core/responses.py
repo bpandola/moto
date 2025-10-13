@@ -27,13 +27,13 @@ from xml.dom.minidom import parseString as parseXML
 
 import boto3
 import requests
-from botocore.model import OperationModel, ServiceModel
 from jinja2 import DictLoader, Environment, Template
 from werkzeug.exceptions import HTTPException
 
 from moto import settings
 from moto.core.common_types import TYPE_IF_NONE, TYPE_RESPONSE
 from moto.core.exceptions import DryRunClientError, ServiceException
+from moto.core.model import OperationModel, ServiceModel
 from moto.core.parsers import PROTOCOL_PARSERS, XFormedDict
 from moto.core.request import determine_request_protocol, normalize_request
 from moto.core.serialize import (

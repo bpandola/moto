@@ -5,8 +5,8 @@ import os
 from enum import Enum
 
 import pytest
-from botocore.model import OperationModel, ServiceModel
 
+from moto.core.model import OperationModel, ServiceModel
 from moto.core.serialize import SERIALIZERS
 
 TEST_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "protocols")
