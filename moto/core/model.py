@@ -5,26 +5,14 @@ from __future__ import annotations
 import warnings
 from typing import Any, Mapping, cast
 
-from botocore.model import (
-    ListShape as BotocoreListShape,
-)
-from botocore.model import (
-    MapShape as BotocoreMapShape,
-)
+from botocore.model import ListShape as BotocoreListShape
+from botocore.model import MapShape as BotocoreMapShape
 from botocore.model import OperationModel as BotocoreOperationModel
-from botocore.model import (
-    ServiceModel as BotocoreServiceModel,
-)
-from botocore.model import (
-    Shape as BotocoreShape,
-)
+from botocore.model import ServiceModel as BotocoreServiceModel
+from botocore.model import Shape as BotocoreShape
 from botocore.model import ShapeResolver as BotocoreShapeResolver
-from botocore.model import (
-    StringShape as BotocoreStringShape,
-)
-from botocore.model import (
-    StructureShape as BotocoreStructureShape,
-)
+from botocore.model import StringShape as BotocoreStringShape
+from botocore.model import StructureShape as BotocoreStructureShape
 from botocore.utils import CachedProperty, instance_cache
 
 # These are common error codes that are *not* included in the service definitions.
@@ -73,15 +61,15 @@ class Shape(BotocoreShape, ShapeExtensionMethodsMixin):
     pass
 
 
-class StringShape(BotocoreStringShape, Shape):  # ShapeExtensionMethodsMixin):
+class StringShape(BotocoreStringShape, Shape):
     pass
 
 
-class ListShape(BotocoreListShape, Shape):  # ShapeExtensionMethodsMixin):
+class ListShape(BotocoreListShape, Shape):
     pass
 
 
-class MapShape(BotocoreMapShape, Shape):  # ShapeExtensionMethodsMixin):
+class MapShape(BotocoreMapShape, Shape):
     pass
 
 

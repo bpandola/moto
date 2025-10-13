@@ -7,8 +7,9 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 from botocore import xform_name
-from botocore.model import OperationModel
 from botocore.utils import parse_timestamp as botocore_parse_timestamp
+
+from moto.core.model import OperationModel
 
 UNDEFINED = object()  # Sentinel to signal the absence of a field in the input
 
