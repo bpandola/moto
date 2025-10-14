@@ -89,7 +89,7 @@ def test_output_compliance(json_description: dict, case: dict, protocol):
 
 
 def _create_exception(case):
-    exc = Exception()
+    exc = type(case["errorCode"], (Exception,), {})()
     exc.code = case["errorCode"]
     if "errorMessage" in case:
         exc.message = case["errorMessage"]

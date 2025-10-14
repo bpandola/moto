@@ -75,8 +75,8 @@ from botocore import xform_name
 from botocore.compat import formatdate
 from botocore.utils import is_json_value_header, parse_to_aware_datetime
 
+from moto.core.errors import ErrorLookupFactory, ErrorShape
 from moto.core.model import (
-    ErrorShape,
     ListShape,
     MapShape,
     OperationModel,
@@ -87,6 +87,8 @@ from moto.core.model import (
 from moto.core.utils import MISSING, get_value
 
 Serialized = MutableMapping[str, Any]
+
+error_lookup = ErrorLookupFactory()
 
 
 class ResponseDict(TypedDict):
@@ -263,7 +265,8 @@ class ResponseSerializer:
         resp: ResponseDict,
         error: Exception,
     ) -> ResponseDict:
-        error_shape = self.service_model.get_error_shape(error)
+        error_shapes = error_lookup.for_service(self.service_model)
+        error_shape = error_shapes.from_exception(error)
         serialized_error = self.MAP_TYPE()
         self._serialize_error_metadata(serialized_error, error, error_shape)
         return self._serialized_error_to_response(

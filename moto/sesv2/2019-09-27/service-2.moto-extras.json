@@ -4,7 +4,7 @@
     "shapes": {
       "NotFoundException": {
         "error": {
-          "aliasCodes": [
+          "codeAliases": [
             "ConfigurationSetDoesNotExist"
           ]
         }
