@@ -94,7 +94,7 @@ class QueryParser(RequestParser):
         if node.get(prefix, UNDEFINED) == "":
             return []
 
-        if self._is_shape_flattened(shape):
+        if shape.is_flattened:
             list_prefix = prefix
             location_name = self._get_serialized_name(shape.member, None)
             if location_name is not None:
@@ -115,7 +115,7 @@ class QueryParser(RequestParser):
         return parsed_list if parsed_list != [] else UNDEFINED
 
     def _handle_map(self, shape, query_params, prefix=""):
-        if self._is_shape_flattened(shape):
+        if shape.is_flattened:
             full_prefix = prefix
         else:
             full_prefix = f"{prefix}.entry"
@@ -171,18 +171,14 @@ class QueryParser(RequestParser):
         return value.get(prefix, default_value)
 
     def _get_serialized_name(self, shape, default_name):
-        shape_data = getattr(shape, "_shape_model", {})
-        query_compatible_name = shape_data.get("locationNameForQueryCompatibility")
-        if query_compatible_name:
-            return query_compatible_name
+        serialized_name = shape.serialization.get("locationNameForQueryCompatibility")
+        if serialized_name:
+            return serialized_name
         return shape.serialization.get("name", default_name)
 
     def _parsed_key_name(self, member_name):
         key_name = member_name
         return key_name
-
-    def _is_shape_flattened(self, shape):
-        return shape.serialization.get("flattened")
 
 
 class JSONParser(RequestParser):
