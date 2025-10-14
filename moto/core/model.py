@@ -29,14 +29,13 @@ COMMON_ERROR_CODES = [
 ]
 
 
-class ShapeExtensionMethodsMixin:
+MOTO_SERIALIZED_ATTRS = ["locationNameForQueryCompatibility"]
+
+
+class Shape(BotocoreShape):
+    SERIALIZED_ATTRS = BotocoreShape.SERIALIZED_ATTRS + MOTO_SERIALIZED_ATTRS
+
     serialization: dict[str, Any]
-
-    def get_serialized_name(self, default_name: str) -> str:
-        return self.serialization.get("name", default_name)
-
-    def get_query_compatible_name(self, default_name: str) -> str:
-        return self.serialization.get("locationNameForQueryCompatibility", default_name)
 
     @property
     def is_flattened(self) -> bool:
@@ -44,20 +43,11 @@ class ShapeExtensionMethodsMixin:
 
     @property
     def is_http_header_trait(self) -> bool:
-        return hasattr(self, "serialization") and self.serialization.get(
-            "location"
-        ) in ["header", "headers"]
+        return self.serialization.get("location") in ["header", "headers"]
 
     @property
     def is_not_bound_to_body(self) -> bool:
-        return hasattr(self, "serialization") and "location" in self.serialization
-
-
-MOTO_SERIALIZED_ATTRS = ["locationNameForQueryCompatibility"]
-
-
-class Shape(BotocoreShape, ShapeExtensionMethodsMixin):
-    SERIALIZED_ATTRS = BotocoreShape.SERIALIZED_ATTRS + MOTO_SERIALIZED_ATTRS
+        return "location" in self.serialization
 
 
 class StringShape(BotocoreStringShape, Shape):

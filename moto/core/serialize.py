@@ -184,7 +184,7 @@ class HeaderSerializer:
     def _serialize_type_map(
         self, serialized: Serialized, value: Any, shape: MapShape, _: str
     ) -> None:
-        header_prefix = shape.get_serialized_name(default_name="")
+        header_prefix = shape.serialization.get("name", "")
         for key, val in value.items():
             full_key = header_prefix + key
             self._default_serialize(serialized, val, shape, full_key)
@@ -1014,12 +1014,12 @@ class SqsQuerySerializer(QuerySerializer):
         return body_escaped
 
     def get_serialized_name(self, shape: Shape, default_name: str) -> str:
-        serialization_name = shape.get_serialized_name(default_name=default_name)
+        serialized_name = super().get_serialized_name(shape, default_name)
         if self.service_model.is_query_compatible:
-            serialization_name = shape.get_query_compatible_name(
-                default_name=serialization_name
+            serialized_name = shape.serialization.get(
+                "locationNameForQueryCompatibility", serialized_name
             )
-        return serialization_name
+        return serialized_name
 
 
 SERIALIZERS = {
