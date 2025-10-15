@@ -1,7 +1,14 @@
+"""
+This module provides a Shape subclass to encapsulate service model error definitions.
+
+It also provides a mechanism for mapping ServiceException exception classes to the
+corresponding error shape defined in the relevant service model.
+"""
+
 from __future__ import annotations
 
-import warnings
 from typing import TYPE_CHECKING, Any
+from warnings import warn
 
 from moto.core.model import StructureShape
 
@@ -12,6 +19,7 @@ if TYPE_CHECKING:
 # For example:
 # https://docs.aws.amazon.com/emr/latest/APIReference/CommonErrors.html
 # https://docs.aws.amazon.com/AmazonRDS/latest/APIReference/CommonErrors.html
+# https://docs.aws.amazon.com/AWSSimpleQueueService/latest/APIReference/CommonErrors.html
 # TODO: Augment the service definitions with shape models for these errors.
 COMMON_ERROR_CODES = [
     "InvalidParameterCombination",
@@ -31,9 +39,9 @@ class ErrorShape(StructureShape):
         return code
 
     @property
-    def error_message(self) -> str:
+    def query_compatible_error_message(self) -> str:
         error_info = self.metadata.get("error", {})
-        error_message = error_info.get("message", "")
+        error_message = error_info.get("messageForQueryCompatibility", "")
         return error_message
 
     @property
@@ -61,7 +69,7 @@ class ErrorLookup:
         if error is None:
             if self._service_id and code not in COMMON_ERROR_CODES:
                 warning = f"{self._service_id} service model does not contain an error shape that matches code {code} from Exception({exception.__class__.__name__})"
-                warnings.warn(warning)
+                warn(warning)
             error = ErrorShape(
                 shape_name=exception.__class__.__name__,
                 shape_model={
@@ -78,19 +86,20 @@ class ErrorLookup:
 
 class ErrorLookupFactory:
     def __init__(self) -> None:
-        self._service_error_cache: dict[str, ErrorLookup] = {}
+        self._error_lut_cache: dict[str, ErrorLookup] = {}
 
     def for_service(self, service_model: ServiceModel) -> ErrorLookup:
         service_id = service_model.metadata.get("serviceId")
-        if service_id not in self._service_error_cache:
-            service_errors = self._create_error_lut(service_model)
+        if service_id not in self._error_lut_cache:
+            error_lut = self._create_error_lut(service_model)
             if service_id is None:
-                return service_errors
-            self._service_error_cache[service_id] = service_errors
-        return self._service_error_cache[service_id]
+                return error_lut
+            self._error_lut_cache[service_id] = error_lut
+        return self._error_lut_cache[service_id]
 
     @staticmethod
     def _create_error_lut(service_model: ServiceModel) -> ErrorLookup:
+        """We map an error's code, name, and any alias codes to the same ErrorShape."""
         code_to_shape = {}
         for shape in service_model.error_shapes:
             error_shape = ErrorShape(

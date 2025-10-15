@@ -1,4 +1,22 @@
-"""A facade over the Botocore model to add helper methods needed for Moto."""
+"""
+This module provides a facade over the `botocore.model` module.
+
+It defines custom shape and service model classes that extend Botocore's
+classes to add additional functionality and properties specific to Moto.
+
+Because Botocore's shape classes are not designed for subclassing, this module
+redefines the class hierarchy to ensure that all shape classes inherit from
+both the relevant Botocore shape class as well as a new Moto base class.
+This allows us to add common functionality to all shape types while still
+retaining the original behavior of the Botocore classes without monkey-patching.
+
+This module also defines a modified ShapeResolver to ensure that all shapes created
+through the resolver are instances of our custom classes.
+
+Any Moto code that needs to interact with Botocore's model classes should do so
+through this facade to avoid direct dependencies on Botocore's internal structure,
+which may change over time.
+"""
 
 from __future__ import annotations
 
@@ -14,11 +32,12 @@ from botocore.model import StringShape as BotocoreStringShape
 from botocore.model import StructureShape as BotocoreStructureShape
 from botocore.utils import CachedProperty, instance_cache
 
-MOTO_SERIALIZED_ATTRS = ["locationNameForQueryCompatibility"]
-
 
 class Shape(BotocoreShape):
-    SERIALIZED_ATTRS = BotocoreShape.SERIALIZED_ATTRS + MOTO_SERIALIZED_ATTRS
+    # Custom Moto model properties that we want available in the serialization dict.
+    SERIALIZED_ATTRS = BotocoreShape.SERIALIZED_ATTRS + [
+        "locationNameForQueryCompatibility"
+    ]
 
     serialization: dict[str, Any]
 
@@ -66,7 +85,7 @@ class ServiceModel(BotocoreServiceModel):
         self, service_description: Mapping[str, Any], service_name: str | None = None
     ):
         super(ServiceModel, self).__init__(service_description, service_name)
-        # Use our shape resolver
+        # Use our custom shape resolver.
         self._shape_resolver = ShapeResolver(service_description.get("shapes", {}))
 
     @instance_cache
@@ -100,7 +119,11 @@ class ShapeResolver(BotocoreShapeResolver):
     def get_shape_by_name(
         self, shape_name: str, member_traits: Mapping[str, Any] | None = None
     ) -> Shape:
-        result = super().get_shape_by_name(shape_name, member_traits)
-        if not isinstance(result, Shape):
-            result = Shape(shape_name, getattr(result, "_shape_model", {}), self)
-        return result
+        shape = super().get_shape_by_name(shape_name, member_traits)
+        # The SHAPE_CLASSES dict only allows us to override Shape subclasses,
+        # but Botocore will return its own Shape base class for unknown types.
+        # If the returned shape is not a part of our hierarchy, we need to
+        # convert it to our Shape base class here.
+        if not isinstance(shape, Shape):
+            shape = Shape(shape_name, getattr(shape, "_shape_model", {}), self)
+        return shape
