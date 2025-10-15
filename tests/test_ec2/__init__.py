@@ -4,6 +4,7 @@ from time import sleep
 from uuid import uuid4
 
 import boto3
+from botocore.exceptions import ClientError
 
 from moto import mock_aws
 from tests import allow_aws_request
@@ -70,9 +71,10 @@ def _invoke_func(
         kwargs["vpc_id"] = vpc_id
 
         if create_subnet:
-            subnet_id = ec2_client.create_subnet(VpcId=vpc_id, CidrBlock="10.0.0.0/24")[
-                "Subnet"
-            ]["SubnetId"]
+            subnet = ec2_client.create_subnet(
+                VpcId=vpc_id, CidrBlock="10.0.0.0/24", AvailabilityZone="us-east-1a"
+            )
+            subnet_id = subnet["Subnet"]["SubnetId"]
             kwargs["subnet_id"] = subnet_id
 
     if create_sg:
@@ -177,6 +179,17 @@ def wait_for_vpn_connections(ec2_client, vpn_connection_id):
         sleep(5 * idx)
 
 
+def wait_for_ipv6_cidr_block_associations(ec2_client, vpc_id):
+    for idx in range(10):
+        vpcs = ec2_client.describe_vpcs(VpcIds=[vpc_id])["Vpcs"]
+        if (
+            vpcs[0]["Ipv6CidrBlockAssociationSet"][0]["Ipv6CidrBlockState"]["State"]
+            == "associated"
+        ):
+            return vpcs[0]["Ipv6CidrBlockAssociationSet"][0]
+        sleep(5 * idx)
+
+
 def delete_transit_gateway_dependencies(ec2_client, tg_id):
     delete_tg_attachments(ec2_client, tg_id)
 
@@ -214,9 +227,16 @@ def delete_tg_attachments(ec2_client, tg_id):
 
         for attachment in attachments:
             if attachment["State"] == "available":
-                ec2_client.delete_transit_gateway_vpc_attachment(
-                    TransitGatewayAttachmentId=attachment["TransitGatewayAttachmentId"]
-                )
+                try:
+                    ec2_client.delete_transit_gateway_vpc_attachment(
+                        TransitGatewayAttachmentId=attachment[
+                            "TransitGatewayAttachmentId"
+                        ]
+                    )
+                except ClientError as exc:
+                    # If we run tests in parallel, the attachment may have already been deleted
+                    err = exc.value.response["Error"]
+                    assert err["Code"] == "InvalidTransitGatewayAttachmentID.NotFound"
 
         if set(a["State"] for a in attachments) == {"deleted"}:
             return
