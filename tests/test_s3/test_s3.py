@@ -1292,7 +1292,7 @@ def test_list_objects_with_pagesize_0():
     resp = s3_client.list_objects(Bucket="mybucket", MaxKeys=0)
     assert resp["Name"] == "mybucket"
     assert resp["MaxKeys"] == 0
-    assert resp["IsTruncated"] is False
+    assert resp["IsTruncated"] is True
     assert "Contents" not in resp
 
 

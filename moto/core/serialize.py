@@ -557,7 +557,7 @@ class BaseXMLSerializer(ResponseSerializer):
 
     def _serialize_namespace_attribute(self, serialized: Serialized) -> None:
         if (
-            self.CONTENT_TYPE == "text/xml"
+            self.CONTENT_TYPE in ["application/xml", "text/xml"]
             and "xmlNamespace" in self.operation_model.metadata
         ):
             namespace = self.operation_model.metadata["xmlNamespace"]
@@ -592,7 +592,8 @@ class BaseXMLSerializer(ResponseSerializer):
         shape: Optional[StructureShape],
         serialized_result: MutableMapping[str, Any],
     ) -> ResponseDict:
-        result_key = f"{self.operation_model.name}Result"
+        result_name = self.operation_model.wire_name or self.operation_model.name
+        result_key = f"{result_name}Result"
         result_wrapper = {
             result_key: serialized_result,
         }
@@ -957,6 +958,19 @@ class EC2Serializer(QuerySerializer):
         return resp
 
 
+class S3Serializer(RestXMLSerializer):
+    CONTENT_TYPE = "application/xml"
+
+    def _serialize_body(self, body: Mapping[str, Any]) -> str:
+        body_serialized = xmltodict.unparse(
+            body,
+            full_document=True,
+            pretty=self.pretty_print,
+            short_empty_elements=True,
+        )
+        return body_serialized
+
+
 DoublePassEncoding = namedtuple(
     "DoublePassEncoding", ["char", "marker", "escape_sequence"]
 )
@@ -1033,6 +1047,7 @@ SERIALIZERS = {
     "rest-xml": RestXMLSerializer,
 }
 SERVICE_SPECIFIC_SERIALIZERS = {
+    "s3": {"rest-xml": S3Serializer},
     "sqs": {
         "query": SqsQuerySerializer,
     }
