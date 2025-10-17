@@ -592,8 +592,9 @@ class BaseXMLSerializer(ResponseSerializer):
         shape: Optional[StructureShape],
         serialized_result: MutableMapping[str, Any],
     ) -> ResponseDict:
-        result_name = self.operation_model.wire_name or self.operation_model.name
-        result_key = f"{result_name}Result"
+        result_key = f"{self.operation_model.name}Result"
+        if shape is not None:
+            result_key = shape.serialization.get("resultWrapper", result_key)
         result_wrapper = {
             result_key: serialized_result,
         }

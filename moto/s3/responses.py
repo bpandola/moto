@@ -224,6 +224,8 @@ class S3Response(BaseResponse):
     def all_buckets(self) -> TYPE_RESPONSE:
         self.data["Action"] = "ListAllMyBuckets"
         self._authenticate_and_authorize_s3_action()
+        # Reset to actual service model operation name after authorization.
+        self.data["Action"] = "ListBuckets"
 
         # No bucket specified. Listing all buckets
         all_buckets = self.backend.list_buckets()
@@ -626,6 +628,7 @@ class S3Response(BaseResponse):
         )
 
     def list_objects(self) -> TYPE_RESPONSE:
+        self.data["Action"] = "ListObjects"
         bucket = self.backend.get_bucket(self.bucket_name)
         querystring = self._get_querystring(self.request, self.uri)
         prefix = querystring.get("prefix", [None])[0]
@@ -703,7 +706,7 @@ class S3Response(BaseResponse):
         return self.serialized(ActionResult(result))
 
     def list_objects_v2(self) -> TYPE_RESPONSE:
-        self.data["Action"] = "ListBucketV2"
+        self.data["Action"] = "ListObjectsV2"
         template = self.response_template(S3_BUCKET_GET_RESPONSE_V2)
         bucket = self.backend.get_bucket(self.bucket_name)
 
