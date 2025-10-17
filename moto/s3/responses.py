@@ -11,7 +11,7 @@ import xmltodict
 from moto import settings
 from moto.core.common_types import TYPE_RESPONSE
 from moto.core.mime_types import APP_XML
-from moto.core.responses import BaseResponse
+from moto.core.responses import ActionResult, BaseResponse
 from moto.core.utils import (
     ALT_DOMAIN_SUFFIXES,
     extract_region_from_aws_authorization,
@@ -218,13 +218,27 @@ class S3Response(BaseResponse):
         self.backend.abort_multipart_upload(self.bucket_name, upload_id)
         return 204, {}, ""
 
-    def all_buckets(self) -> str:
+    def all_buckets(self) -> TYPE_RESPONSE:
         self.data["Action"] = "ListAllMyBuckets"
         self._authenticate_and_authorize_s3_action()
 
         # No bucket specified. Listing all buckets
         all_buckets = self.backend.list_buckets()
         template = self.response_template(S3_ALL_BUCKETS)
+        result = {
+            "Owner": {
+                "ID": "bcaf1ffd86f41161ca5fb16fd081034f",
+                "DisplayName": "webfile",
+            },
+            "Buckets": [
+                {
+                    "Name": bucket.name,
+                    "CreationDate": bucket.creation_date_ISO8601,
+                }
+                for bucket in all_buckets
+            ],
+        }
+        return self.serialized(ActionResult(result))
         return template.render(buckets=all_buckets)
 
     def subdomain_based_buckets(self, request: Any) -> bool:
@@ -608,7 +622,7 @@ class S3Response(BaseResponse):
             account_id=self.current_account,
         )
 
-    def list_objects(self) -> str:
+    def list_objects(self) -> TYPE_RESPONSE:
         bucket = self.backend.get_bucket(self.bucket_name)
         querystring = self._get_querystring(self.request, self.uri)
         prefix = querystring.get("prefix", [None])[0]
@@ -635,7 +649,7 @@ class S3Response(BaseResponse):
         )
 
         template = self.response_template(S3_BUCKET_GET_RESPONSE)
-        return template.render(
+        rendered = template.render(
             bucket=bucket,
             prefix=prefix,
             delimiter=delimiter,
@@ -646,8 +660,47 @@ class S3Response(BaseResponse):
             max_keys=max_keys,
             encoding_type=encoding_type,
         )
+        assert rendered
+        result = {
+            "IsTruncated": is_truncated,
+            #'Marker': next_marker,
+            "NextMarker": next_marker,
+            "Contents": [
+                {
+                    "Key": key.safe_name(encoding_type),
+                    "LastModified": key.last_modified_ISO8601,
+                    "ETag": key.etag,
+                    "ChecksumAlgorithm": [key.checksum_algorithm],
+                    #'ChecksumType': 'COMPOSITE'|'FULL_OBJECT',
+                    "Size": key.size,
+                    "StorageClass": key.storage_class,
+                    "Owner": {
+                        "DisplayName": "webfile",
+                        "ID": "75aa57f09aa0c8caeab4f8c24e99d10f8e7faeebf76c078efc7c6caea54ba06a",
+                    },
+                    # 'RestoreStatus': {
+                    #     'IsRestoreInProgress': True|False,
+                    #     'RestoreExpiryDate': datetime(2015, 1, 1)
+                    # }
+                }
+                for key in result_keys
+            ]
+            if result_keys
+            else None,
+            "Name": bucket.name,
+            "Prefix": prefix,
+            "Delimiter": delimiter,
+            "MaxKeys": max_keys,
+            "CommonPrefixes": [{"Prefix": folder} for folder in result_folders]
+            if delimiter and result_folders
+            else None,
+            "EncodingType": encoding_type,
+            "RequestCharged": "requester",
+        }
+        return self.serialized(ActionResult(result))
 
-    def list_objects_v2(self) -> str:
+    def list_objects_v2(self) -> TYPE_RESPONSE:
+        self.data["Action"] = "ListBucketV2"
         template = self.response_template(S3_BUCKET_GET_RESPONSE_V2)
         bucket = self.backend.get_bucket(self.bucket_name)
 
@@ -691,7 +744,7 @@ class S3Response(BaseResponse):
                 map(lambda folder: urllib.parse.quote(folder), result_folders)
             )
 
-        return template.render(
+        rendered = template.render(
             bucket=bucket,
             prefix=prefix or "",
             delimiter=delimiter,
@@ -705,6 +758,48 @@ class S3Response(BaseResponse):
             start_after=None if continuation_token else start_after,
             encoding_type=encoding_type,
         )
+        assert rendered
+        result = {
+            "IsTruncated": is_truncated,
+            "Contents": [
+                {
+                    "Key": key.safe_name(encoding_type),
+                    "LastModified": key.last_modified_ISO8601,
+                    "ETag": key.etag,
+                    "ChecksumAlgorithm": [key.checksum_algorithm],
+                    # 'ChecksumType': 'COMPOSITE'|'FULL_OBJECT',
+                    "Size": key.size,
+                    "StorageClass": key.storage_class,
+                    "Owner": {
+                        "DisplayName": "webfile",
+                        "ID": "75aa57f09aa0c8caeab4f8c24e99d10f8e7faeebf76c078efc7c6caea54ba06a",
+                    }
+                    if fetch_owner
+                    else None,
+                    # 'RestoreStatus': {
+                    #     'IsRestoreInProgress': True|False,
+                    #     'RestoreExpiryDate': datetime(2015, 1, 1)
+                    # }
+                }
+                for key in result_keys
+            ]
+            if result_keys
+            else None,
+            "Name": bucket.name,
+            "Prefix": prefix or "",
+            "Delimiter": delimiter,
+            "MaxKeys": max_keys,
+            "CommonPrefixes": [{"Prefix": folder} for folder in result_folders]
+            if delimiter and result_folders
+            else None,
+            "EncodingType": encoding_type,
+            "KeyCount": key_count,
+            "ContinuationToken": continuation_token,
+            "NextContinuationToken": next_continuation_token,
+            "StartAfter": None if continuation_token else start_after,
+            "RequestCharged": "requester",
+        }
+        return self.serialized(ActionResult(result))
 
     def list_object_versions(self) -> str:
         delimiter = self.querystring.get("delimiter", [None])[0]
