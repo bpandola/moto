@@ -1061,6 +1061,7 @@ class S3Response(BaseResponse):
             if ownership_rule:
                 new_bucket.ownership_rule = ownership_rule
 
+            return self.serialized(ActionResult({"Location": f"/{new_bucket.name}"}))
             template = self.response_template(S3_BUCKET_CREATE_RESPONSE)
             return template.render(bucket=new_bucket)
 

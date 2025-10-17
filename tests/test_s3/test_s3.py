@@ -356,7 +356,8 @@ def test_bucket_deletion():
 def test_get_all_buckets():
     client = boto3.client("s3", region_name=DEFAULT_REGION_NAME)
     client.create_bucket(Bucket="foobar")
-    client.create_bucket(Bucket="foobar2")
+    resp = client.create_bucket(Bucket="foobar2")
+    assert resp["Location"] == "/foobar2"
 
     assert len(client.list_buckets()["Buckets"]) == 2
 
