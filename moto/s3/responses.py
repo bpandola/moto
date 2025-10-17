@@ -365,7 +365,7 @@ class S3Response(BaseResponse):
         if not isinstance(response, bytes):
             response = response.encode("utf-8")
 
-        if response and "content-type" not in headers:
+        if response and "content-type" not in map(lambda x: x.lower(), headers.keys()):
             headers["content-type"] = APP_XML
 
         return status_code, headers, response
