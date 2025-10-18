@@ -707,6 +707,9 @@ class BaseRestSerializer(ResponseSerializer):
             resp["headers"].update(serialized_result["headers"])
         if resp["body"]:
             resp["headers"]["Content-Type"] = self.CONTENT_TYPE
+        resp["status_code"] = self.operation_model.http.get(
+            "responseCode", self.DEFAULT_RESPONSE_CODE
+        )
         return resp
 
     def _serialize_result(self, resp: ResponseDict, result: Any) -> ResponseDict:

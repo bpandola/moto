@@ -341,7 +341,8 @@ def test_bucket_deletion():
     )
 
     client.delete_object(Bucket="foobar", Key="the-key")
-    client.delete_bucket(Bucket="foobar")
+    resp = client.delete_bucket(Bucket="foobar")
+    assert resp["ResponseMetadata"]["HTTPStatusCode"] == 204
 
     # Delete non-existent bucket
     with pytest.raises(ClientError) as ex:

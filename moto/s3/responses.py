@@ -12,7 +12,7 @@ import xmltodict
 from moto import settings
 from moto.core.common_types import TYPE_RESPONSE
 from moto.core.mime_types import APP_XML
-from moto.core.responses import ActionResult, BaseResponse
+from moto.core.responses import ActionResult, BaseResponse, EmptyResult
 from moto.core.utils import (
     ALT_DOMAIN_SUFFIXES,
     extract_region_from_aws_authorization,
@@ -1254,6 +1254,7 @@ class S3Response(BaseResponse):
     def delete_bucket(self) -> TYPE_RESPONSE:
         removed_bucket = self.backend.delete_bucket(self.bucket_name)
         if removed_bucket:
+            return self.serialized(EmptyResult())
             # Bucket exists
             template = self.response_template(S3_DELETE_BUCKET_SUCCESS)
             return 204, {}, template.render(bucket=removed_bucket)
