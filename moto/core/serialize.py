@@ -56,6 +56,7 @@ import abc
 import base64
 import calendar
 import json
+from collections import namedtuple
 from dataclasses import dataclass
 from datetime import datetime
 from typing import (
@@ -74,7 +75,7 @@ from botocore import xform_name
 from botocore.compat import formatdate
 from botocore.utils import is_json_value_header, parse_to_aware_datetime
 
-from moto.core.errors import ErrorLookupFactory, ErrorShape
+from moto.core.errors import ErrorShape, get_error_model
 from moto.core.model import (
     ListShape,
     MapShape,
@@ -86,8 +87,6 @@ from moto.core.model import (
 from moto.core.utils import MISSING, get_value
 
 Serialized = MutableMapping[str, Any]
-
-error_lookup = ErrorLookupFactory()
 
 
 class ResponseDict(TypedDict):
@@ -264,8 +263,7 @@ class ResponseSerializer:
         resp: ResponseDict,
         error: Exception,
     ) -> ResponseDict:
-        error_shapes = error_lookup.for_service(self.service_model)
-        error_shape = error_shapes.from_exception(error)
+        error_shape = get_error_model(error, self.service_model)
         serialized_error = self.MAP_TYPE()
         self._serialize_error_metadata(serialized_error, error, error_shape)
         return self._serialized_error_to_response(
@@ -611,6 +609,8 @@ class BaseXMLSerializer(ResponseSerializer):
         serialized["Type"] = "Sender" if shape.is_sender_fault else "Receiver"
         serialized["Code"] = shape.error_code
         message = getattr(error, "message", None)
+        if shape.query_compatible_error_message:
+            message = shape.query_compatible_error_message
         if message is not None:
             serialized["Message"] = message
         # Serialize any error model attributes.
@@ -971,6 +971,73 @@ class S3Serializer(RestXMLSerializer):
         return body_serialized
 
 
+DoublePassEncoding = namedtuple(
+    "DoublePassEncoding", ["char", "marker", "escape_sequence"]
+)
+
+
+class DoublePassEncoder:
+    """Facilitates double pass encoding of special characters in a string
+    by replacing them with markers in one pass and then replacing the markers
+    with escape sequences in a second pass."""
+
+    def __init__(self, encodings: list[DoublePassEncoding]) -> None:
+        self.encodings = encodings
+
+    def mark(self, value: str) -> str:
+        for item in self.encodings:
+            value = value.replace(item.char, item.marker)
+        return value
+
+    def escape(self, value: str) -> str:
+        for item in self.encodings:
+            value = value.replace(item.marker, item.escape_sequence)
+        return value
+
+
+class SqsQuerySerializer(QuerySerializer):
+    """
+    Special handling of SQS Query protocol responses:
+        * support aws.protocols#awsQueryCompatible trait after switch to JSON protocol
+        * escape HTML entities within XML tag text
+    """
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.encoder = DoublePassEncoder(
+            [
+                DoublePassEncoding(
+                    char="\r",
+                    marker="__CARRIAGE_RETURN_MARKER__",
+                    escape_sequence="&#xD;",
+                ),
+                DoublePassEncoding(
+                    char='"', marker="__DOUBLE_QUOTE_MARKER__", escape_sequence="&quot;"
+                ),
+            ]
+        )
+
+    def _default_serialize(
+        self, serialized: Serialized, value: Any, shape: Shape, key: str
+    ) -> None:
+        if isinstance(value, str):
+            value = self.encoder.mark(value)
+        super()._default_serialize(serialized, value, shape, key)
+
+    def _serialize_body(self, body: Serialized) -> str:
+        body_encoded = super()._serialize_body(body)
+        body_escaped = self.encoder.escape(body_encoded)
+        return body_escaped
+
+    def get_serialized_name(self, shape: Shape, default_name: str) -> str:
+        serialized_name = super().get_serialized_name(shape, default_name)
+        if self.service_model.is_query_compatible:
+            serialized_name = shape.serialization.get(
+                "locationNameForQueryCompatibility", serialized_name
+            )
+        return serialized_name
+
+
 SERIALIZERS = {
     "ec2": EC2Serializer,
     "json": JSONSerializer,
@@ -979,7 +1046,12 @@ SERIALIZERS = {
     "rest-json": RestJSONSerializer,
     "rest-xml": RestXMLSerializer,
 }
-SERVICE_SPECIFIC_SERIALIZERS = {"s3": {"rest-xml": S3Serializer}}
+SERVICE_SPECIFIC_SERIALIZERS = {
+    "s3": {"rest-xml": S3Serializer},
+    "sqs": {
+        "query": SqsQuerySerializer,
+    }
+}
 
 
 def get_serializer_class(service_name: str, protocol: str) -> type[ResponseSerializer]:
