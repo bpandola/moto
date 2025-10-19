@@ -27,7 +27,7 @@ from xml.dom.minidom import parseString as parseXML
 
 import boto3
 import requests
-from jinja2 import DictLoader, Environment, Template
+from jinja2 import DictLoader, Environment, StrictUndefined, Template
 from werkzeug.exceptions import HTTPException
 
 from moto import settings
