@@ -1051,11 +1051,9 @@ SERIALIZERS = {
     "rest-json": RestJSONSerializer,
     "rest-xml": RestXMLSerializer,
 }
-SERVICE_SPECIFIC_SERIALIZERS = {
+SERVICE_SPECIFIC_SERIALIZERS: dict[str, dict[str, type[ResponseSerializer]]] = {
     "s3": {"rest-xml": S3Serializer},
-    "sqs": {
-        "query": SqsQuerySerializer,
-    }
+    "sqs": {"query": SqsQuerySerializer},
 }
 
 
