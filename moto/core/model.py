@@ -108,6 +108,10 @@ class OperationModel(BotocoreOperationModel):
     def service_model(self) -> ServiceModel:
         return self._service_model
 
+    @property
+    def is_unwrapped_xml_output(self) -> bool:
+        return "s3UnwrappedXmlOutput" in self._operation_model
+
 
 class ShapeResolver(BotocoreShapeResolver):
     SHAPE_CLASSES = {

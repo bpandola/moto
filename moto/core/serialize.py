@@ -966,6 +966,44 @@ class EC2Serializer(QuerySerializer):
 class S3Serializer(RestXMLSerializer):
     CONTENT_TYPE = "application/xml"
 
+    def _serialized_result_to_response(
+        self,
+        resp: ResponseDict,
+        result: Any,
+        shape: Optional[StructureShape],
+        serialized_result: MutableMapping[str, Any],
+    ) -> ResponseDict:
+        if "payload" in serialized_result:
+            # Payload trumps all and is delivered as-is.
+            resp["body"] = serialized_result["payload"]
+        else:
+            if shape and shape.name == "GetBucketLocationOutput":
+                result_wrapper = {"LocationConstraint": {}}
+                if result.get("LocationConstraint"):
+                    result_wrapper["LocationConstraint"]["#text"] = result[
+                        "LocationConstraint"
+                    ]
+                self._serialize_namespace_attribute(
+                    result_wrapper["LocationConstraint"]
+                )
+                resp["body"] = self._serialize_body(result_wrapper)
+
+            elif not serialized_result["body"]:
+                if self.REQUIRES_EMPTY_BODY:
+                    resp["body"] = self._serialize_body(self.EMPTY_BODY)
+            else:
+                resp = super()._serialized_result_to_response(
+                    resp, result, shape, serialized_result.get("body", {})
+                )
+        if "headers" in serialized_result:
+            resp["headers"].update(serialized_result["headers"])
+        if resp["body"]:
+            resp["headers"]["Content-Type"] = self.CONTENT_TYPE
+        resp["status_code"] = self.operation_model.http.get(
+            "responseCode", self.DEFAULT_RESPONSE_CODE
+        )
+        return resp
+
     def _serialize_body(self, body: Mapping[str, Any]) -> str:
         body_serialized = xmltodict.unparse(
             body,

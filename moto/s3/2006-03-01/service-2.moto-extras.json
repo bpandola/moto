@@ -5,6 +5,9 @@
       "xmlNamespace": "http://s3.amazonaws.com/doc/2006-03-01/"
     },
     "operations": {
+      "GetBucketLocation": {
+        "s3UnwrappedXmlOutput": {}
+      },
       "ListBuckets": {
         "output": {
           "resultWrapper": "ListAllMyBucketsResult"
@@ -20,6 +23,11 @@
           "resultWrapper": "ListBucketResult"
         }
       }
+    },
+    "shapes": {
+       "GetBucketLocationOutput":{
+         "locationName": "LocationConstraint"
+    }
     }
   }
 }

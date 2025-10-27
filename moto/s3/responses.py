@@ -1101,14 +1101,15 @@ class S3Response(BaseResponse):
         template = self.response_template(S3_BUCKET_LIFECYCLE_CONFIGURATION)
         return template.render(rules=rules)
 
-    def get_bucket_location(self) -> str:
+    def get_bucket_location(self) -> TYPE_RESPONSE:
         location: Optional[str] = self.backend.get_bucket_location(self.bucket_name)
         template = self.response_template(S3_BUCKET_LOCATION)
 
         # us-east-1 is different - returns a None location
         if location == DEFAULT_REGION_NAME:
             location = None
-
+        result = {"LocationConstraint": location}
+        return self.serialized(ActionResult(result))
         return template.render(location=location)
 
     def get_bucket_logging(self) -> str:
