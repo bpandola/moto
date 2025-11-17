@@ -12,8 +12,8 @@ from botocore.awsrequest import HeadersDict
 from botocore.utils import parse_timestamp
 from dateutil.tz import tzutc
 
-from moto.core.parse import PROTOCOL_PARSERS
 from moto.core.model import OperationModel, ServiceModel
+from moto.core.parse import PROTOCOL_PARSERS
 from moto.core.serialize import SERIALIZERS
 
 TEST_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "protocols")

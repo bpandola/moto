@@ -245,10 +245,10 @@ class RequestParser:
         return parsed
 
     def _do_parse(self, request_dict, shape):
-        raise NotImplementedError("%s._do_parse" % self.__class__.__name__)
+        raise NotImplementedError(f"{self.__class__.__name__}._do_parse")
 
     def _parse_shape(self, shape, node):
-        handler = getattr(self, "_parse_%s" % shape.type_name, self._default_handle)
+        handler = getattr(self, f"_parse_{shape.type_name}", self._default_handle)
         return handler(shape, node)
 
     def _parse_list(self, shape, node):
@@ -283,13 +283,13 @@ class QueryParser(RequestParser):
         return parsed if parsed is not UNDEFINED else {}
 
     def _parse_shape(self, shape, node, prefix=""):
-        handler = getattr(self, "_parse_%s" % shape.type_name, self._default_handle)
+        handler = getattr(self, f"_parse_{shape.type_name}", self._default_handle)
         return handler(shape, node, prefix)
 
     def _gonna_recurse(self, query_params, prefix):
         if prefix == "":
             return False
-        return not any([param_key.startswith(prefix) for param_key in query_params])
+        return not any(param_key.startswith(prefix) for param_key in query_params)
 
     def _parse_structure(self, shape, query_params, prefix=""):
         if self._gonna_recurse(query_params, prefix):
@@ -300,7 +300,7 @@ class QueryParser(RequestParser):
             member_shape = members[member_name]
             member_prefix = self._get_serialized_name(member_shape, member_name)
             if prefix:
-                member_prefix = "%s.%s" % (prefix, member_prefix)
+                member_prefix = f"{prefix}.{member_prefix}"
             value = self._parse_shape(member_shape, query_params, member_prefix)
             parsed_key = self._parsed_key_name(member_name)
             if value is not UNDEFINED:
@@ -472,9 +472,9 @@ class BaseJSONParser(RequestParser):
         parsed = self.MAP_TYPE()
         key_shape = shape.key
         value_shape = shape.value
-        for key, value in value.items():
+        for key, val in value.items():
             actual_key = self._parse_shape(key_shape, key)
-            actual_value = self._parse_shape(value_shape, value)
+            actual_value = self._parse_shape(value_shape, val)
             parsed[actual_key] = actual_value
         return parsed
 
@@ -750,7 +750,7 @@ class BaseXMLParser(RequestParser):
                 elif tag_name == value_location_name:
                     val_name = self._parse_shape(value_shape, single_pair)
                 else:
-                    raise ResponseParserError("Unknown tag: %s" % tag_name)
+                    raise ResponseParserError(f"Unknown tag: {tag_name}")
             parsed[key_name] = val_name
         return parsed
 
@@ -842,9 +842,8 @@ class BaseXMLParser(RequestParser):
             root = parser.close()
         except XMLParseError as e:
             raise ResponseParserError(
-                "Unable to parse response (%s), "
-                "invalid XML received. Further retries may succeed:\n%s"
-                % (e, xml_string)
+                f"Unable to parse response ({e}), "
+                f"invalid XML received. Further retries may succeed:\n{xml_string}"
             )
         return root
 
