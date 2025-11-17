@@ -400,6 +400,9 @@ class QueryParser(RequestParser):
         return value.get(prefix, default_value)
 
     def _get_serialized_name(self, shape, default_name):
+        serialized_name = shape.serialization.get("locationNameForQueryCompatibility")
+        if serialized_name:
+            return serialized_name
         return shape.serialization.get("name", default_name)
 
     def _parsed_key_name(self, member_name):
