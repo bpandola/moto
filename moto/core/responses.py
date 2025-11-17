@@ -268,7 +268,7 @@ class BaseResponse(_TemplateEnvironmentMixin, ActionAuthenticatorMixin):
         super().__init__()
         self.service_name = service_name
         self.allow_request_decompression = True
-        self.automated_parameter_parsing = True
+        self.automated_parameter_parsing = False
 
     @classmethod
     def dispatch(cls, *args: Any, **kwargs: Any) -> Any:  # type: ignore[misc]
