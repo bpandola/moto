@@ -543,35 +543,45 @@ class BaseRestParser(RequestParser):
             pass
         return super().parse_params(request_dict, operation_model)
 
-    def uri_to_regexp(self, uri):
+    def uri_to_regexp(self, uri: str, operation: OperationModel) -> str:
         """converts uri w/ placeholder to regexp
-        '/cars/{carName}/drivers/{DriverName}' -> '^/cars/.*/drivers/[^/]*$'
-        '/cars/{carName}/drivers/{DriverName}/drive' -> '^/cars/.*/drivers/.*/drive$'
+          '/accounts/{AwsAccountId}/namespaces/{Namespace}/groups'
+        -> '^/accounts/(?P<AwsAccountId>[^/]+)/namespaces/(?P<Namespace>[^/]+)/groups$'
+
+          '/trustStores/{trustStoreArn+}'
+        -> '^/trustStores/(?P<trustStoreArn>.+)$'
+
         """
 
-        def _convert(elem, is_last):
+        def _convert(elem: str) -> str:
             if not re.match("^{.*}$", elem):
-                return elem
-            greedy = "+" in elem
+                # URL-parts sometimes contain a $
+                # Like Greengrass: /../deployments/$reset
+                # We don't want to our regex to think this marks an end-of-line, so let's escape it
+                return elem.replace("$", r"\$")
+
+            # When the element ends with +} the parameter can contain a / otherwise not.
+            slash_allowed = elem.endswith("+}")
             name = (
                 elem.replace("{", "")
                 .replace("}", "")
                 .replace("+", "")
                 .replace("-", "_")
             )
-            if is_last:
-                capture = "[^/]" if not greedy else "."
-                return f"(?P<{name}>{capture}+)"
-            return f"(?P<{name}>[^/]*)"
+            pattern = ".+" if slash_allowed else "[^/]+"
+            input_shape = operation.input_shape
+            if input_shape is not None:
+                for param_name, param_shape in input_shape.members.items():
+                    if name == param_name:
+                        if "pattern" in param_shape.metadata:
+                            pattern = param_shape.metadata["pattern"]
+                        elif name == "resourceArn":
+                            pattern = "arn:aws[-a-z]*:aps:[-a-z0-9]+:[0-9]{12}:(workspace|rulegroupsnamespace)/.+$"
+            return f"(?P<{name}>{pattern})"
 
         elems = uri.split("/")
-        num_elems = len(elems)
-        regexp = "^{}$".format(
-            "/".join(
-                [_convert(elem, (i == num_elems - 1)) for i, elem in enumerate(elems)]
-            )
-        )
-        return regexp
+        regexp = "/".join([_convert(elem) for elem in elems])
+        return f"^{regexp}$"
 
     def parse_action(self, request_dict):
         method_urls = defaultdict(lambda: defaultdict(str))
@@ -580,7 +590,7 @@ class BaseRestParser(RequestParser):
             op_model = self.service_model.operation_model(op_name)
             _method = op_model.http["method"]
             parsed_uri = urlparse(op_model.http["requestUri"])
-            uri_regexp = self.uri_to_regexp(parsed_uri.path)
+            uri_regexp = self.uri_to_regexp(parsed_uri.path, op_model)
             method_urls[_method][uri_regexp] = op_model.name
         regexp_and_names = method_urls[request_dict["method"]]
         for regexp, name in regexp_and_names.items():

@@ -268,7 +268,7 @@ class BaseResponse(_TemplateEnvironmentMixin, ActionAuthenticatorMixin):
         super().__init__()
         self.service_name = service_name
         self.allow_request_decompression = True
-        self.automated_parameter_parsing = False
+        self.automated_parameter_parsing = True
 
     @classmethod
     def dispatch(cls, *args: Any, **kwargs: Any) -> Any:  # type: ignore[misc]
@@ -561,7 +561,7 @@ class BaseResponse(_TemplateEnvironmentMixin, ActionAuthenticatorMixin):
                 "url_path": normalized_request.path,
             }
         )  # type: ignore[no-untyped-call]
-        assert parsed["action"] == self._get_action()
+        assert parsed["action"] == self._get_action(), (parsed["action"], self._get_action())
         self.params = cast(Any, parsed["params"])
 
     def determine_response_protocol(self, service_model: ServiceModel) -> str:
