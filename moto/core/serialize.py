@@ -993,7 +993,7 @@ class S3Serializer(RestXMLSerializer):
                     resp["body"] = self._serialize_body(self.EMPTY_BODY)
             else:
                 resp = super()._serialized_result_to_response(
-                    resp, result, shape, serialized_result.get("body", {})
+                    resp, result, shape, serialized_result
                 )
         if "headers" in serialized_result:
             resp["headers"].update(serialized_result["headers"])
