@@ -9,7 +9,6 @@ from uuid import uuid4
 import boto3
 import pytest
 from botocore.exceptions import ClientError
-from dateutil.tz import tzlocal
 from freezegun import freeze_time
 
 from moto import mock_aws, settings
@@ -219,6 +218,43 @@ def test_batch_get_secret_value_for_secret_id_list_without_matches():
         SecretIdList=["test-secret-b", "test-secret-c"]
     )
     assert len(secrets_batch["SecretValues"]) == 0
+    assert len(secrets_batch["Errors"]) == 2
+    assert secrets_batch["Errors"][0]["SecretId"] == "test-secret-b"
+    assert secrets_batch["Errors"][0]["ErrorCode"] == "ResourceNotFoundException"
+    assert (
+        secrets_batch["Errors"][0]["Message"]
+        == "Secrets Manager can't find the specified secret."
+    )
+    assert secrets_batch["Errors"][1]["SecretId"] == "test-secret-c"
+    assert secrets_batch["Errors"][1]["ErrorCode"] == "ResourceNotFoundException"
+    assert (
+        secrets_batch["Errors"][1]["Message"]
+        == "Secrets Manager can't find the specified secret."
+    )
+
+
+@mock_aws
+def test_batch_get_secret_value_for_secret_id_list_with_deleted_secret():
+    conn = boto3.client("secretsmanager", region_name="us-west-2")
+
+    conn.create_secret(Name="test-secret1", SecretString="foosecret1")
+    conn.create_secret(Name="test-secret2", SecretString="foosecret2")
+    conn.delete_secret(SecretId="test-secret1")
+
+    secrets_batch = conn.batch_get_secret_value(
+        SecretIdList=["test-secret1", "test-secret2"]
+    )
+
+    # test-secret1 has been marked as deleted and should be in the errors list
+    assert len(secrets_batch["Errors"]) == 1
+    assert secrets_batch["Errors"][0]["SecretId"] == "test-secret1"
+    assert secrets_batch["Errors"][0]["ErrorCode"] == "InvalidRequestException"
+    assert "currently marked deleted" in secrets_batch["Errors"][0]["Message"]
+
+    # test-secret2 is valid
+    assert len(secrets_batch["SecretValues"]) == 1
+    assert secrets_batch["SecretValues"][0]["SecretString"] == "foosecret2"
+    assert secrets_batch["SecretValues"][0]["Name"] == "test-secret2"
 
 
 @mock_aws
@@ -259,8 +295,6 @@ def test_batch_get_secret_value_with_both_secret_id_list_and_filters():
 
 @mock_aws
 def test_batch_get_secret_value_with_max_results_and_no_filters():
-    conn = boto3.client("secretsmanager", region_name="us-west-2")
-
     conn = boto3.client("secretsmanager", region_name="us-west-2")
     with pytest.raises(ClientError) as exc:
         conn.batch_get_secret_value(MaxResults=10, SecretIdList=["foo", "bar"])
@@ -772,27 +806,28 @@ def test_get_random_too_long_password():
 @mock_aws
 def test_describe_secret():
     conn = boto3.client("secretsmanager", region_name="us-west-2")
-    conn.create_secret(Name="test-secret", SecretString="foosecret")
+    tzlocal = datetime.now(timezone.utc).astimezone().tzinfo
 
+    conn.create_secret(Name="test-secret", SecretString="foosecret")
     conn.create_secret(Name="test-secret-2", SecretString="barsecret")
 
     secret_description = conn.describe_secret(SecretId="test-secret")
     secret_description_2 = conn.describe_secret(SecretId="test-secret-2")
 
     assert secret_description  # Returned dict is not empty
-    assert secret_description["Name"] == ("test-secret")
+    assert secret_description["Name"] == "test-secret"
     assert secret_description["ARN"] != ""  # Test arn not empty
-    assert secret_description_2["Name"] == ("test-secret-2")
+    assert secret_description_2["Name"] == "test-secret-2"
     assert secret_description_2["ARN"] != ""  # Test arn not empty
-    assert secret_description["CreatedDate"] <= datetime.now(tz=tzlocal())
+    assert secret_description["CreatedDate"] <= datetime.now(tz=tzlocal)
     assert secret_description["CreatedDate"] > datetime.fromtimestamp(1, timezone.utc)
-    assert secret_description_2["CreatedDate"] <= datetime.now(tz=tzlocal())
+    assert secret_description_2["CreatedDate"] <= datetime.now(tz=tzlocal)
     assert secret_description_2["CreatedDate"] > datetime.fromtimestamp(1, timezone.utc)
-    assert secret_description["LastChangedDate"] <= datetime.now(tz=tzlocal())
+    assert secret_description["LastChangedDate"] <= datetime.now(tz=tzlocal)
     assert secret_description["LastChangedDate"] > datetime.fromtimestamp(
         1, timezone.utc
     )
-    assert secret_description_2["LastChangedDate"] <= datetime.now(tz=tzlocal())
+    assert secret_description_2["LastChangedDate"] <= datetime.now(tz=tzlocal)
     assert secret_description_2["LastChangedDate"] > datetime.fromtimestamp(
         1, timezone.utc
     )
@@ -965,7 +1000,8 @@ def test_cancel_rotate_secret():
 @mock_aws
 def test_rotate_secret():
     # Setup
-    frozen_time = datetime(2023, 5, 20, 10, 20, 30, tzinfo=tzlocal())
+    tzlocal = datetime.now(timezone.utc).astimezone().tzinfo
+    frozen_time = datetime(2023, 5, 20, 10, 20, 30, tzinfo=tzlocal)
     rotate_after_days = 10
     with freeze_time(frozen_time):
         conn = boto3.client("secretsmanager", region_name="us-west-2")
