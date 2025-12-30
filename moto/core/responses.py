@@ -561,7 +561,10 @@ class BaseResponse(_TemplateEnvironmentMixin, ActionAuthenticatorMixin):
                 "url_path": normalized_request.path,
             }
         )  # type: ignore[no-untyped-call]
-        assert parsed["action"] == self._get_action(), (parsed["action"], self._get_action())
+        assert parsed["action"] == self._get_action(), (
+            parsed["action"],
+            self._get_action(),
+        )
         self.params = cast(Any, parsed["params"])
 
     def determine_response_protocol(self, service_model: ServiceModel) -> str:
