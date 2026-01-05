@@ -1,16 +1,3 @@
-# mypy: ignore-errors
-# Copyright 2014 Amazon.com, Inc. or its affiliates. All Rights Reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License"). You
-# may not use this file except in compliance with the License. A copy of
-# the License is located at
-#
-# http://aws.amazon.com/apache2.0/
-#
-# or in the "license" file accompanying this file. This file is
-# distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF
-# ANY KIND, either express or implied. See the License for the specific
-# language governing permissions and limitations under the License.
 """Request parsers for the various protocol types.
 
 The module contains classes that can take an HTTP response, and given
@@ -133,7 +120,7 @@ from botocore.utils import is_json_value_header
 from botocore.utils import parse_timestamp as botocore_parse_timestamp
 
 if TYPE_CHECKING:
-    from botocore.model import OperationModel, ServiceModel
+    from moto.core.model import OperationModel, ServiceModel
 
 LOG = logging.getLogger(__name__)
 
@@ -146,6 +133,12 @@ def parse_timestamp(value: str) -> datetime:
     parsed = botocore_parse_timestamp(value)
     as_naive_utc = parsed.astimezone(timezone.utc).replace(tzinfo=None)
     return as_naive_utc
+
+
+def default_blob_parser(value):
+    # We don't decode this to a str because it's possible that
+    # the blob contains binary data that can't be decoded.
+    return base64.b64decode(value)
 
 
 DEFAULT_TIMESTAMP_PARSER = parse_timestamp
@@ -194,13 +187,6 @@ class ParsedDict(TypedDict):
     params: dict[str, Any]
 
 
-def default_blob_parser(value):
-    # Some blobs contain binary data that can't be decoded,
-    # so we return bytes and let We don't decode this to a str because it's entirely possible that the
-    # blob contains binary data that actually can't be decoded.
-    return base64.b64decode(value)
-
-
 class RequestParser:
     DEFAULT_ENCODING = "utf-8"
     MAP_TYPE = dict
@@ -236,8 +222,8 @@ class RequestParser:
 
     def parse(self, request_dict: RequestDict) -> ParsedDict:
         action = self.parse_action(request_dict)
-        operation_model = self.service_model.operation_model(action)
-        params = self.parse_params(request_dict, operation_model)
+        operation = self.service_model.operation_model(action)
+        params = self.parse_params(request_dict, operation)
         parsed: ParsedDict = {
             "action": action,
             "params": params,
@@ -414,15 +400,6 @@ class QueryParser(RequestParser):
 
 
 class EC2QueryParser(QueryParser):
-    """EC2 specific customizations to the query protocol serializers.
-
-    The EC2 model is almost, but not exactly, similar to the query protocol
-    serializer.  This class encapsulates those differences.  The model
-    will have be marked with a ``protocol`` of ``ec2``, so you don't need
-    to worry about wiring this class up correctly.
-
-    """
-
     def _get_serialized_name(self, shape, default_name):
         if "queryName" in shape.serialization:
             return shape.serialization["queryName"]
