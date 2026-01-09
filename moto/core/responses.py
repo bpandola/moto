@@ -326,6 +326,7 @@ class BaseResponse(ActionAuthenticatorMixin):
         if not self.is_werkzeug_request:
             self.response_headers["date"] = http_date(utcnow())
 
+        self.normalized_request = normalize_request(request)
         if self.automated_parameter_parsing and self._get_action():
             self.parse_parameters(request)
 
@@ -452,17 +453,25 @@ class BaseResponse(ActionAuthenticatorMixin):
         return None  # type: ignore[return-value]
 
     def _get_action(self) -> str:
-        action = self.querystring.get("Action")
-        if action and isinstance(action, list):
-            action = action[0]
-        if action:
-            return action
-        # Some services use a header for the action
-        # Headers are case-insensitive. Probably a better way to do this.
-        match = self.headers.get("x-amz-target") or self.headers.get("X-Amz-Target")
-        if match:
-            return match.split(".")[-1]
+        # action = self.querystring.get("Action")
+        # if action and isinstance(action, list):
+        #     action = action[0]
+        # if action:
+        #     return action
+        # # Some services use a header for the action
+        # # Headers are case-insensitive. Probably a better way to do this.
+        # match = self.headers.get("x-amz-target") or self.headers.get("X-Amz-Target")
+        # if match:
+        #     return match.split(".")[-1]
         # get action from method and uri
+        from moto.core.routing import ServiceOperationRouter
+
+        model = get_service_model(
+            boto3_service_name.get(self.service_name, self.service_name)  # type: ignore[arg-type]
+        )
+        router = ServiceOperationRouter(model)
+        op, args = router.match(self.normalized_request)
+        return op.name
         return self._get_action_from_method_and_request_uri(self.method, self.raw_path)
 
     def parse_parameters(self, request: Any) -> None:
@@ -606,6 +615,16 @@ class BaseResponse(ActionAuthenticatorMixin):
             except (ValueError, KeyError):
                 pass
         # try to get path parameter
+        from moto.core.routing import ServiceOperationRouter
+
+        model = get_service_model(
+            boto3_service_name.get(self.service_name, self.service_name)  # type: ignore[arg-type]
+        )
+        router = ServiceOperationRouter(model)
+        _, args = router.match(self.normalized_request)
+        if param_name in args:
+            return args[param_name]
+        return if_none
         if self.uri_match:
             try:
                 val = self.uri_match.group(param_name)
