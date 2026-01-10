@@ -58,9 +58,11 @@ class HeaderValueConstraint(ActionConstraint):
 
 
 class ActionCandidate:
-    def __init__(self, operation: OperationModel, constraints: list[ActionConstraint]):
+    def __init__(
+        self, operation: OperationModel, constraints: list[ActionConstraint] = None
+    ):
         self.operation = operation
-        self.constraints = constraints
+        self.constraints = constraints or []
 
 
 class ActionSelector:
@@ -93,10 +95,6 @@ def get_raw_path(request: Request) -> str:
             # it also means that we already only have the path, so we just need to remove the query string
             return raw_uri.split("?")[0]
         return urlparse(raw_uri or request.path).path
-
-    if hasattr(request, "scope"):
-        # quart request raw_path comes as bytes, and without the query part
-        return request.scope.get("raw_path", request.path).decode("utf-8")
 
     raise ValueError("cannot extract raw path from request object %s")
 
@@ -413,21 +411,6 @@ def _create_service_map(service: ServiceModel) -> Map:
                     endpoint=ActionSelector(candidate_list),
                 )
             )
-        # elif protocol == "ec2":
-        #     candidate_list = []
-        #     for op in ops:
-        #         candidate = ActionCandidate(
-        #             op.operation, [DataValueConstraint("Action", op.operation.name)]
-        #         )
-        #         candidate_list.append(candidate)
-        #     rules.append(
-        #         StrictMethodRule(
-        #             string=rule_string,
-        #             methods=[method],
-        #             endpoint=ActionSelector(candidate_list),
-        #         )
-        #     )
-
         elif protocol.startswith("json"):
             candidate_list = []
             for op in ops:
