@@ -1,3 +1,15 @@
+# TODO:
+# RuleFactory for each protocol
+# Loop through service.protocols and add rules for each one
+# The localstack RequiredArgsRule can probably be done better with a Constraint(s)
+# Find a way to subclass mapadapter to automatically do match plus constraint
+#
+# The nice thing about this module is that none of the werkzeug stuff should leak outside of it
+# In other words, however it does the routing, it's only output is the Action and Arguments
+#
+# If we need to pass args to a Rule subclass, see here for how to work with rule.empty()
+# https://github.com/pallets/werkzeug/blob/11c9fe9272e281b90abe89dc59f86e44ee453bab/src/werkzeug/routing/rules.py#L528
+
 from __future__ import annotations
 
 import re
@@ -59,7 +71,9 @@ class HeaderValueConstraint(ActionConstraint):
 
 class ActionCandidate:
     def __init__(
-        self, operation: OperationModel, constraints: list[ActionConstraint] = None
+        self,
+        operation: OperationModel,
+        constraints: list[ActionConstraint] | None = None,
     ):
         self.operation = operation
         self.constraints = constraints or []
@@ -118,6 +132,7 @@ class StrictMethodRule(Rule):
             self.methods = {method.upper() for method in methods}
 
 
+# Should be singular
 def transform_path_params_to_rule_vars(match: re.Match[AnyStr]) -> str:
     """
     Transforms a request URI path param to a valid Werkzeug Rule string variable placeholder.
@@ -191,6 +206,10 @@ class _HttpOperation(NamedTuple):
 
     @staticmethod
     def from_operation(op: OperationModel) -> _HttpOperation:
+        # I don't know if any of this holds if we use our loader to load the model...
+        # See here: https://github.com/boto/botocore/blob/e2a72fcedae63c2875e56c007b3ffaa491375653/botocore/handlers.py#L1093
+
+        # ***original localstack comment****
         # botocore >= 1.28 might modify the internal model (specifically for S3).
         # It will modify the request URI to strip the bucket name from the path and set the original value at
         # "authPath".
@@ -346,7 +365,7 @@ def _create_service_map(service: ServiceModel) -> Map:
     for (path, method), ops in path_index.items():
         # translate the requestUri to a Werkzeug rule string
         rule_string = path_param_regex.sub(transform_path_params_to_rule_vars, path)
-
+        # for protocol in service.protocols:
         if protocol.startswith("rest"):
             if len(ops) == 1:
                 # if there is only a single operation for a (path, method) combination,
@@ -524,3 +543,13 @@ def test_op_router() -> None:
     assert op.name == "CreateUser"
     assert args["broker-id"] == "broker-id-test"
     assert args["username"] == "username-test"
+
+
+def test_s3_router() -> None:
+    model = get_service_model("s3")
+    router = ServiceOperationRouter(model)
+    req = Request.from_values(method="GET", path="/my-bucket-name?list-type=2")
+    op, args = router.match(req)
+
+    assert op.name == "ListObjectsV2"
+    assert args["Bucket"] == "my-bucket-name"
