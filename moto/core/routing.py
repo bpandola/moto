@@ -465,6 +465,17 @@ def _create_service_map(service: ServiceModel) -> dict[str, Map]:
                         endpoint=ActionSelector(candidate_list),
                     )
                 )
+                if service.service_name == "sqs":
+                    rule_string = path_param_regex.sub(
+                        transform_path_params_to_rule_vars, "/{AccountId}/{QueueName}"
+                    )
+                    rules.append(
+                        StrictMethodRule(
+                            string=rule_string,
+                            methods=["POST"],
+                            endpoint=ActionSelector(candidate_list),
+                        )
+                    )
         protocol_to_rules[protocol] = Map(
             rules=rules,
             # don't be strict about trailing slashes when matching

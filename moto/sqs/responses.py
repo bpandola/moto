@@ -66,7 +66,7 @@ class SQSResponse(BaseResponse):
 
     def create_queue(self) -> ActionResult:
         request_url = urlparse(self.uri)
-        queue_name = self._get_param("QueueName")
+        queue_name = self._get_queue_name()
         attributes = self._get_param("Attributes", {})
         tags = self._get_param("tags", {})
         queue = self.sqs_backend.create_queue(queue_name, tags, **attributes)
@@ -75,7 +75,7 @@ class SQSResponse(BaseResponse):
 
     def get_queue_url(self) -> ActionResult:
         request_url = urlparse(self.uri)
-        queue_name = self._get_param("QueueName")
+        queue_name = self._get_queue_name()
         queue = self.sqs_backend.get_queue_url(queue_name)
         result = {"QueueUrl": queue.url(request_url)}
         return ActionResult(result)
