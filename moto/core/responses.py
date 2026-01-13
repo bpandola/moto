@@ -6,7 +6,7 @@ import logging
 import os
 import re
 from collections import OrderedDict, defaultdict
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import (
     Any,
@@ -527,6 +527,16 @@ class BaseResponse(_TemplateEnvironmentMixin, ActionAuthenticatorMixin):
                 return name
         return None  # type: ignore[return-value]
 
+    def _get_action_and_args(self) -> tuple[OperationModel, Mapping[str, Any]]:
+        from moto.core.routing import ServiceOperationRouter
+
+        model = get_service_model(
+            boto3_service_name.get(self.service_name, self.service_name)  # type: ignore[arg-type]
+        )
+        router = ServiceOperationRouter(model)
+        op, args = router.match(self.normalized_request)
+        return op, args
+
     def _get_action(self) -> str:
         # action = self.querystring.get("Action")
         # if action and isinstance(action, list):
@@ -539,14 +549,7 @@ class BaseResponse(_TemplateEnvironmentMixin, ActionAuthenticatorMixin):
         # if match:
         #     return match.split(".")[-1]
         # get action from method and uri
-
-        from moto.core.routing import ServiceOperationRouter
-
-        model = get_service_model(
-            boto3_service_name.get(self.service_name, self.service_name)  # type: ignore[arg-type]
-        )
-        router = ServiceOperationRouter(model)
-        op, args = router.match(self.normalized_request)
+        op, _ = self._get_action_and_args()
         return op.name
         return self._get_action_from_method_and_request_uri(self.method, self.raw_path)
 
@@ -572,6 +575,8 @@ class BaseResponse(_TemplateEnvironmentMixin, ActionAuthenticatorMixin):
             operation_model,
         )  # type: ignore[no-untyped-call]
         self.params = cast(Any, parsed)
+        _, args = self._get_action_and_args()
+        self.params.update(args)
 
     def determine_response_protocol(self, service_model: ServiceModel) -> str:
         content_type = self.headers.get("Content-Type", "")
@@ -685,13 +690,7 @@ class BaseResponse(_TemplateEnvironmentMixin, ActionAuthenticatorMixin):
             except (ValueError, KeyError):
                 pass
         # try to get path parameter
-        from moto.core.routing import ServiceOperationRouter
-
-        model = get_service_model(
-            boto3_service_name.get(self.service_name, self.service_name)  # type: ignore[arg-type]
-        )
-        router = ServiceOperationRouter(model)
-        _, args = router.match(self.normalized_request)
+        _, args = self._get_action_and_args()
         if param_name in args:
             return args[param_name]
         return if_none
