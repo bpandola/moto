@@ -464,6 +464,7 @@ class BaseResponse(ActionAuthenticatorMixin):
         # if match:
         #     return match.split(".")[-1]
         # get action from method and uri
+
         from moto.core.routing import ServiceOperationRouter
 
         model = get_service_model(

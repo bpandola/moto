@@ -29,7 +29,7 @@ from werkzeug.exceptions import MethodNotAllowed, NotFound
 from werkzeug.routing import Map, MapAdapter, PathConverter, Rule
 
 from moto.core.model import OperationModel, ServiceModel, StructureShape
-from moto.core.request import Request
+from moto.core.request import Request, determine_request_protocol
 from moto.core.utils import get_service_model
 
 # Regex to find path parameters in requestUris of AWS service specs (f.e. /{param1}/{param2+})
@@ -345,15 +345,14 @@ class _RequestMatchingRule(StrictMethodRule):
         raise NotFound()
 
 
-def _create_service_map(service: ServiceModel) -> Map:
+def _create_service_map(service: ServiceModel) -> dict[str, Map]:
     """
     Creates a Werkzeug Map object with all rules necessary for the specific service.
     :param service: botocore service model to create the rules for
     :return: a Map instance which is used to perform the in-service operation routing
     """
     ops = [service.operation_model(op_name) for op_name in service.operation_names]
-    protocol = str(service.protocol)
-    rules = []
+    # protocol = str(service.protocol)
 
     # group all operations by their path and method
     path_index: dict[tuple[str, str], list[_HttpOperation]] = defaultdict(list)
@@ -361,45 +360,26 @@ def _create_service_map(service: ServiceModel) -> Map:
         http_op = _HttpOperation.from_operation(op)
         path_index[(http_op.path, http_op.method)].append(http_op)
 
-    # create a matching rule for each (path, method) combination
-    for (path, method), ops in path_index.items():
-        # translate the requestUri to a Werkzeug rule string
-        rule_string = path_param_regex.sub(transform_path_params_to_rule_vars, path)
-        # for protocol in service.protocols:
-        if protocol.startswith("rest"):
-            if len(ops) == 1:
-                # if there is only a single operation for a (path, method) combination,
-                # the default Werkzeug rule can be used directly (this is the case for most rules)
-                op = ops[0]
-                rules.append(
-                    StrictMethodRule(
-                        string=rule_string, methods=[method], endpoint=op.operation
-                    )
-                )  # type: ignore
-                if op.path.startswith("/{Bucket}"):
-                    new_path = op.path.replace("/{Bucket}", "", 1)
-                    if new_path == "":
-                        new_path = "/"
-                    rule_string = path_param_regex.sub(
-                        transform_path_params_to_rule_vars, new_path
-                    )
+    protocol_to_rules: dict[str, Map] = {}
+    protocol = str(service.protocol)
+    supported_protocols = service.metadata.get("protocols", [protocol])
+    for protocol in supported_protocols:
+        rules = []
+        # create a matching rule for each (path, method) combination
+        for (path, method), ops in path_index.items():
+            # translate the requestUri to a Werkzeug rule string
+            rule_string = path_param_regex.sub(transform_path_params_to_rule_vars, path)
+            # for protocol in service.protocols:
+            if protocol.startswith("rest"):
+                if len(ops) == 1:
+                    # if there is only a single operation for a (path, method) combination,
+                    # the default Werkzeug rule can be used directly (this is the case for most rules)
+                    op = ops[0]
                     rules.append(
                         StrictMethodRule(
-                            string=rule_string,
-                            methods=[method],
-                            endpoint=op.operation,
-                            subdomain="<Bucket>",
+                            string=rule_string, methods=[method], endpoint=op.operation
                         )
-                    )
-            else:
-                # if there is an ambiguity with only the (path, method) combination,
-                # a custom rule - which can use additional request metadata - needs to be used
-                rules.append(
-                    _RequestMatchingRule(
-                        string=rule_string, method=method, operations=ops
-                    )
-                )
-                for op in ops:
+                    )  # type: ignore
                     if op.path.startswith("/{Bucket}"):
                         new_path = op.path.replace("/{Bucket}", "", 1)
                         if new_path == "":
@@ -415,51 +395,87 @@ def _create_service_map(service: ServiceModel) -> Map:
                                 subdomain="<Bucket>",
                             )
                         )
-
-        elif protocol in ("query", "ec2"):
-            candidate_list = []
-            for op in ops:
-                candidate = ActionCandidate(
-                    op.operation, [DataValueConstraint("Action", op.operation.name)]
-                )
-                candidate_list.append(candidate)
-            rules.append(
-                StrictMethodRule(
-                    string=rule_string,
-                    methods=["POST", "GET"],
-                    endpoint=ActionSelector(candidate_list),
-                )
-            )
-        elif protocol.startswith("json"):
-            candidate_list = []
-            for op in ops:
-                candidate = ActionCandidate(
-                    op.operation,
-                    [
-                        HeaderValueConstraint(
-                            "X-Amz-Target",
-                            f"{service.metadata.get('targetPrefix')}.{op.operation.name}",
+                else:
+                    # if there is an ambiguity with only the (path, method) combination,
+                    # a custom rule - which can use additional request metadata - needs to be used
+                    rules.append(
+                        _RequestMatchingRule(
+                            string=rule_string, method=method, operations=ops
                         )
-                    ],
+                    )
+                    for op in ops:
+                        if op.path.startswith("/{Bucket}"):
+                            new_path = op.path.replace("/{Bucket}", "", 1)
+                            if new_path == "":
+                                new_path = "/"
+                            rule_string = path_param_regex.sub(
+                                transform_path_params_to_rule_vars, new_path
+                            )
+                            rules.append(
+                                StrictMethodRule(
+                                    string=rule_string,
+                                    methods=[method],
+                                    endpoint=op.operation,
+                                    subdomain="<Bucket>",
+                                )
+                            )
+
+            elif protocol in ("query", "ec2"):
+                candidate_list = []
+                for op in ops:
+                    candidate = ActionCandidate(
+                        op.operation, [DataValueConstraint("Action", op.operation.name)]
+                    )
+                    candidate_list.append(candidate)
+                rules.append(
+                    StrictMethodRule(
+                        string=rule_string,
+                        methods=["POST", "GET"],
+                        endpoint=ActionSelector(candidate_list),
+                    )
                 )
-                candidate_list.append(candidate)
-            rules.append(
-                StrictMethodRule(
-                    string=rule_string,
-                    methods=[method],
-                    endpoint=ActionSelector(candidate_list),
+                if service.service_name == "sqs":
+                    rule_string = path_param_regex.sub(
+                        transform_path_params_to_rule_vars, "/{AccountId}/{QueueName}"
+                    )
+                    rules.append(
+                        StrictMethodRule(
+                            string=rule_string,
+                            methods=["POST", "GET"],
+                            endpoint=ActionSelector(candidate_list),
+                        )
+                    )
+            elif protocol.startswith("json"):
+                candidate_list = []
+                for op in ops:
+                    candidate = ActionCandidate(
+                        op.operation,
+                        [
+                            HeaderValueConstraint(
+                                "X-Amz-Target",
+                                f"{service.metadata.get('targetPrefix')}.{op.operation.name}",
+                            )
+                        ],
+                    )
+                    candidate_list.append(candidate)
+                rules.append(
+                    StrictMethodRule(
+                        string=rule_string,
+                        methods=[method],
+                        endpoint=ActionSelector(candidate_list),
+                    )
                 )
-            )
-    return Map(
-        rules=rules,
-        # don't be strict about trailing slashes when matching
-        strict_slashes=False,
-        # we can't really use werkzeug's merge-slashes since it uses HTTP redirects to solve it
-        merge_slashes=False,
-        # get service-specific converters
-        converters={"path": GreedyPathConverter},
-        default_subdomain="s3" if service.service_name == "s3" else "",
-    )
+        protocol_to_rules[protocol] = Map(
+            rules=rules,
+            # don't be strict about trailing slashes when matching
+            strict_slashes=False,
+            # we can't really use werkzeug's merge-slashes since it uses HTTP redirects to solve it
+            merge_slashes=False,
+            # get service-specific converters
+            converters={"path": GreedyPathConverter},
+            default_subdomain="s3" if service.service_name == "s3" else "",
+        )
+    return protocol_to_rules
 
 
 class ServiceOperationRouter:
@@ -468,9 +484,10 @@ class ServiceOperationRouter:
     operation within a "REST" service (rest-xml, rest-json).
     """
 
-    _map: Map
+    _map: dict[str, Map]
 
     def __init__(self, service: ServiceModel):
+        self._service_model = service
         self._map = _create_service_map(service)
 
     def match(self, request: Request) -> tuple[OperationModel, Mapping[str, Any]]:
@@ -481,9 +498,10 @@ class ServiceOperationRouter:
         :return: A tuple with the matched operation and the (already parsed) path params
         :raises: Werkzeug's NotFound exception in case the given request does not match any operation
         """
-
+        protocol = determine_request_protocol(self._service_model, request.content_type)
+        protocol_map = self._map[protocol]
         # bind the map to get the actual matcher
-        matcher: MapAdapter = self._map.bind(
+        matcher: MapAdapter = protocol_map.bind(
             request.host,
             subdomain=request.host.split(".", 1)[0]
             if request.host.find("s3") > 1
