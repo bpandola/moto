@@ -489,6 +489,26 @@ def _create_service_map(service: ServiceModel) -> dict[str, Map]:
     return protocol_to_rules
 
 
+def get_map_for_operation(operation: OperationModel) -> Map:
+    path = operation.http.get("requestUri", "/")
+    method = operation.http.get("method", "POST")
+    rule_string = path_param_regex.sub(transform_path_params_to_rule_vars, path)
+    rule = StrictMethodRule(
+        string=rule_string, methods=[method], endpoint=operation.name
+    )
+    rule_map = Map(
+        rules=[rule],
+        # don't be strict about trailing slashes when matching
+        strict_slashes=False,
+        # we can't really use werkzeug's merge-slashes since it uses HTTP redirects to solve it
+        merge_slashes=False,
+        # get service-specific converters
+        converters={"path": GreedyPathConverter},
+        # default_subdomain="s3" if service.service_name == "s3" else "",
+    )
+    return rule_map
+
+
 class ServiceOperationRouter:
     """
     A router implementation which abstracts the (quite complex) routing of incoming HTTP requests to a specific
@@ -582,3 +602,29 @@ def test_s3_router() -> None:
 
     assert op.name == "ListObjectsV2"
     assert args["Bucket"] == "my-bucket-name"
+
+
+def test_op_args() -> None:
+    model = get_service_model("route53")
+    router = ServiceOperationRouter(model)
+    # Get the one rule we want...
+    rules = router._map["rest-xml"]._rules_by_endpoint[
+        model.operation_model("ActivateKeySigningKey")
+    ]
+    rules = [rule.empty() for rule in rules]
+    rule_map = Map(
+        rules=rules,
+        strict_slashes=False,
+        merge_slashes=False,
+        converters={"path": GreedyPathConverter},
+    )
+    matcher: MapAdapter = rule_map.bind(
+        "route53.us-east-1.amazon.com",
+    )
+    op, args = matcher.match(
+        "/2013-04-01/keysigningkey/HostedZoneId/Name/activate",
+        method="POST",
+    )
+    assert args["HostedZoneId"] == "HostedZoneId"
+    assert args["Name"] == "Name"
+    assert op.name == "ActivateKeySigningKey"
