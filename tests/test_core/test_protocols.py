@@ -3,6 +3,7 @@ import base64
 import copy
 import json
 import os
+import re
 from calendar import timegm
 from enum import Enum
 from urllib.parse import parse_qs, urlparse
@@ -14,6 +15,7 @@ from dateutil.tz import tzutc
 
 from moto.core.model import OperationModel, ServiceModel
 from moto.core.parse import PROTOCOL_PARSERS
+from moto.core.responses import BaseResponse
 from moto.core.serialize import SERIALIZERS
 
 TEST_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "protocols")
@@ -102,12 +104,17 @@ def _create_request_dict(given, serialized):
     url_path = parsed_uri.path
     body = serialized["body"]
     values = _build_query_params(query_string, serialized["body"], headers)
+    uri_template = given.get("http", {}).get("requestUri", "/")
+    uri_regex = BaseResponse.uri_to_regexp(uri_template)
+    uri_match = re.match(uri_regex, url_path)
+    uri_params = uri_match.groupdict() if uri_match else {}
     request_dict = {
         "method": method,
         "body": body,
         "headers": headers,
         "values": values,
         "url_path": url_path,
+        "url_params": uri_params,
     }
     return request_dict
 
@@ -117,9 +124,8 @@ def _create_request_dict(given, serialized):
 )
 def test_input_compliance(json_description: dict, case: dict, protocol: str):
     service_description = copy.deepcopy(json_description)
-    operation_name = case.get("given").get("name", "OperationName")
-    service_description["operations"] = {operation_name: case["given"]}
     model = ServiceModel(service_description)
+    operation_model = OperationModel(case["given"], model)
     protocol_parser = PROTOCOL_PARSERS[protocol]
     parser = protocol_parser(
         model,
@@ -127,9 +133,8 @@ def test_input_compliance(json_description: dict, case: dict, protocol: str):
         timestamp_parser=_compliance_timestamp_parser,
     )
     request_dict = _create_request_dict(case["given"], case["serialized"])
-    parsed = parser.parse(request_dict)
-    assert parsed["action"] == operation_name
-    assert parsed["params"] == case.get("params", {})
+    parsed = parser.parse_params(request_dict, operation_model)
+    assert parsed == case.get("params", {})
 
 
 @pytest.mark.parametrize(

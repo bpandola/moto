@@ -177,6 +177,7 @@ UNDEFINED = object()
 
 class RequestDict(TypedDict):
     url_path: str
+    url_params: dict[str, Any]
     method: str
     headers: dict[str, Any]
     body: str
@@ -511,56 +512,6 @@ class JSONParser(BaseJSONParser):
 
 
 class BaseRestParser(RequestParser):
-    def parse_params(self, request_dict, operation_model):
-        try:
-            parsed_uri = urlparse(operation_model.http["requestUri"])
-            uri_regexp = self.uri_to_regexp(parsed_uri.path)
-            match = re.match(uri_regexp, request_dict["url_path"])
-            self.uri_match = match
-        except Exception:
-            pass
-        return super().parse_params(request_dict, operation_model)
-
-    def uri_to_regexp(self, uri: str, operation: OperationModel) -> str:
-        """converts uri w/ placeholder to regexp
-          '/accounts/{AwsAccountId}/namespaces/{Namespace}/groups'
-        -> '^/accounts/(?P<AwsAccountId>[^/]+)/namespaces/(?P<Namespace>[^/]+)/groups$'
-
-          '/trustStores/{trustStoreArn+}'
-        -> '^/trustStores/(?P<trustStoreArn>.+)$'
-
-        """
-
-        def _convert(elem: str) -> str:
-            if not re.match("^{.*}$", elem):
-                # URL-parts sometimes contain a $
-                # Like Greengrass: /../deployments/$reset
-                # We don't want to our regex to think this marks an end-of-line, so let's escape it
-                return elem.replace("$", r"\$")
-
-            # When the element ends with +} the parameter can contain a / otherwise not.
-            slash_allowed = elem.endswith("+}")
-            name = (
-                elem.replace("{", "")
-                .replace("}", "")
-                .replace("+", "")
-                .replace("-", "_")
-            )
-            pattern = ".+" if slash_allowed else "[^/]+"
-            input_shape = operation.input_shape
-            if input_shape is not None:
-                for param_name, param_shape in input_shape.members.items():
-                    if name == param_name:
-                        if "pattern" in param_shape.metadata:
-                            pattern = param_shape.metadata["pattern"]
-                        elif name == "resourceArn":
-                            pattern = "arn:aws[-a-z]*:aps:[-a-z0-9]+:[0-9]{12}:(workspace|rulegroupsnamespace)/.+$"
-            return f"(?P<{name}>{pattern})"
-
-        elems = uri.split("/")
-        regexp = "/".join([_convert(elem) for elem in elems])
-        return f"^{regexp}$"
-
     def parse_action(self, request_dict):
         method_urls = defaultdict(lambda: defaultdict(str))
         op_names = self.service_model.operation_names
@@ -573,7 +524,6 @@ class BaseRestParser(RequestParser):
         regexp_and_names = method_urls[request_dict["method"]]
         for regexp, name in regexp_and_names.items():
             match = re.match(regexp, request_dict["url_path"])
-            self.uri_match = match
             if match:
                 return name
         return "UnknownOperation"
@@ -636,17 +586,13 @@ class BaseRestParser(RequestParser):
                     )
             elif location == "uri":
                 member_name = member_shape.serialization.get("name", name)
-                if self.uri_match:
-                    try:
-                        # TODO: Should this be here?!
-                        from urllib import parse
+                uri_params = response["url_params"]
+                # TODO: Should this be here?!
+                from urllib import parse
 
-                        value = self.uri_match.group(member_name)
-                        value = parse.unquote(value)
-                        final_parsed[name] = self._parse_shape(member_shape, value)
-                    except IndexError:
-                        # do nothing if param is not found
-                        pass
+                value = uri_params.get(member_name)
+                value = parse.unquote(value)
+                final_parsed[name] = self._parse_shape(member_shape, value)
             elif location == "querystring":
                 qs = response["values"]
                 member_name = member_shape.serialization.get("name", name)
