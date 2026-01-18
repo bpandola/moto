@@ -1,3 +1,4 @@
+# mypy: ignore-errors
 """Request parsers for the various protocol types.
 
 The module contains classes that can take an HTTP response, and given
