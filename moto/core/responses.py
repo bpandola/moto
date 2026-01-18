@@ -548,11 +548,12 @@ class BaseResponse(_TemplateEnvironmentMixin, ActionAuthenticatorMixin):
         assert isinstance(request, (AWSPreparedRequest, Request)), str(request)
         normalized_request = normalize_request(request)
         service_model = get_service_model(self.service_name)
+        operation_model = service_model.operation_model(self._get_action())
         protocol = determine_request_protocol(
             service_model, normalized_request.content_type
         )
         parser_cls = PROTOCOL_PARSERS[protocol]
-        parser = parser_cls(service_model, map_type=self.PROTOCOL_PARSER_MAP_TYPE)
+        parser = parser_cls(operation_model, map_type=self.PROTOCOL_PARSER_MAP_TYPE)
         parsed = parser.parse(
             {
                 "method": normalized_request.method,
@@ -560,13 +561,10 @@ class BaseResponse(_TemplateEnvironmentMixin, ActionAuthenticatorMixin):
                 "headers": normalized_request.headers,  # type: ignore[typeddict-item]
                 "body": normalized_request.data,  # type: ignore[typeddict-item]
                 "url_path": normalized_request.path,
+                "url_params": self.uri_match.groupdict() if self.uri_match else {},
             }
         )  # type: ignore[no-untyped-call]
-        assert parsed["action"] == self._get_action(), (
-            parsed["action"],
-            self._get_action(),
-        )
-        self.params = cast(Any, parsed["params"])
+        self.params = cast(Any, parsed)
 
     def determine_response_protocol(self, service_model: ServiceModel) -> str:
         content_type = self.headers.get("Content-Type", "")

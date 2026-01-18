@@ -128,12 +128,12 @@ def test_input_compliance(json_description: dict, case: dict, protocol: str):
     operation_model = OperationModel(case["given"], model)
     protocol_parser = PROTOCOL_PARSERS[protocol]
     parser = protocol_parser(
-        model,
+        operation_model,
         blob_parser=_compliance_blob_parser,
         timestamp_parser=_compliance_timestamp_parser,
     )
     request_dict = _create_request_dict(case["given"], case["serialized"])
-    parsed = parser.parse_params(request_dict, operation_model)
+    parsed = parser.parse(request_dict)
     assert parsed == case.get("params", {})
 
 
