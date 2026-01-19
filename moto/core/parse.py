@@ -545,11 +545,11 @@ class BaseRestParser(RequestParser):
                     value = qs
                     # Is this right?  Did this for rest-xml case "String to string maps in querystring"
                     final_parsed[name] = value
-                    return
+                    continue
                 else:
                     value = qs.get(member_name, None)
                 if value is None:
-                    return
+                    continue
                 final_parsed[name] = self._parse_shape(member_shape, value)
 
     def _parse_header_map(self, shape, headers):
