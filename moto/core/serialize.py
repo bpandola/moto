@@ -596,7 +596,7 @@ class BaseXMLSerializer(ResponseSerializer):
         if shape and "payload" in shape.serialization:
             result_key = shape.serialization["payload"]
         else:
-            result_key = f"{self.operation_model.name}Result"
+            result_key = f"{self.operation_model.name}Response"
         result_wrapper = {
             result_key: serialized_result,
         }
