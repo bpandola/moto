@@ -8,8 +8,8 @@ import xmltodict
 from jinja2 import Template
 
 from moto.core.common_types import TYPE_RESPONSE
-from moto.core.responses import BaseResponse
-from moto.core.utils import iso_8601_datetime_with_milliseconds
+from moto.core.responses import ActionResult, BaseResponse, EmptyResult
+from moto.core.utils import utcnow
 from moto.route53.exceptions import InvalidChangeBatch, InvalidInput
 from moto.route53.models import Route53Backend, route53_backends
 
@@ -21,6 +21,7 @@ class Route53(BaseResponse):
 
     def __init__(self) -> None:
         super().__init__(service_name="route53")
+        self.automated_parameter_parsing = True
 
     @staticmethod
     def _convert_to_bool(bool_str: Any) -> bool:  # type: ignore[misc]
@@ -245,10 +246,9 @@ class Route53(BaseResponse):
         )
         return 200, {}, r_template
 
-    def create_health_check(self) -> TYPE_RESPONSE:
-        json_body = xmltodict.parse(self.body)["CreateHealthCheckRequest"]
-        caller_reference = json_body["CallerReference"]
-        config = json_body["HealthCheckConfig"]
+    def create_health_check(self) -> ActionResult:
+        caller_reference = self._get_param("CallerReference")
+        config = self._get_param("HealthCheckConfig")
         health_check_args = {
             "ip_address": config.get("IPAddress"),
             "port": config.get("Port"),
@@ -263,69 +263,69 @@ class Route53(BaseResponse):
             "inverted": config.get("Inverted"),
             "disabled": config.get("Disabled"),
             "enable_sni": config.get("EnableSNI"),
-            "children": config.get("ChildHealthChecks", {}).get("ChildHealthCheck"),
-            "regions": config.get("Regions", {}).get("Region"),
+            "children": config.get("ChildHealthChecks", []),
+            "regions": config.get("Regions", []),
         }
         health_check = self.backend.create_health_check(
             caller_reference, health_check_args
         )
-        template = Template(CREATE_HEALTH_CHECK_RESPONSE)
-        return (
-            201,
-            {"status": 201},
-            template.render(health_check=health_check, xmlns=XMLNS),
-        )
+        result = {"HealthCheck": health_check}
+        return ActionResult(result)
 
-    def list_health_checks(self) -> str:
-        template = Template(LIST_HEALTH_CHECKS_RESPONSE)
+    def list_health_checks(self) -> ActionResult:
         health_checks = self.backend.list_health_checks()
-        return template.render(health_checks=health_checks, xmlns=XMLNS)
+        result = {"HealthChecks": health_checks}
+        return ActionResult(result)
 
-    def get_health_check(self) -> str:
-        health_check_id = self.parsed_url.path.split("/")[-1]
-
+    def get_health_check(self) -> ActionResult:
+        health_check_id = self._get_param("HealthCheckId")
         health_check = self.backend.get_health_check(health_check_id)
-        template = Template(GET_HEALTH_CHECK_RESPONSE)
-        return template.render(health_check=health_check)
+        result = {"HealthCheck": health_check}
+        return ActionResult(result)
 
-    def delete_health_check(self) -> str:
-        health_check_id = self.parsed_url.path.split("/")[-1]
+    def delete_health_check(self) -> ActionResult:
+        health_check_id = self._get_param("HealthCheckId")
         self.backend.delete_health_check(health_check_id)
-        template = Template(DELETE_HEALTH_CHECK_RESPONSE)
-        return template.render(xmlns=XMLNS)
+        return EmptyResult()
 
-    def update_health_check(self) -> str:
-        health_check_id = self.parsed_url.path.split("/")[-1]
-        config = xmltodict.parse(self.body)["UpdateHealthCheckRequest"]
+    def update_health_check(self) -> ActionResult:
+        health_check_id = self._get_param("HealthCheckId")
         health_check_args = {
-            "ip_address": config.get("IPAddress"),
-            "port": config.get("Port"),
-            "resource_path": config.get("ResourcePath"),
-            "fqdn": config.get("FullyQualifiedDomainName"),
-            "search_string": config.get("SearchString"),
-            "failure_threshold": config.get("FailureThreshold"),
-            "health_threshold": config.get("HealthThreshold"),
-            "inverted": config.get("Inverted"),
-            "disabled": config.get("Disabled"),
-            "enable_sni": config.get("EnableSNI"),
-            "children": config.get("ChildHealthChecks", {}).get("ChildHealthCheck"),
-            "regions": config.get("Regions", {}).get("Region"),
+            "ip_address": self._get_param("IPAddress"),
+            "port": self._get_param("Port"),
+            "resource_path": self._get_param("ResourcePath"),
+            "fqdn": self._get_param("FullyQualifiedDomainName"),
+            "search_string": self._get_param("SearchString"),
+            "failure_threshold": self._get_param("FailureThreshold"),
+            "health_threshold": self._get_param("HealthThreshold"),
+            "inverted": self._get_param("Inverted"),
+            "disabled": self._get_param("Disabled"),
+            "enable_sni": self._get_param("EnableSNI"),
+            "children": self._get_param("ChildHealthChecks", []),
+            "regions": self._get_param("Regions", []),
         }
         health_check = self.backend.update_health_check(
             health_check_id, health_check_args
         )
-        template = Template(UPDATE_HEALTH_CHECK_RESPONSE)
-        return template.render(health_check=health_check)
+        result = {"HealthCheck": health_check}
+        return ActionResult(result)
 
-    def get_health_check_status(self) -> str:
-        health_check_match = re.search(
-            r"healthcheck/(?P<health_check_id>[^/]+)/status$", self.parsed_url.path
-        )
-        health_check_id = health_check_match.group("health_check_id")  # type: ignore[union-attr]
-
+    def get_health_check_status(self) -> ActionResult:
+        health_check_id = self._get_param("HealthCheckId")
         self.backend.get_health_check(health_check_id)
-        template = Template(GET_HEALTH_CHECK_STATUS_RESPONSE)
-        return template.render(timestamp=iso_8601_datetime_with_milliseconds())
+        result = {
+            "HealthCheckObservations": [
+                {
+                    "Region": "us-east-1",
+                    "IPAddress": "127.0.13.37",
+                    "StatusReport": {
+                        "Status": "Success: HTTP Status Code: 200. Resolved IP: 127.0.13.37. OK",
+                        "CheckedTime": utcnow(),
+                    },
+                },
+            ]
+        }
+        return ActionResult(result)
 
     def not_implemented_response(
         self, request: Any, full_url: str, headers: Any
@@ -380,111 +380,94 @@ class Route53(BaseResponse):
             template = Template(CHANGE_TAGS_FOR_RESOURCE_RESPONSE)
             return 200, headers, template.render()
 
-    def list_tags_for_resources(self) -> str:
-        if id_matcher := re.search(r"/tags/(.+)", self.parsed_url.path):
-            resource_type = unquote(id_matcher.group(1))
-        else:
-            resource_type = ""
-        resource_ids = xmltodict.parse(self.body)["ListTagsForResourcesRequest"][
-            "ResourceIds"
-        ]["ResourceId"]
-        # If only one resource id is passed, it is a string, not a list
-        if not isinstance(resource_ids, list):
-            resource_ids = [resource_ids]
-        tag_sets = self.backend.list_tags_for_resources(resource_ids=resource_ids)
-        template = Template(LIST_TAGS_FOR_RESOURCES_RESPONSE)
-        return template.render(tag_sets=tag_sets, resource_type=resource_type)
+    def list_tags_for_resources(self) -> ActionResult:
+        resource_type = self._get_param("ResourceType")
+        resource_ids = self._get_param("ResourceIds")
+        tag_sets = self.backend.list_tags_for_resources(resource_type, resource_ids)
+        result = {"ResourceTagSets": tag_sets}
+        return ActionResult(result)
 
-    def get_change(self) -> str:
-        change_id = self.parsed_url.path.rstrip("/").rsplit("/", 1)[1]
-        template = Template(GET_CHANGE_RESPONSE)
-        return template.render(change_id=change_id, xmlns=XMLNS)
+    def get_change(self) -> ActionResult:
+        change_id = self._get_param("Id")
+        result = {
+            "ChangeInfo": {
+                "Id": change_id,
+                "Status": "INSYNC",
+                "SubmittedAt": utcnow(),
+            }
+        }
+        return ActionResult(result)
 
-    def create_query_logging_config(self) -> TYPE_RESPONSE:
-        json_body = xmltodict.parse(self.body)["CreateQueryLoggingConfigRequest"]
-        hosted_zone_id = json_body["HostedZoneId"]
-        log_group_arn = json_body["CloudWatchLogsLogGroupArn"]
-
+    def create_query_logging_config(self) -> ActionResult:
+        hosted_zone_id = self._get_param("HostedZoneId")
+        log_group_arn = self._get_param("CloudWatchLogsLogGroupArn")
         query_logging_config = self.backend.create_query_logging_config(
             hosted_zone_id, log_group_arn
         )
+        result = {
+            "QueryLoggingConfig": query_logging_config,
+            "Location": query_logging_config.location,
+        }
+        return ActionResult(result)
 
-        template = Template(CREATE_QUERY_LOGGING_CONFIG_RESPONSE)
-        headers = {"Location": query_logging_config.location, "status": 201}
-        return (
-            201,
-            headers,
-            template.render(query_logging_config=query_logging_config, xmlns=XMLNS),
-        )
-
-    def list_query_logging_configs(self) -> str:
-        hosted_zone_id = self._get_param("hostedzoneid")
-        next_token = self._get_param("nexttoken")
-        max_results = self._get_int_param("maxresults")
-
+    def list_query_logging_configs(self) -> ActionResult:
+        hosted_zone_id = self._get_param("HostedZoneId")
+        next_token = self._get_param("NextToken")
+        max_results = self._get_int_param("MaxResults", 100)
         all_configs, next_token = self.backend.list_query_logging_configs(
             hosted_zone_id=hosted_zone_id,
             next_token=next_token,
             max_results=max_results,
         )
+        result = {"QueryLoggingConfigs": all_configs, "NextToken": next_token}
+        return ActionResult(result)
 
-        template = Template(LIST_QUERY_LOGGING_CONFIGS_RESPONSE)
-        return template.render(
-            query_logging_configs=all_configs, next_token=next_token, xmlns=XMLNS
-        )
-
-    def get_query_logging_config(self) -> str:
-        query_logging_config_id = self.parsed_url.path.rstrip("/").rsplit("/", 1)[1]
-
+    def get_query_logging_config(self) -> ActionResult:
+        query_logging_config_id = self._get_param("Id")
         query_logging_config = self.backend.get_query_logging_config(
             query_logging_config_id
         )
-        template = Template(GET_QUERY_LOGGING_CONFIG_RESPONSE)
-        return template.render(query_logging_config=query_logging_config, xmlns=XMLNS)
+        result = {"QueryLoggingConfig": query_logging_config}
+        return ActionResult(result)
 
-    def delete_query_logging_config(self) -> str:
-        query_logging_config_id = self.parsed_url.path.rstrip("/").rsplit("/", 1)[1]
+    def delete_query_logging_config(self) -> ActionResult:
+        query_logging_config_id = self._get_param("Id")
         self.backend.delete_query_logging_config(query_logging_config_id)
-        return ""
+        return EmptyResult()
 
-    def list_reusable_delegation_sets(self) -> str:
+    def list_reusable_delegation_sets(self) -> ActionResult:
+        marker = self._get_param("Marker")
         delegation_sets = self.backend.list_reusable_delegation_sets()
-        template = self.response_template(LIST_REUSABLE_DELEGATION_SETS_TEMPLATE)
-        return template.render(
-            delegation_sets=delegation_sets,
-            marker=None,
-            is_truncated=False,
-            max_items=100,
-        )
+        result = {
+            "DelegationSets": delegation_sets,
+            "Marker": marker,
+            "IsTruncated": False,
+            "NextMarker": None,
+            "MaxItems": 100,
+        }
+        return ActionResult(result)
 
-    def create_reusable_delegation_set(self) -> TYPE_RESPONSE:
-        elements = xmltodict.parse(self.body)
-        root_elem = elements["CreateReusableDelegationSetRequest"]
-        caller_reference = root_elem.get("CallerReference")
-        hosted_zone_id = root_elem.get("HostedZoneId")
+    def create_reusable_delegation_set(self) -> ActionResult:
+        caller_reference = self._get_param("CallerReference")
+        hosted_zone_id = self._get_param("HostedZoneId")
         delegation_set = self.backend.create_reusable_delegation_set(
             caller_reference=caller_reference, hosted_zone_id=hosted_zone_id
         )
-        template = self.response_template(CREATE_REUSABLE_DELEGATION_SET_TEMPLATE)
-        return (
-            201,
-            {"Location": delegation_set.location, "status": 201},
-            template.render(delegation_set=delegation_set),
-        )
+        result = {"DelegationSet": delegation_set, "Location": delegation_set.location}
+        return ActionResult(result)
 
-    def get_reusable_delegation_set(self) -> str:
-        ds_id = self.parsed_url.path.rstrip("/").rsplit("/")[-1]
+    def get_reusable_delegation_set(self) -> ActionResult:
+        ds_id = self._get_param("Id")
         delegation_set = self.backend.get_reusable_delegation_set(
             delegation_set_id=ds_id
         )
-        template = self.response_template(GET_REUSABLE_DELEGATION_SET_TEMPLATE)
-        return template.render(delegation_set=delegation_set)
+        result = {"DelegationSet": delegation_set}
+        return ActionResult(result)
 
-    def delete_reusable_delegation_set(self) -> str:
-        ds_id = self.parsed_url.path.rstrip("/").rsplit("/")[-1]
+    def delete_reusable_delegation_set(self) -> ActionResult:
+        ds_id = self._get_param("Id")
         self.backend.delete_reusable_delegation_set(delegation_set_id=ds_id)
-        template = self.response_template(DELETE_REUSABLE_DELEGATION_SET_TEMPLATE)
-        return template.render()
+        return EmptyResult()
 
 
 LIST_TAGS_FOR_RESOURCE_RESPONSE = """

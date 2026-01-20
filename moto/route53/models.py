@@ -8,8 +8,6 @@ from collections import defaultdict
 from datetime import datetime
 from typing import Any, Optional
 
-from jinja2 import Template
-
 from moto.core.base_backend import BackendDict, BaseBackend
 from moto.core.common_models import BaseModel, CloudFormationModel
 from moto.moto_api._internal import mock_random as random
@@ -117,10 +115,11 @@ class HealthCheck(CloudFormationModel):
         self.measure_latency = health_check_args.get("measure_latency") or False
         self.inverted = health_check_args.get("inverted") or False
         self.disabled = health_check_args.get("disabled") or False
-        self.enable_sni = health_check_args.get("enable_sni") or True
+        self.enable_sni = health_check_args.get("enable_sni") or False
         self.caller_reference = caller_reference
         self.children = None
         self.regions = None
+        self.health_check_version = 1
 
     def set_children(self, children: Any) -> None:
         if children and isinstance(children, list):
@@ -173,56 +172,28 @@ class HealthCheck(CloudFormationModel):
         )
         return health_check
 
-    def to_xml(self) -> str:
-        template = Template(
-            """<HealthCheck>
-            <Id>{{ health_check.id }}</Id>
-            <CallerReference>{{ health_check.caller_reference }}</CallerReference>
-            <HealthCheckConfig>
-                {% if health_check.type_ != "CALCULATED" %}
-                    <IPAddress>{{ health_check.ip_address }}</IPAddress>
-                    <Port>{{ health_check.port }}</Port>
-                {% endif %}
-                <Type>{{ health_check.type_ }}</Type>
-                {% if health_check.resource_path %}
-                    <ResourcePath>{{ health_check.resource_path }}</ResourcePath>
-                {% endif %}
-                {% if health_check.fqdn %}
-                    <FullyQualifiedDomainName>{{ health_check.fqdn }}</FullyQualifiedDomainName>
-                {% endif %}
-                {% if health_check.type_ != "CALCULATED" %}
-                    <RequestInterval>{{ health_check.request_interval }}</RequestInterval>
-                    <FailureThreshold>{{ health_check.failure_threshold }}</FailureThreshold>
-                    <MeasureLatency>{{ health_check.measure_latency }}</MeasureLatency>
-                {% endif %}
-                {% if health_check.type_ == "CALCULATED" %}
-                    <HealthThreshold>{{ health_check.health_threshold }}</HealthThreshold>
-                {% endif %}
-                <Inverted>{{ health_check.inverted }}</Inverted>
-                <Disabled>{{ health_check.disabled }}</Disabled>
-                <EnableSNI>{{ health_check.enable_sni }}</EnableSNI>
-                {% if health_check.search_string %}
-                    <SearchString>{{ health_check.search_string }}</SearchString>
-                {% endif %}
-                {% if health_check.children %}
-                    <ChildHealthChecks>
-                    {% for child in health_check.children %}
-                        <ChildHealthCheck>{{ child }}</ChildHealthCheck>
-                    {% endfor %}
-                    </ChildHealthChecks>
-                {% endif %}
-                {% if health_check.regions %}
-                    <Regions>
-                    {% for region in health_check.regions %}
-                        <Region>{{ region }}</Region>
-                    {% endfor %}
-                    </Regions>
-                {% endif %}
-            </HealthCheckConfig>
-            <HealthCheckVersion>1</HealthCheckVersion>
-        </HealthCheck>"""
-        )
-        return template.render(health_check=self)
+    @property
+    def health_check_config(self) -> dict[str, Any]:
+        config = {
+            "Type": self.type_,
+            "ResourcePath": self.resource_path,
+            "FullyQualifiedDomainName": self.fqdn,
+            "SearchString": self.search_string,
+            "Inverted": self.inverted,
+            "Disabled": self.disabled,
+            "ChildHealthChecks": self.children,
+            "EnableSNI": self.enable_sni,
+            "Regions": self.regions,
+        }
+        if self.type_ == "CALCULATED":
+            config["HealthThreshold"] = self.health_threshold
+        else:
+            config["IPAddress"] = self.ip_address
+            config["Port"] = self.port
+            config["RequestInterval"] = self.request_interval
+            config["FailureThreshold"] = self.failure_threshold
+            config["MeasureLatency"] = self.measure_latency
+        return config
 
 
 class RecordSet(CloudFormationModel):
@@ -536,21 +507,11 @@ class QueryLoggingConfig(BaseModel):
         cloudwatch_logs_log_group_arn: str,
     ):
         self.hosted_zone_id = hosted_zone_id
-        self.cloudwatch_logs_log_group_arn = cloudwatch_logs_log_group_arn
-        self.query_logging_config_id = query_logging_config_id
-        self.location = f"https://route53.amazonaws.com/2013-04-01/queryloggingconfig/{self.query_logging_config_id}"
-
-    def to_xml(self) -> str:
-        template = Template(
-            """<QueryLoggingConfig>
-                <CloudWatchLogsLogGroupArn>{{ query_logging_config.cloudwatch_logs_log_group_arn }}</CloudWatchLogsLogGroupArn>
-                <HostedZoneId>{{ query_logging_config.hosted_zone_id }}</HostedZoneId>
-                <Id>{{ query_logging_config.query_logging_config_id }}</Id>
-            </QueryLoggingConfig>"""
+        self.cloud_watch_logs_log_group_arn = cloudwatch_logs_log_group_arn
+        self.id = query_logging_config_id
+        self.location = (
+            f"https://route53.amazonaws.com/2013-04-01/queryloggingconfig/{self.id}"
         )
-        # The "Location" value must be put into the header; that's done in
-        # responses.py.
-        return template.render(query_logging_config=self)
 
 
 class Route53Backend(BaseBackend):
@@ -683,11 +644,19 @@ class Route53Backend(BaseBackend):
             return self.resource_tags[resource_id]
         return {}
 
-    def list_tags_for_resources(self, resource_ids: list[str]) -> list[dict[str, Any]]:
+    def list_tags_for_resources(
+        self, resource_type: str, resource_ids: list[str]
+    ) -> list[dict[str, Any]]:
         resources = []
-        for id in resource_ids:
-            resource_set = {"ResourceId": id, "Tags": {}}
-            resource_set["Tags"] = self.list_tags_for_resource(id)
+        for resource_id in resource_ids:
+            resource_set = {
+                "ResourceId": resource_id,
+                "ResourceType": resource_type,
+                "Tags": [
+                    {"Key": key, "Value": value}
+                    for key, value in self.list_tags_for_resource(resource_id).items()
+                ],
+            }
             resources.append(resource_set)
         return resources
 
