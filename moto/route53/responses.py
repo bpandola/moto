@@ -2,7 +2,7 @@
 
 import re
 from typing import Any
-from urllib.parse import parse_qs, unquote
+from urllib.parse import unquote
 
 import xmltodict
 from jinja2 import Template
@@ -23,52 +23,25 @@ class Route53(BaseResponse):
         super().__init__(service_name="route53")
         self.automated_parameter_parsing = True
 
-    @staticmethod
-    def _convert_to_bool(bool_str: Any) -> bool:  # type: ignore[misc]
-        if isinstance(bool_str, bool):
-            return bool_str
-
-        if isinstance(bool_str, str):
-            return str(bool_str).lower() == "true"
-
-        return False
-
     @property
     def backend(self) -> Route53Backend:
         return route53_backends[self.current_account][self.partition]
 
-    def create_hosted_zone(self) -> TYPE_RESPONSE:
+    def create_hosted_zone(self) -> ActionResult:
         vpcid = None
         vpcregion = None
-        elements = xmltodict.parse(self.body)
-        zone_request = elements["CreateHostedZoneRequest"]
-        if "HostedZoneConfig" in zone_request:
-            zone_config = zone_request["HostedZoneConfig"]
-            comment = zone_config["Comment"]
-            if zone_request.get("VPC", {}).get("VPCId", None):
-                private_zone = True
-            else:
-                private_zone = self._convert_to_bool(
-                    zone_config.get("PrivateZone", False)
-                )
-        else:
-            comment = None
-            private_zone = False
-
+        comment = self._get_param("HostedZoneConfig.Comment")
+        private_zone = self._get_bool_param("HostedZoneConfig.PrivateZone", False)
         # It is possible to create a Private Hosted Zone without
         # associating VPC at the time of creation.
-        if self._convert_to_bool(private_zone):
-            if zone_request.get("VPC", None) is not None:
-                vpcid = zone_request["VPC"].get("VPCId", None)
-                vpcregion = zone_request["VPC"].get("VPCRegion", None)
-
-        name = zone_request["Name"]
-        caller_reference = zone_request["CallerReference"]
-
+        if private_zone:
+            vpcid = self._get_param("VPC.VPCId")
+            vpcregion = self._get_param("VPC.VPCRegion")
+        name = self._get_param("Name")
+        caller_reference = self._get_param("CallerReference")
         if name[-1] != ".":
             name += "."
-        delegation_set_id = zone_request.get("DelegationSetId")
-
+        delegation_set_id = self._get_param("DelegationSetId")
         new_zone = self.backend.create_hosted_zone(
             name,
             comment=comment,
@@ -78,125 +51,128 @@ class Route53(BaseResponse):
             vpcregion=vpcregion,
             delegation_set_id=delegation_set_id,
         )
-        template = Template(CREATE_HOSTED_ZONE_RESPONSE).render(zone=new_zone)
-        headers = {
-            "Location": f"https://route53.amazonaws.com/2013-04-01/hostedzone/{new_zone.id}",
-            "status": 201,
+        result = {
+            "HostedZone": new_zone,
+            "ChangeInfo": {
+                "Id": "/change/C1PA6795UKMFR9",
+                "Status": "INSYNC",
+                "SubmittedAt": utcnow(),
+            },
+            "DelegationSet": new_zone.delegation_set if not private_zone else None,
+            "VPC": {
+                "VPCRegion": new_zone.vpcs[0].get("vpc_region"),
+                "VPCId": new_zone.vpcs[0].get("vpc_id"),
+            }
+            if new_zone.private_zone and new_zone.vpcs
+            else None,
+            "Location": f"https://route53.amazonaws.com/2013-04-01/hostedzone/{new_zone.resource_id}",
         }
-        return 201, headers, template
+        return ActionResult(result)
 
-    def list_hosted_zones(self) -> str:
-        max_size = self.querystring.get("maxitems", [None])[0]
-        if max_size:
-            max_size = int(max_size)
-        marker = self.querystring.get("marker", [None])[0]
+    def list_hosted_zones(self) -> ActionResult:
+        max_items = self._get_int_param("MaxItems", 100)
+        marker = self._get_param("Marker")
         zone_page, next_marker = self.backend.list_hosted_zones(
-            marker=marker, max_size=max_size
+            marker=marker, max_size=max_items
         )
-        template = Template(LIST_HOSTED_ZONES_RESPONSE).render(
-            zones=zone_page,
-            marker=marker,
-            next_marker=next_marker,
-            max_items=max_size,
-        )
-        return template
+        result = {
+            "HostedZones": zone_page,
+            "Marker": marker,
+            "IsTruncated": True if next_marker else False,
+            "NextMarker": next_marker,
+            "MaxItems": max_items,
+        }
+        return ActionResult(result)
 
-    def list_hosted_zones_by_name(self) -> str:
-        query_params = parse_qs(self.parsed_url.query)
-        dnsnames = query_params.get("dnsname")
+    def list_hosted_zones_by_name(self) -> ActionResult:
+        dnsname = self._get_param("DNSName")
+        dnsname, zones = self.backend.list_hosted_zones_by_name(dnsname)
+        result = {"DNSName": dnsname, "HostedZones": zones}
+        return ActionResult(result)
 
-        dnsname, zones = self.backend.list_hosted_zones_by_name(dnsnames)
-
-        template = Template(LIST_HOSTED_ZONES_BY_NAME_RESPONSE)
-        return template.render(zones=zones, dnsname=dnsname, xmlns=XMLNS)
-
-    def list_hosted_zones_by_vpc(self) -> str:
-        query_params = parse_qs(self.parsed_url.query)
-        vpc_id = query_params.get("vpcid")[0]  # type: ignore
+    def list_hosted_zones_by_vpc(self) -> ActionResult:
+        vpc_id = self._get_param("VPCId")
         zones = self.backend.list_hosted_zones_by_vpc(vpc_id)
-        template = Template(LIST_HOSTED_ZONES_BY_VPC_RESPONSE)
-        return template.render(zones=zones, xmlns=XMLNS)
+        result = {"HostedZoneSummaries": zones}
+        return ActionResult(result)
 
-    def get_hosted_zone_count(self) -> str:
+    def get_hosted_zone_count(self) -> ActionResult:
         num_zones = self.backend.get_hosted_zone_count()
-        template = Template(GET_HOSTED_ZONE_COUNT_RESPONSE)
-        return template.render(zone_count=num_zones, xmlns=XMLNS)
+        result = {"HostedZoneCount": num_zones}
+        return ActionResult(result)
 
-    def get_hosted_zone(self) -> str:
-        zoneid = self.parsed_url.path.rstrip("/").rsplit("/", 1)[1]
+    def get_hosted_zone(self) -> ActionResult:
+        zoneid = self._get_param("Id")
         the_zone = self.backend.get_hosted_zone(zoneid)
-        template = Template(GET_HOSTED_ZONE_RESPONSE)
-        return template.render(zone=the_zone)
+        result = {
+            "HostedZone": the_zone,
+            "DelegationSet": the_zone.delegation_set
+            if not the_zone.private_zone
+            else None,
+            "VPCs": the_zone.vpcs if the_zone.private_zone else None,
+        }
+        return ActionResult(result)
 
-    def delete_hosted_zone(self) -> str:
-        zoneid = self.parsed_url.path.rstrip("/").rsplit("/", 1)[1]
+    def delete_hosted_zone(self) -> ActionResult:
+        zoneid = self._get_param("Id")
         self.backend.delete_hosted_zone(zoneid)
-        return DELETE_HOSTED_ZONE_RESPONSE
+        result = {
+            "ChangeInfo": {
+                "Id": "/change/C2682N5HXP0BZ4",
+                "Status": "INSYNC",
+                "SubmittedAt": utcnow(),
+            }
+        }
+        return ActionResult(result)
 
-    def update_hosted_zone_comment(self) -> str:
-        zoneid = self.parsed_url.path.rstrip("/").rsplit("/", 1)[1]
-
-        elements = xmltodict.parse(self.body)
-        comment = elements.get("UpdateHostedZoneCommentRequest", {}).get(
-            "Comment", None
-        )
+    def update_hosted_zone_comment(self) -> ActionResult:
+        zoneid = self._get_param("Id")
+        comment = self._get_param("Comment")
         zone = self.backend.update_hosted_zone_comment(zoneid, comment)
-        template = Template(UPDATE_HOSTED_ZONE_COMMENT_RESPONSE)
-        return template.render(zone=zone)
+        result = {"HostedZone": zone}
+        return ActionResult(result)
 
-    def get_dnssec(self) -> str:
+    def get_dnssec(self) -> ActionResult:
         # TODO: implement enable/disable dnssec apis
-        zoneid = self.parsed_url.path.rstrip("/").rsplit("/", 2)[1]
-
+        zoneid = self._get_param("HostedZoneId")
         self.backend.get_dnssec(zoneid)
-        return GET_DNSSEC
+        result = {"Status": {"ServeSignature": "NOT_SIGNING"}}
+        return ActionResult(result)
 
-    def associate_vpc_with_hosted_zone(self) -> str:
-        zoneid = self.parsed_url.path.rstrip("/").rsplit("/", 2)[1]
-
-        elements = xmltodict.parse(self.body)
-        comment = elements.get("AssociateVPCWithHostedZoneRequest", {}).get(
-            "Comment", {}
-        )
-        vpc = elements.get("AssociateVPCWithHostedZoneRequest", {}).get("VPC", {})
-        vpcid = vpc.get("VPCId", None)
-        vpcregion = vpc.get("VPCRegion", None)
-
+    def associate_vpc_with_hosted_zone(self) -> ActionResult:
+        zoneid = self._get_param("HostedZoneId")
+        comment = self._get_param("Comment")
+        vpcid = self._get_param("VPC.VPCId")
+        vpcregion = self._get_param("VPC.VPCRegion")
         self.backend.associate_vpc_with_hosted_zone(zoneid, vpcid, vpcregion)
+        result = {
+            "ChangeInfo": {
+                "Id": "/change/a1b2c3d4",
+                "Status": "INSYNC",
+                "SubmittedAt": utcnow(),
+                "Comment": comment,
+            }
+        }
+        return ActionResult(result)
 
-        template = Template(ASSOCIATE_VPC_RESPONSE)
-        return template.render(comment=comment)
-
-    def disassociate_vpc_from_hosted_zone(self) -> str:
-        zoneid = self.parsed_url.path.rstrip("/").rsplit("/", 2)[1]
-
-        elements = xmltodict.parse(self.body)
-        comment = elements.get("DisassociateVPCFromHostedZoneRequest", {}).get(
-            "Comment", {}
-        )
-        vpc = elements.get("DisassociateVPCFromHostedZoneRequest", {}).get("VPC", {})
-        vpcid = vpc.get("VPCId", None)
-
+    def disassociate_vpc_from_hosted_zone(self) -> ActionResult:
+        zoneid = self._get_param("HostedZoneId")
+        comment = self._get_param("Comment")
+        vpcid = self._get_param("VPC.VPCId")
         self.backend.disassociate_vpc_from_hosted_zone(zoneid, vpcid)
+        result = {
+            "ChangeInfo": {
+                "Id": "/change/a1b2c3d4",
+                "Status": "INSYNC",
+                "SubmittedAt": utcnow(),
+                "Comment": comment,
+            }
+        }
+        return ActionResult(result)
 
-        template = Template(DISASSOCIATE_VPC_RESPONSE)
-        return template.render(comment=comment)
-
-    def change_resource_record_sets(self) -> str:
-        zoneid = self.parsed_url.path.rstrip("/").rsplit("/", 2)[1]
-
-        elements = xmltodict.parse(self.body)
-
-        change_list = elements["ChangeResourceRecordSetsRequest"]["ChangeBatch"][
-            "Changes"
-        ]["Change"]
-        if not isinstance(change_list, list):
-            change_list = [
-                elements["ChangeResourceRecordSetsRequest"]["ChangeBatch"]["Changes"][
-                    "Change"
-                ]
-            ]
-
+    def change_resource_record_sets(self) -> ActionResult:
+        zoneid = self._get_param("HostedZoneId")
+        change_list = self._get_param("ChangeBatch.Changes")
         # Enforce quotas https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/DNSLimitations.html#limits-api-requests-changeresourcerecordsets
         #  - A request cannot contain more than 1,000 ResourceRecord elements. When the value of the Action element is UPSERT, each ResourceRecord element is counted twice.
         effective_rr_count = 0
@@ -204,27 +180,30 @@ class Route53(BaseResponse):
             record_set = value["ResourceRecordSet"]
             if "ResourceRecords" not in record_set or not record_set["ResourceRecords"]:
                 continue
-            resource_records = list(record_set["ResourceRecords"].values())[0]
+            resource_records = record_set["ResourceRecords"]
             effective_rr_count += len(resource_records)
             if value["Action"] == "UPSERT":
                 effective_rr_count += len(resource_records)
         if effective_rr_count > 1000:
             raise InvalidChangeBatch
-
         self.backend.change_resource_record_sets(zoneid, change_list)
+        result = {
+            "ChangeInfo": {
+                "Id": "/change/C2682N5HXP0BZ4",
+                "Status": "INSYNC",
+                "SubmittedAt": utcnow(),
+            }
+        }
+        return ActionResult(result)
 
-        return CHANGE_RRSET_RESPONSE
-
-    def list_resource_record_sets(self) -> TYPE_RESPONSE:
-        zoneid = self.parsed_url.path.rstrip("/").rsplit("/", 2)[1]
-        querystring = parse_qs(self.parsed_url.query)
-        template = Template(LIST_RRSET_RESPONSE)
-        start_type = querystring.get("type", [None])[0]
-        start_name = querystring.get("name", [None])[0]
-        max_items = int(querystring.get("maxitems", ["300"])[0])
+    def list_resource_record_sets(self) -> ActionResult:
+        zoneid = self._get_param("HostedZoneId")
+        start_type = self._get_param("StartRecordType")
+        start_name = self._get_param("StartRecordName")
+        max_items = self._get_int_param("MaxItems", 300)
 
         if start_type and not start_name:
-            return 400, {"status": 400}, "The input is not valid"
+            raise InvalidInput("The input is not valid")
 
         (
             record_sets,
@@ -237,14 +216,14 @@ class Route53(BaseResponse):
             start_name=start_name,  # type: ignore
             max_items=max_items,
         )
-        r_template = template.render(
-            record_sets=record_sets,
-            next_name=next_name,
-            next_type=next_type,
-            max_items=max_items,
-            is_truncated=is_truncated,
-        )
-        return 200, {}, r_template
+        result = {
+            "ResourceRecordSets": record_sets,
+            "IsTruncated": is_truncated,
+            "NextRecordName": next_name if is_truncated else None,
+            "NextRecordType": next_type if is_truncated else None,
+            "MaxItems": max_items,
+        }
+        return ActionResult(result)
 
     def create_health_check(self) -> ActionResult:
         caller_reference = self._get_param("CallerReference")
