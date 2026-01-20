@@ -1,248 +1,255 @@
-from typing import Any
-from urllib.parse import unquote
-
-import xmltodict
-
-from moto.core.responses import TYPE_RESPONSE, BaseResponse
+from moto.core.responses import ActionResult, BaseResponse, EmptyResult
 
 from .models import CloudFrontBackend, cloudfront_backends
-
-XMLNS = "http://cloudfront.amazonaws.com/doc/2020-05-31/"
 
 
 class CloudFrontResponse(BaseResponse):
     def __init__(self) -> None:
         super().__init__(service_name="cloudfront")
-
-    def _get_xml_body(self) -> dict[str, Any]:
-        return xmltodict.parse(self.body, dict_constructor=dict, force_list="Path")
+        self.automated_parameter_parsing = True
 
     @property
     def backend(self) -> CloudFrontBackend:
         return cloudfront_backends[self.current_account][self.partition]
 
-    @classmethod
-    def tagging(cls, request: Any, full_url: str, headers: Any) -> TYPE_RESPONSE:  # type: ignore
-        response = cls()
-        response.setup_class(request, full_url, headers)
-        operation = response._get_param("Operation")
-        if operation == "Tag":
-            return 204, {}, response.tag_resource()[2]
-        if operation == "Untag":
-            return 204, {}, response.untag_resource()[2]
-        if request.method == "GET":
-            return 200, {}, response.list_tags_for_resource()[2]
+    def _get_action(self) -> str:
+        # This is needed because the uri matcher doesn't take queryargs into account
+        action = super()._get_action()
+        if action == "CreateDistribution" and "WithTags" in self.querystring:
+            action = "CreateDistributionWithTags"
+        elif action is None and "Operation" in self.querystring:
+            op_to_action = {"Tag": "TagResource", "Untag": "UntagResource"}
+            operation = self.querystring.get("Operation")[0]
+            action = op_to_action.get(operation, action)
+        return action  # type: ignore[return-value]
 
-    def create_distribution(self) -> TYPE_RESPONSE:
-        params = self._get_xml_body()
-        if "DistributionConfigWithTags" in params:
-            config = params.get("DistributionConfigWithTags")
-            tags = (config.get("Tags", {}).get("Items") or {}).get("Tag", [])  # type: ignore[union-attr]
-            if not isinstance(tags, list):
-                tags = [tags]
-        else:
-            config = params
-            tags = []
-        distribution_config = config.get("DistributionConfig")  # type: ignore[union-attr]
+    def create_distribution(self) -> ActionResult:
+        distribution_config = self._get_param("DistributionConfig", {})  # type: ignore[union-attr]
+        distribution, location, e_tag = self.backend.create_distribution(
+            distribution_config=distribution_config,
+            tags=[],
+        )
+        result = {"Distribution": distribution, "ETag": e_tag, "Location": location}
+        return ActionResult(result)
+
+    def create_distribution_with_tags(self) -> ActionResult:
+        distribution_config = self._get_param(
+            "DistributionConfigWithTags.DistributionConfig", {}
+        )  # type: ignore[union-attr]
+        tags = self._get_param("DistributionConfigWithTags.Tags.Items", [])
         distribution, location, e_tag = self.backend.create_distribution(
             distribution_config=distribution_config,
             tags=tags,
         )
-        template = self.response_template(CREATE_DISTRIBUTION_TEMPLATE)
-        response = template.render(distribution=distribution, xmlns=XMLNS)
-        headers = {"ETag": e_tag, "Location": location}
-        return 200, headers, response
+        result = {"Distribution": distribution, "ETag": e_tag, "Location": location}
+        return ActionResult(result)
 
-    def list_distributions(self) -> TYPE_RESPONSE:
+    def list_distributions(self) -> ActionResult:
         distributions = self.backend.list_distributions()
-        template = self.response_template(LIST_TEMPLATE)
-        response = template.render(distributions=distributions)
-        return 200, {}, response
+        result = {
+            "DistributionList": {
+                "Marker": "",
+                "MaxItems": 100,
+                "IsTruncated": False,
+                "Quantity": len(distributions),
+                "Items": distributions if distributions else None,
+            }
+        }
+        return ActionResult(result)
 
-    def delete_distribution(self) -> TYPE_RESPONSE:
-        distribution_id = self.path.split("/")[-1]
-        if_match = self._get_param("If-Match")
+    def delete_distribution(self) -> ActionResult:
+        distribution_id = self._get_param("Id")
+        if_match = self._get_param("IfMatch")
         self.backend.delete_distribution(distribution_id, if_match)
-        return 204, {"status": 204}, ""
+        return EmptyResult()
 
-    def get_distribution(self) -> TYPE_RESPONSE:
-        distribution_id = self.path.split("/")[-1]
+    def get_distribution(self) -> ActionResult:
+        distribution_id = self._get_param("Id")
         dist, etag = self.backend.get_distribution(distribution_id)
-        template = self.response_template(GET_DISTRIBUTION_TEMPLATE)
-        response = template.render(distribution=dist, xmlns=XMLNS)
-        return 200, {"ETag": etag}, response
+        result = {"Distribution": dist, "ETag": etag}
+        return ActionResult(result)
 
-    def get_distribution_config(self) -> TYPE_RESPONSE:
-        dist_id = self.path.split("/")[-2]
+    def get_distribution_config(self) -> ActionResult:
+        dist_id = self._get_param("Id")
         distribution_config, etag = self.backend.get_distribution_config(dist_id)
-        template = self.response_template(GET_DISTRIBUTION_CONFIG_TEMPLATE)
-        response = template.render(distribution=distribution_config, xmlns=XMLNS)
-        return 200, {"ETag": etag}, response
+        result = {"DistributionConfig": distribution_config, "ETag": etag}
+        return ActionResult(result)
 
-    def update_distribution(self) -> TYPE_RESPONSE:
-        dist_id = self.path.split("/")[-2]
-        params = self._get_xml_body()
-        dist_config = params.get("DistributionConfig")
-        if_match = self.headers["If-Match"]
+    def update_distribution(self) -> ActionResult:
+        dist_id = self._get_param("Id")
+        dist_config = self._get_param("DistributionConfig", {})
+        if_match = self._get_param("IfMatch")
         dist, location, e_tag = self.backend.update_distribution(
             dist_config=dist_config,  # type: ignore[arg-type]
             _id=dist_id,
             if_match=if_match,
         )
-        template = self.response_template(UPDATE_DISTRIBUTION_TEMPLATE)
-        response = template.render(distribution=dist, xmlns=XMLNS)
-        headers = {"ETag": e_tag, "Location": location}
-        return 200, headers, response
+        result = {"Distribution": dist, "ETag": e_tag, "Location": location}
+        return ActionResult(result)
 
-    def create_invalidation(self) -> TYPE_RESPONSE:
-        dist_id = self.path.split("/")[-2]
-        params = self._get_xml_body()["InvalidationBatch"]
-        paths = ((params.get("Paths") or {}).get("Items") or {}).get("Path") or []
-        caller_ref = params.get("CallerReference")
-
+    def create_invalidation(self) -> ActionResult:
+        dist_id = self._get_param("DistributionId")
+        paths = self._get_param("InvalidationBatch.Paths.Items", [])
+        caller_ref = self._get_param("InvalidationBatch.CallerReference")
         invalidation = self.backend.create_invalidation(dist_id, paths, caller_ref)  # type: ignore[arg-type]
-        template = self.response_template(CREATE_INVALIDATION_TEMPLATE)
-        response = template.render(invalidation=invalidation, xmlns=XMLNS)
+        result = {"Invalidation": invalidation, "Location": invalidation.location}
+        return ActionResult(result)
 
-        return 200, {"Location": invalidation.location}, response
-
-    def list_invalidations(self) -> TYPE_RESPONSE:
-        dist_id = self.path.split("/")[-2]
+    def list_invalidations(self) -> ActionResult:
+        dist_id = self._get_param("DistributionId")
         invalidations = self.backend.list_invalidations(dist_id)
-        template = self.response_template(INVALIDATIONS_TEMPLATE)
-        response = template.render(invalidations=invalidations, xmlns=XMLNS)
+        result = {
+            "InvalidationList": {
+                "MaxItems": 100,
+                "IsTruncated": False,
+                "Quantity": len(invalidations),
+                "Items": invalidations if invalidations else None,
+            }
+        }
+        return ActionResult(result)
 
-        return 200, {}, response
+    def get_invalidation(self) -> ActionResult:
+        invalidation_id = self._get_param("Id")
+        dist_id = self._get_param("DistributionId")
+        invalidation = self.backend.get_invalidation(dist_id, invalidation_id)
+        result = {"Invalidation": invalidation}
+        return ActionResult(result)
 
-    def get_invalidation(self) -> TYPE_RESPONSE:
-        pathItems = self.path.split("/")
-        dist_id = pathItems[-3]
-        id = pathItems[-1]
-        invalidation = self.backend.get_invalidation(dist_id, id)
-        template = self.response_template(GET_INVALIDATION_TEMPLATE)
-        response = template.render(invalidation=invalidation, xmlns=XMLNS)
-        return 200, {}, response
-
-    def list_tags_for_resource(self) -> TYPE_RESPONSE:
-        resource = unquote(self._get_param("Resource"))
+    def list_tags_for_resource(self) -> ActionResult:
+        resource = self._get_param("Resource")
         tags = self.backend.list_tags_for_resource(resource=resource)["Tags"]
-        template = self.response_template(TAGS_TEMPLATE)
-        response = template.render(tags=tags, xmlns=XMLNS)
-        return 200, {}, response
+        result = {"Tags": {"Items": tags}}
+        return ActionResult(result)
 
-    def tag_resource(self) -> TYPE_RESPONSE:
-        resource = unquote(self._get_param("Resource"))
-        params = self._get_xml_body()
-        tags = params.get("Tags", {}).get("Items", {}).get("Tag", [])
-        if not isinstance(tags, list):
-            tags = [tags]
+    def tag_resource(self) -> ActionResult:
+        resource = self._get_param("Resource")
+        tags = self._get_param("Tags.Items", [])
         self.backend.tag_resource(resource=resource, tags=tags)
-        return 204, {}, ""
+        return EmptyResult()
 
-    def untag_resource(self) -> TYPE_RESPONSE:
-        resource = unquote(self._get_param("Resource"))
-        params = self._get_xml_body()
-        tag_keys_data = params.get("TagKeys", {}).get("Items", {}).get("Key", [])
-        if not isinstance(tag_keys_data, list):
-            tag_keys_data = [tag_keys_data]
+    def untag_resource(self) -> ActionResult:
+        resource = self._get_param("Resource")
+        tag_keys_data = self._get_param("TagKeys.Items", [])
         self.backend.untag_resource(resource=resource, tag_keys=tag_keys_data)
-        return 204, {}, ""
+        return EmptyResult()
 
-    def create_origin_access_control(self) -> TYPE_RESPONSE:
-        config = self._get_xml_body().get("OriginAccessControlConfig", {})
-        config.pop("@xmlns", None)
+    def create_origin_access_control(self) -> ActionResult:
+        config = self._get_param("OriginAccessControlConfig", {})
         control = self.backend.create_origin_access_control(config)
-        template = self.response_template(ORIGIN_ACCESS_CONTROl)
-        return 200, {}, template.render(control=control)
+        result = {
+            "OriginAccessControl": {
+                "Id": control.id,
+                "OriginAccessControlConfig": control,
+            },
+            "ETag": control.etag,
+        }
+        return ActionResult(result)
 
-    def get_origin_access_control(self) -> TYPE_RESPONSE:
-        control_id = self.path.split("/")[-1]
+    def get_origin_access_control(self) -> ActionResult:
+        control_id = self._get_param("Id")
         control = self.backend.get_origin_access_control(control_id)
-        template = self.response_template(ORIGIN_ACCESS_CONTROl)
-        return 200, {"ETag": control.etag}, template.render(control=control)
+        result = {
+            "OriginAccessControl": {
+                "Id": control.id,
+                "OriginAccessControlConfig": control,
+            },
+            "ETag": control.etag,
+        }
+        return ActionResult(result)
 
-    def list_origin_access_controls(self) -> TYPE_RESPONSE:
+    def list_origin_access_controls(self) -> ActionResult:
         controls = self.backend.list_origin_access_controls()
-        template = self.response_template(LIST_ORIGIN_ACCESS_CONTROl)
-        return 200, {}, template.render(controls=controls)
+        result = {
+            "OriginAccessControlList": {
+                "MaxItems": 100,
+                "IsTruncated": False,
+                "Quantity": len(controls),
+                "Items": controls,
+            }
+        }
+        return ActionResult(result)
 
-    def update_origin_access_control(self) -> TYPE_RESPONSE:
-        control_id = self.path.split("/")[-2]
-        config = self._get_xml_body().get("OriginAccessControlConfig", {})
-        config.pop("@xmlns", None)
+    def update_origin_access_control(self) -> ActionResult:
+        control_id = self._get_param("Id")
+        config = self._get_param("OriginAccessControlConfig", {})
         control = self.backend.update_origin_access_control(control_id, config)
-        template = self.response_template(ORIGIN_ACCESS_CONTROl)
-        return 200, {"ETag": control.etag}, template.render(control=control)
+        result = {
+            "OriginAccessControl": {
+                "Id": control.id,
+                "OriginAccessControlConfig": control,
+            },
+            "ETag": control.etag,
+        }
+        return ActionResult(result)
 
-    def delete_origin_access_control(self) -> TYPE_RESPONSE:
-        control_id = self.path.split("/")[-1]
+    def delete_origin_access_control(self) -> ActionResult:
+        control_id = self._get_param("Id")
         self.backend.delete_origin_access_control(control_id)
-        return 200, {}, "{}"
+        return EmptyResult()
 
-    def create_public_key(self) -> TYPE_RESPONSE:
-        config = self._get_xml_body()["PublicKeyConfig"]
+    def create_public_key(self) -> ActionResult:
+        config = self._get_param("PublicKeyConfig")
         caller_ref = config["CallerReference"]
         name = config["Name"]
         encoded_key = config["EncodedKey"]
         public_key = self.backend.create_public_key(
             caller_ref=caller_ref, name=name, encoded_key=encoded_key
         )
-
-        response = self.response_template(PUBLIC_KEY_TEMPLATE)
-        headers = {
+        result = {
+            "PublicKey": public_key,
             "Location": public_key.location,
             "ETag": public_key.etag,
-            "status": 201,
         }
-        return 201, headers, response.render(key=public_key)
+        return ActionResult(result)
 
-    def get_public_key(self) -> TYPE_RESPONSE:
-        key_id = self.parsed_url.path.split("/")[-1]
+    def get_public_key(self) -> ActionResult:
+        key_id = self._get_param("Id")
         public_key = self.backend.get_public_key(key_id=key_id)
+        result = {"PublicKey": public_key, "ETag": public_key.etag}
+        return ActionResult(result)
 
-        response = self.response_template(PUBLIC_KEY_TEMPLATE)
-        return 200, {"ETag": public_key.etag}, response.render(key=public_key)
-
-    def delete_public_key(self) -> TYPE_RESPONSE:
-        key_id = self.parsed_url.path.split("/")[-1]
+    def delete_public_key(self) -> ActionResult:
+        key_id = self._get_param("Id")
         self.backend.delete_public_key(key_id=key_id)
-        return 204, {"status": 204}, "{}"
+        return EmptyResult()
 
-    def list_public_keys(self) -> TYPE_RESPONSE:
+    def list_public_keys(self) -> ActionResult:
         keys = self.backend.list_public_keys()
-        response = self.response_template(LIST_PUBLIC_KEYS)
-        return 200, {}, response.render(keys=keys)
+        result = {
+            "PublicKeyList": {
+                "MaxItems": 100,
+                "Quantity": len(keys),
+                "Items": keys if keys else None,
+            }
+        }
+        return ActionResult(result)
 
-    def create_key_group(self) -> TYPE_RESPONSE:
-        config = self._get_xml_body()["KeyGroupConfig"]
-        name = config["Name"]
-        items = config["Items"]["PublicKey"]
-        if isinstance(items, str):
-            # Serialized as a string if there is only one item
-            items = [items]
-
+    def create_key_group(self) -> ActionResult:
+        name = self._get_param("KeyGroupConfig.Name")
+        items = self._get_param("KeyGroupConfig.Items", [])
         key_group = self.backend.create_key_group(name=name, items=items)
-
-        response = self.response_template(KEY_GROUP_TEMPLATE)
-        headers = {
+        result = {
+            "KeyGroup": key_group,
             "Location": key_group.location,
             "ETag": key_group.etag,
-            "status": 201,
         }
-        return 201, headers, response.render(group=key_group)
+        return ActionResult(result)
 
-    def get_key_group(self) -> TYPE_RESPONSE:
-        group_id = self.parsed_url.path.split("/")[-1]
+    def get_key_group(self) -> ActionResult:
+        group_id = self._get_param("Id")
         key_group = self.backend.get_key_group(group_id=group_id)
+        result = {"KeyGroup": key_group, "ETag": key_group.etag}
+        return ActionResult(result)
 
-        response = self.response_template(KEY_GROUP_TEMPLATE)
-        return 200, {"ETag": key_group.etag}, response.render(group=key_group)
-
-    def list_key_groups(self) -> TYPE_RESPONSE:
+    def list_key_groups(self) -> ActionResult:
         groups = self.backend.list_key_groups()
-
-        response = self.response_template(LIST_KEY_GROUPS_TEMPLATE)
-        return 200, {}, response.render(groups=groups)
+        result = {
+            "KeyGroupList": {
+                "Quantity": len(groups),
+                "Items": [{"KeyGroup": key_group} for key_group in groups],
+            }
+        }
+        return ActionResult(result)
 
 
 DIST_META_TEMPLATE = """
@@ -311,8 +318,8 @@ DIST_CONFIG_TEMPLATE = """
             <ConnectionTimeout>{{ origin.connection_timeout }}</ConnectionTimeout>
             {% if origin.origin_shield %}
             <OriginShield>
-              <Enabled>{{ origin.origin_shield.get("Enabled") }}</Enabled>
-              <OriginShieldRegion>{{ origin.origin_shield.get("OriginShieldRegion") }}</OriginShieldRegion>
+              <Enabled>{{ origin.origin_shield.get('Enabled') }}</Enabled>
+              <OriginShieldRegion>{{ origin.origin_shield.get('OriginShieldRegion') }}</OriginShieldRegion>
             </OriginShield>
             {% else %}
             <OriginShield>
@@ -657,7 +664,7 @@ DISTRIBUTION_TEMPLATE = (
 
 CREATE_DISTRIBUTION_TEMPLATE = (
     """<?xml version="1.0"?>
-  <CreateDistributionResult xmlns="{{ xmlns }}">
+  <CreateDistributionResult xmlns='http://cloudfront.amazonaws.com/doc/2020-05-31/'>
 """
     + DISTRIBUTION_TEMPLATE
     + """
@@ -667,7 +674,7 @@ CREATE_DISTRIBUTION_TEMPLATE = (
 
 GET_DISTRIBUTION_TEMPLATE = (
     """<?xml version="1.0"?>
-  <Distribution xmlns="{{ xmlns }}">
+  <Distribution xmlns='{{ xmlns }}'>
 """
     + DISTRIBUTION_TEMPLATE
     + """
