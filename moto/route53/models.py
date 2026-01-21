@@ -819,12 +819,6 @@ class Route53Backend(BaseBackend):
     def get_hosted_zone_count(self) -> int:
         return len(self.zones.values())
 
-    def get_hosted_zone_by_name(self, name: str) -> Optional[FakeZone]:
-        for zone in self.zones.values():
-            if zone.name == name:
-                return zone
-        return None
-
     def delete_hosted_zone(self, id_: str) -> Optional[FakeZone]:
         # Verify it exists
         zone = self.get_hosted_zone(id_)
