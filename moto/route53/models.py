@@ -810,6 +810,12 @@ class Route53Backend(BaseBackend):
             raise NoSuchHostedZone(id_)
         return the_zone
 
+    def get_hosted_zone_by_name(self, name: str) -> Optional[FakeZone]:
+        for zone in self.zones.values():
+            if zone.name == name:
+                return zone
+        return None
+
     def get_hosted_zone_count(self) -> int:
         return len(self.zones.values())
 
