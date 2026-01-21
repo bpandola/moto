@@ -641,26 +641,23 @@ class Route53Backend(BaseBackend):
         return zone
 
     def change_tags_for_resource(
-        self, resource_type: str, resource_id: str, tags: Any
+        self,
+        resource_type: str,
+        resource_id: str,
+        add_tags: list[dict[str, str]],
+        remove_tag_keys: list[str],
     ) -> None:
         if resource_type == "hostedzone" and resource_id not in self.zones:
             raise NoSuchHostedZone(host_zone_id=resource_id)
 
-        if "Tag" in tags:
-            if isinstance(tags["Tag"], list):
-                for tag in tags["Tag"]:
-                    self.resource_tags[resource_id][tag["Key"]] = tag["Value"]
-            else:
-                key, value = (tags["Tag"]["Key"], tags["Tag"]["Value"])
-                self.resource_tags[resource_id][key] = value
-        else:
-            if "Key" in tags:
-                if resource_id in self.resource_tags:
-                    if isinstance(tags["Key"], list):
-                        for key in tags["Key"]:
-                            self.resource_tags[resource_id].pop(key, None)
-                    else:
-                        self.resource_tags[resource_id].pop(tags["Key"], None)
+        if add_tags:
+            for tag in add_tags:
+                self.resource_tags[resource_id][tag["Key"]] = tag["Value"]
+
+        if remove_tag_keys:
+            if resource_id in self.resource_tags:
+                for key in remove_tag_keys:
+                    self.resource_tags[resource_id].pop(key, None)
 
     def list_tags_for_resource(self, resource_id: str) -> dict[str, str]:
         if resource_id in self.resource_tags:

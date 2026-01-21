@@ -1,11 +1,6 @@
 """Handles Route53 API requests, invokes method and returns response."""
 
-import re
 from typing import Any
-from urllib.parse import unquote
-
-import xmltodict
-from jinja2 import Template
 
 from moto.core.common_types import TYPE_RESPONSE
 from moto.core.responses import ActionResult, BaseResponse, EmptyResult
@@ -320,44 +315,30 @@ class Route53(BaseResponse):
             f"The action for {action} has not been implemented for route 53"
         )
 
-    def list_or_change_tags_for_resource_request(  # type: ignore[return]
-        self, request: Any, full_url: str, headers: Any
-    ) -> TYPE_RESPONSE:
-        self.setup_class(request, full_url, headers)
+    def list_tags_for_resource(self) -> ActionResult:
+        resource_type = self._get_param("ResourceType")
+        resource_id = self._get_param("ResourceId")
+        self._validate_resource_id(resource_id, resource_type)
+        tags = self.backend.list_tags_for_resource(resource_id)
+        result = {
+            "ResourceTagSet": {
+                "ResourceType": resource_type,
+                "ResourceId": resource_id,
+                "Tags": [{"Key": key, "Value": value} for key, value in tags.items()],
+            }
+        }
+        return ActionResult(result)
 
-        id_matcher = re.search(r"/tags/([-a-z]+)/(.+)", self.parsed_url.path)
-        assert id_matcher
-        type_ = id_matcher.group(1)
-        id_ = unquote(id_matcher.group(2))
-        if type_ == "hostedzone" and len(id_) > 32:
-            # From testing, it looks like Route53 creates ID's that are either 21 or 22 characters long
-            # In practice, this error will typically appear when passing in the full ID: `/hostedzone/{id}`
-            # Users should pass in {id} instead
-            # NOTE: we don't know (yet) what kind of validation (if any) is in place for type_==healthcheck.
-            raise InvalidInput(
-                f"1 validation error detected: Value '{id_}' at 'resourceId' failed to satisfy constraint: Member must have length less than or equal to 32"
-            )
-
-        if request.method == "GET":
-            tags = self.backend.list_tags_for_resource(id_)
-            template = Template(LIST_TAGS_FOR_RESOURCE_RESPONSE)
-            return (
-                200,
-                headers,
-                template.render(resource_type=type_, resource_id=id_, tags=tags),
-            )
-
-        if request.method == "POST":
-            tags = xmltodict.parse(self.body)["ChangeTagsForResourceRequest"]
-
-            if "AddTags" in tags:
-                tags = tags["AddTags"]  # type: ignore
-            elif "RemoveTagKeys" in tags:
-                tags = tags["RemoveTagKeys"]  # type: ignore
-
-            self.backend.change_tags_for_resource(type_, id_, tags)
-            template = Template(CHANGE_TAGS_FOR_RESOURCE_RESPONSE)
-            return 200, headers, template.render()
+    def change_tags_for_resource(self) -> ActionResult:
+        resource_type = self._get_param("ResourceType")
+        resource_id = self._get_param("ResourceId")
+        self._validate_resource_id(resource_id, resource_type)
+        add_tags = self._get_param("AddTags", [])
+        remove_tag_keys = self._get_param("RemoveTagKeys", [])
+        self.backend.change_tags_for_resource(
+            resource_type, resource_id, add_tags, remove_tag_keys
+        )
+        return EmptyResult()
 
     def list_tags_for_resources(self) -> ActionResult:
         resource_type = self._get_param("ResourceType")
@@ -447,6 +428,18 @@ class Route53(BaseResponse):
         ds_id = self._get_param("Id")
         self.backend.delete_reusable_delegation_set(delegation_set_id=ds_id)
         return EmptyResult()
+
+    @staticmethod
+    def _validate_resource_id(resource_id: str, resource_type: str) -> None:
+        # Method extracted from https://github.com/getmoto/moto/pull/8984
+        # From testing, it looks like Route53 creates ID's that are either 21 or 22 characters long
+        # In practice, this error will typically appear when passing in the full ID: `/hostedzone/{id}`
+        # Users should pass in {id} instead
+        # NOTE: we don't know (yet) what kind of validation (if any) is in place for type_==healthcheck.
+        if resource_type == "hostedzone" and len(resource_id) > 32:
+            raise InvalidInput(
+                f"1 validation error detected: Value '{resource_id}' at 'resourceId' failed to satisfy constraint: Member must have length less than or equal to 32"
+            )
 
 
 LIST_TAGS_FOR_RESOURCE_RESPONSE = """
