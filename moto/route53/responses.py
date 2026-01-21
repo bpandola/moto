@@ -1,8 +1,5 @@
 """Handles Route53 API requests, invokes method and returns response."""
 
-from typing import Any
-
-from moto.core.common_types import TYPE_RESPONSE
 from moto.core.responses import ActionResult, BaseResponse, EmptyResult
 from moto.core.utils import utcnow
 from moto.route53.exceptions import InvalidChangeBatch, InvalidInput
@@ -300,20 +297,6 @@ class Route53(BaseResponse):
             ]
         }
         return ActionResult(result)
-
-    def not_implemented_response(
-        self, request: Any, full_url: str, headers: Any
-    ) -> TYPE_RESPONSE:
-        self.setup_class(request, full_url, headers)
-
-        action = ""
-        if "tags" in full_url:
-            action = "tags"
-        elif "trafficpolicyinstances" in full_url:
-            action = "policies"
-        raise NotImplementedError(
-            f"The action for {action} has not been implemented for route 53"
-        )
 
     def list_tags_for_resource(self) -> ActionResult:
         resource_type = self._get_param("ResourceType")
