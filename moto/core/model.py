@@ -41,6 +41,7 @@ class Shape(BotocoreShape):
     ]
 
     serialization: dict[str, Any]
+    type_name: str
 
     @property
     def is_flattened(self) -> bool:
