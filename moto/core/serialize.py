@@ -248,7 +248,9 @@ class ResponseSerializer:
         response_dict: ResponseDict = {
             "body": "",
             "headers": {},
-            "status_code": self.DEFAULT_RESPONSE_CODE,
+            "status_code": self.operation_model.http.get(
+                "responseCode", self.DEFAULT_RESPONSE_CODE
+            ),
         }
         return response_dict
 
@@ -591,7 +593,10 @@ class BaseXMLSerializer(ResponseSerializer):
         shape: Optional[StructureShape],
         serialized_result: MutableMapping[str, Any],
     ) -> ResponseDict:
-        result_key = f"{self.operation_model.name}Result"
+        if shape and "payload" in shape.serialization:
+            result_key = shape.serialization["payload"]
+        else:
+            result_key = f"{self.operation_model.name}Response"
         result_wrapper = {
             result_key: serialized_result,
         }
@@ -762,6 +767,15 @@ class BaseRestSerializer(ResponseSerializer):
 
 class RestXMLSerializer(BaseRestSerializer, BaseXMLSerializer):
     DEFAULT_TIMESTAMP_FORMAT = TimestampSerializer.TIMESTAMP_FORMAT_ISO8601
+
+    def _serialize_body(self, body: Mapping[str, Any]) -> str:
+        body_serialized = xmltodict.unparse(
+            body,
+            full_document=True,
+            pretty=self.pretty_print,
+            short_empty_elements=False,
+        )
+        return body_serialized
 
 
 class RestJSONSerializer(BaseRestSerializer, BaseJSONSerializer):
@@ -1224,10 +1238,20 @@ class ShapeNameAlias(AttributeAliasProvider):
 
     def has_alias(self, key: str) -> bool:
         shape = self.context.shape
-        if shape is not None:
-            if shape.type_name in ["list", "structure"]:
-                if key != shape.name:
-                    return True
+        if shape is None:
+            return False
+        if shape.type_name not in ["list", "structure"]:
+            return False
+        try:
+            if shape.name in shape.parent.members:  # type: ignore[attr-defined]
+                # If the name of the shape conflicts with a sibling key,
+                # we don't want to use it as an alias because it will
+                # pick up the sibling value.
+                return False
+        except AttributeError:
+            pass
+        if key != shape.name:
+            return True
         return False
 
     def get_alias(self, key: str) -> Any:

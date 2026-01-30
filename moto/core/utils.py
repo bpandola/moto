@@ -290,6 +290,19 @@ def tags_from_cloudformation_tags_list(
     return tags
 
 
+def ensure_boolean(val: Any) -> bool:
+    """Ensures a boolean value if a string or boolean is provided
+
+    For strings, the value for True/False is case-insensitive.
+    """
+    if isinstance(val, bool):
+        return val
+    elif isinstance(val, str):
+        return val.lower() == "true"
+    else:
+        return False
+
+
 def remap_nested_keys(root: Any, key_transform: Callable[[str], str]) -> Any:
     """This remap ("recursive map") function is used to traverse and
     transform the dictionary keys of arbitrarily nested structures.
@@ -393,7 +406,10 @@ ISO_REGION_DOMAINS = {
     "isoe": "cloud.adc-e.uk",
     "isof": "csp.hci.ic.gov",
 }
-ALT_DOMAIN_SUFFIXES = list(ISO_REGION_DOMAINS.values()) + ["amazonaws.com.cn"]
+ALT_DOMAIN_SUFFIXES = list(ISO_REGION_DOMAINS.values()) + [
+    "amazonaws.com.cn",
+    "amazonaws.eu",
+]
 
 
 def get_equivalent_url_in_aws_domain(url: str) -> tuple[ParseResult, bool]:

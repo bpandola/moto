@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import datetime
 import functools
 import json
 import logging
@@ -22,6 +21,7 @@ from xml.dom.minidom import parseString as parseXML
 import boto3
 from jinja2 import DictLoader, Environment, StrictUndefined, Template
 from werkzeug.exceptions import HTTPException
+from werkzeug.http import http_date
 
 from moto import settings
 from moto.core.authorization import ActionAuthenticatorMixin
@@ -44,6 +44,7 @@ from moto.core.utils import (
     gzip_decompress,
     method_names_from_class,
     set_value,
+    utcnow,
 )
 from moto.utilities.aws_headers import gen_amzn_requestid_long
 from moto.utilities.paginator import paginate
@@ -274,32 +275,6 @@ class BaseResponse(_TemplateEnvironmentMixin, ActionAuthenticatorMixin):
     def dispatch(cls, *args: Any, **kwargs: Any) -> Any:  # type: ignore[misc]
         return cls()._dispatch(*args, **kwargs)
 
-    @classmethod
-    def method_dispatch(  # type: ignore[misc]
-        cls, to_call: Callable[[ResponseShape, Any, str, Any], TYPE_RESPONSE]
-    ) -> Callable[[Any, str, Any], TYPE_RESPONSE]:
-        """
-        Takes a given unbound function (part of a Response class) and executes it for a new instance of this
-        response class.
-        Can be used wherever we want to specify different methods for dispatching in urls.py
-        :param to_call: Unbound method residing in this Response class
-        :return: A wrapper executing the given method on a new instance of this class
-        """
-
-        @functools.wraps(to_call)  # type: ignore
-        def _inner(request: Any, full_url: str, headers: Any) -> TYPE_RESPONSE:  # type: ignore[misc]
-            response = getattr(cls(), to_call.__name__)(request, full_url, headers)
-            if isinstance(response, str):
-                status = 200
-                body = response
-                headers = {}
-            else:
-                status, headers, body = response
-            headers, body = cls._enrich_response(headers, body)
-            return status, headers, body
-
-        return _inner
-
     def setup_class(
         self, request: Any, full_url: str, headers: Any, use_raw_body: bool = False
     ) -> None:
@@ -406,8 +381,9 @@ class BaseResponse(_TemplateEnvironmentMixin, ActionAuthenticatorMixin):
             self.headers["host"] = self.parsed_url.netloc
         self.response_headers = {
             "server": "amazon.com",
-            "date": datetime.datetime.now().strftime("%a, %d %b %Y %H:%M:%S GMT"),
         }
+        if not self.is_werkzeug_request:
+            self.response_headers["date"] = http_date(utcnow())
 
         if self.automated_parameter_parsing:
             self.parse_parameters(request)
