@@ -172,6 +172,20 @@ class DomainDispatcherApplication:
             host = "sesv2"
         elif service == "memorydb":
             host = f"memory-db.{region}.amazonaws.com"
+        elif service == "bedrock-agentcore":
+            from moto.bedrockagentcorecontrol.responses import (
+                BedrockAgentCoreControlResponse,
+            )
+
+            resp = BedrockAgentCoreControlResponse()
+            resp.region = region
+            action = resp._get_action_from_method_and_request_uri(
+                method=environ["REQUEST_METHOD"],
+                request_uri=environ["PATH_INFO"],
+            )
+            if action:
+                service = "bedrock-agentcore-control"
+            host = f"{service}.{region}.amazonaws.com"
         else:
             host = f"{service}.{region}.amazonaws.com"
 
