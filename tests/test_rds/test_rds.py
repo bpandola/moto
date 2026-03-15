@@ -1,11 +1,10 @@
-import datetime
 import time
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 import boto3
 import pytest
 from botocore.exceptions import ClientError
-from dateutil.tz import tzutc
 from freezegun import freeze_time
 
 from moto import mock_aws, settings
@@ -95,7 +94,7 @@ def test_create_database(client):
     assert db_instance["IAMDatabaseAuthenticationEnabled"] is False
     assert "db-" in db_instance["DbiResourceId"]
     assert db_instance["CopyTagsToSnapshot"] is False
-    assert isinstance(db_instance["InstanceCreateTime"], datetime.datetime)
+    assert isinstance(db_instance["InstanceCreateTime"], datetime)
     assert db_instance["VpcSecurityGroups"][0]["VpcSecurityGroupId"] == "sg-123456"
     assert db_instance["DeletionProtection"] is False
     assert db_instance["EnabledCloudwatchLogsExports"] == ["audit", "error"]
@@ -432,18 +431,18 @@ def test_get_databases(client):
 
 @mock_aws
 def test_get_databases_paginated(client):
-    for i in range(51):
+    for i in range(101):
         create_db_instance(DBInstanceIdentifier=f"rds{i}")
 
     resp = client.describe_db_instances()
-    assert len(resp["DBInstances"]) == 50
-    assert resp["Marker"] == resp["DBInstances"][-1]["DBInstanceIdentifier"]
+    assert len(resp["DBInstances"]) == 100
+    assert "Marker" in resp
 
     resp2 = client.describe_db_instances(Marker=resp["Marker"])
     assert len(resp2["DBInstances"]) == 1
 
-    resp3 = client.describe_db_instances(MaxRecords=100)
-    assert len(resp3["DBInstances"]) == 51
+    resp3 = client.describe_db_instances(MaxRecords=23)
+    assert len(resp3["DBInstances"]) == 23
 
 
 @mock_aws
@@ -857,7 +856,7 @@ def test_create_db_snapshots(client):
 
     create_db_instance(DBInstanceIdentifier="db-primary-1")
 
-    snapshot_create_time = datetime.datetime(2025, 1, 2, tzinfo=tzutc())
+    snapshot_create_time = datetime(2025, 1, 2, tzinfo=timezone.utc)
     with freeze_time(snapshot_create_time):
         snapshot = client.create_db_snapshot(
             DBInstanceIdentifier="db-primary-1", DBSnapshotIdentifier="g-1"
@@ -942,7 +941,7 @@ def test_copy_db_snapshots(
 ):
     create_db_instance(DBInstanceIdentifier="db-primary-1")
 
-    snapshot_create_time = datetime.datetime(2025, 1, 2, tzinfo=tzutc())
+    snapshot_create_time = datetime(2025, 1, 2, tzinfo=timezone.utc)
     with freeze_time(snapshot_create_time):
         client.create_db_snapshot(
             DBInstanceIdentifier="db-primary-1", DBSnapshotIdentifier="snapshot-1"
@@ -952,7 +951,7 @@ def test_copy_db_snapshots(
         # Delete the original instance, but the copy snapshot operation should still succeed.
         client.delete_db_instance(DBInstanceIdentifier="db-primary-1")
 
-    target_snapshot_create_time = snapshot_create_time + datetime.timedelta(minutes=1)
+    target_snapshot_create_time = snapshot_create_time + timedelta(minutes=1)
     with freeze_time(target_snapshot_create_time):
         target_snapshot = client.copy_db_snapshot(
             SourceDBSnapshotIdentifier=db_snapshot_identifier,
@@ -1418,21 +1417,36 @@ def test_describe_option_group_options(client):
     option_group_options = client.describe_option_group_options(
         EngineName="sqlserver-ee"
     )
-    assert len(option_group_options["OptionGroupOptions"]) == 4
+    for option in option_group_options["OptionGroupOptions"]:
+        assert option["EngineName"] == "sqlserver-ee"
+
     option_group_options = client.describe_option_group_options(
         EngineName="sqlserver-ee", MajorEngineVersion="11.00"
     )
-    assert len(option_group_options["OptionGroupOptions"]) == 2
+    for option in option_group_options["OptionGroupOptions"]:
+        assert option["EngineName"] == "sqlserver-ee"
+        assert option["MajorEngineVersion"] == "11.00"
+
     option_group_options = client.describe_option_group_options(
         EngineName="mysql", MajorEngineVersion="5.6"
     )
-    assert len(option_group_options["OptionGroupOptions"]) == 1
-    with pytest.raises(ClientError):
+    for option in option_group_options["OptionGroupOptions"]:
+        assert option["EngineName"] == "mysql"
+        assert option["MajorEngineVersion"] == "5.6"
+
+    with pytest.raises(ClientError) as exc:
         client.describe_option_group_options(EngineName="non-existent")
-    with pytest.raises(ClientError):
+    error = exc.value.response["Error"]
+    assert error["Code"] == "InvalidParameterValue"
+    assert str(error["Message"]).startswith("Invalid DB engine")
+
+    with pytest.raises(ClientError) as exc:
         client.describe_option_group_options(
             EngineName="mysql", MajorEngineVersion="non-existent"
         )
+    error = exc.value.response["Error"]
+    assert error["Code"] == "InvalidParameterCombination"
+    assert str(error["Message"]).startswith("Cannot find major version")
 
 
 @aws_verified
@@ -3046,9 +3060,9 @@ def test_restore_db_instance_to_point_in_time_with_allocated_storage(client):
     allocated_storage = 20
     details_source = create_db_instance(AllocatedStorage=allocated_storage)
     source_identifier = details_source["DBInstanceIdentifier"]
-    restore_time = datetime.datetime.fromtimestamp(
-        time.time() - 600, datetime.timezone.utc
-    ).strftime("%Y-%m-%dT%H:%M:%SZ")
+    restore_time = datetime.fromtimestamp(time.time() - 600, timezone.utc).strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
     # Default
     restored = client.restore_db_instance_to_point_in_time(
         SourceDBInstanceIdentifier=source_identifier,

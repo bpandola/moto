@@ -626,6 +626,70 @@ def test_nested_projection_expression_using_get_item():
 
 
 @mock_aws
+@pytest.mark.parametrize(
+    "projection_expression, item",
+    [
+        pytest.param(
+            "Id, RelatedIds",
+            {
+                "Id": {"S": "key1"},
+                "RelatedIds": {"L": [{"S": "id1"}, {"S": "id2"}]},
+            },
+            id="Key + Full List",
+        ),
+        pytest.param(
+            "Id, RelatedIds[0]",
+            {"Id": {"S": "key1"}, "RelatedIds": {"L": [{"S": "id1"}]}},
+            id="Key + First List Element",
+        ),
+        pytest.param(
+            "Id, RelatedIds[1]",
+            {"Id": {"S": "key1"}, "RelatedIds": {"L": [{"S": "id2"}]}},
+            id="Key + Last List Element",
+        ),
+        pytest.param(
+            "Id, RelatedIds[2]",
+            {"Id": {"S": "key1"}},
+            id="Key + Out of Bounds List Element",
+        ),
+        pytest.param(
+            "RelatedIds[2]",
+            {},
+            id="No Key + Out of Bounds List Element",
+        ),
+        pytest.param(
+            "Nested[1].Value",
+            {},
+            id="Nested List + Element Out of Bounds",
+        ),
+    ],
+)
+def test_projection_expression_accessing_list_elements(projection_expression, item):
+    client = boto3.client("dynamodb", region_name="us-east-1")
+    table_name = f"T{uuid4()}"
+    client.create_table(
+        TableName=table_name,
+        KeySchema=[{"AttributeName": "Id", "KeyType": "HASH"}],
+        AttributeDefinitions=[{"AttributeName": "Id", "AttributeType": "S"}],
+        ProvisionedThroughput={"ReadCapacityUnits": 5, "WriteCapacityUnits": 5},
+    )
+    client.put_item(
+        TableName=table_name,
+        Item={
+            "Id": {"S": "key1"},
+            "RelatedIds": {"L": [{"S": "id1"}, {"S": "id2"}]},
+            "Nested": {"L": [{"M": {"Value": {"S": "foo"}}}]},
+        },
+    )
+    resp = client.get_item(
+        TableName=table_name,
+        Key={"Id": {"S": "key1"}},
+        ProjectionExpression=projection_expression,
+    )
+    assert resp["Item"] == item
+
+
+@mock_aws
 def test_basic_projection_expressions_using_query():
     dynamodb = boto3.resource("dynamodb", region_name="us-east-1")
 
@@ -1331,6 +1395,53 @@ def test_filter_expression():
     )
     assert filter_expr.expr(row1) is True
     assert filter_expr.expr(row2) is False
+
+
+@mock_aws
+def test_filter_expression_sparse_booleans():
+    # Test filtering between boolean and null values.
+    row_no_boolean = moto.dynamodb.models.Item(
+        hash_key=None,
+        range_key=None,
+        attrs={},
+    )
+    row_null_boolean = moto.dynamodb.models.Item(
+        hash_key=None,
+        range_key=None,
+        attrs={"is_visible": {"NULL": True}},
+    )
+    row_boolean_true = moto.dynamodb.models.Item(
+        hash_key=None,
+        range_key=None,
+        attrs={"is_visible": {"BOOL": True}},
+    )
+    row_boolean_false = moto.dynamodb.models.Item(
+        hash_key=None,
+        range_key=None,
+        attrs={"is_visible": {"BOOL": False}},
+    )
+
+    # equivalent to (is_visible.exists()) & (is_visible != None)
+    filter_expr = moto.dynamodb.comparisons.get_filter_expression(
+        "(attribute_exists (is_visible) AND is_visible <> :0)",
+        names=None,
+        values={":0": {"NULL": True}},
+    )
+    assert filter_expr.expr(row_no_boolean) is False
+    assert filter_expr.expr(row_null_boolean) is False
+    assert filter_expr.expr(row_boolean_false) is True
+    assert filter_expr.expr(row_boolean_true) is True
+
+    # Equivalent to (is_visible.exists()) & (is_visible == True)
+    filter_expr = moto.dynamodb.comparisons.get_filter_expression(
+        "(attribute_exists (is_visible) AND is_visible = :0)",
+        names=None,
+        values={":0": {"BOOL": True}},
+    )
+    assert filter_expr.expr(row_no_boolean) is False
+    assert filter_expr.expr(row_null_boolean) is False
+    assert filter_expr.expr(row_boolean_false) is False
+    assert filter_expr.expr(row_boolean_true) is True
 
 
 @mock_aws

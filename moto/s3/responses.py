@@ -68,6 +68,7 @@ from .models import (
     FakeGrantee,
     FakeKey,
     S3Backend,
+    TransitionDefaultMinimumObjectSize,
     get_canned_acl,
     s3_backends,
 )
@@ -333,6 +334,18 @@ class S3Response(BaseResponse):
         else:
             return bucketpath_parse_key_name(url)
 
+    @classmethod
+    def ambiguous_dispatch(cls, *args: Any, **kwargs: Any) -> TYPE_RESPONSE:
+        return cls().ambiguous_response(*args, **kwargs)
+
+    @classmethod
+    def bucket_dispatch(cls, *args: Any, **kwargs: Any) -> TYPE_RESPONSE:
+        return cls().bucket_response(*args, **kwargs)
+
+    @classmethod
+    def key_dispatch(cls, *args: Any, **kwargs: Any) -> TYPE_RESPONSE:
+        return cls().key_response(*args, **kwargs)
+
     def ambiguous_response(
         self, request: Any, full_url: str, headers: Any
     ) -> TYPE_RESPONSE:
@@ -357,22 +370,28 @@ class S3Response(BaseResponse):
 
         return self._send_response(response)
 
-    @staticmethod
-    def _send_response(response: Union[TYPE_RESPONSE, str, bytes]) -> TYPE_RESPONSE:  # type: ignore
+    @classmethod
+    def _send_response(
+        cls, response: Union[TYPE_RESPONSE, str, bytes]
+    ) -> TYPE_RESPONSE:  # type: ignore
         if isinstance(response, (str, bytes)):
             status_code = 200
-            headers: dict[str, Any] = {}
+            headers: dict[str, str] = {}
+            body = response
         else:
-            status_code, headers, response = response
-        if not isinstance(response, bytes):
-            response = response.encode("utf-8")
+            status_code, headers, body = response
 
-        if response and "content-type" not in (
+        headers, body = cls._enrich_response(headers, body)
+
+        if isinstance(body, str):
+            body = body.encode("utf-8")
+
+        if body and "content-type" not in (
             header.lower() for header in headers.keys()
         ):
             headers["content-type"] = APP_XML
 
-        return status_code, headers, response
+        return status_code, headers, body
 
     def _bucket_response(
         self, request: Any, full_url: str
@@ -1101,7 +1120,10 @@ class S3Response(BaseResponse):
             template = self.response_template(S3_NO_LIFECYCLE)
             return 404, {}, template.render(bucket_name=self.bucket_name)
         template = self.response_template(S3_BUCKET_LIFECYCLE_CONFIGURATION)
-        return template.render(rules=rules)
+        headers = {
+            "x-amz-transition-default-minimum-object-size": TransitionDefaultMinimumObjectSize.ALL_STORAGE_CLASSES_128K.value
+        }
+        return 200, headers, template.render(rules=rules)
 
     def get_bucket_location(self) -> TYPE_RESPONSE:
         location: Optional[str] = self.backend.get_bucket_location(self.bucket_name)
@@ -1264,7 +1286,7 @@ class S3Response(BaseResponse):
         else:
             # Tried to delete a bucket that still has keys
             template = self.response_template(S3_DELETE_BUCKET_WITH_ITEMS_ERROR)
-            return 409, {}, template.render(bucket=removed_bucket)
+            return 409, {}, template.render(bucket_name=self.bucket_name)
 
     def delete_bucket_ownership_controls(self) -> TYPE_RESPONSE:
         self.backend.delete_bucket_ownership_controls(self.bucket_name)
@@ -2650,6 +2672,15 @@ class S3Response(BaseResponse):
         bypass = self.headers.get("X-Amz-Bypass-Governance-Retention")
         key_name = self.parse_key_name()
         version_id = self._get_param("versionId")
+        if_match = self.headers.get("If-Match")
+
+        if if_match:
+            if not (obj := self.backend.get_object(self.bucket_name, key_name)):
+                raise MissingKey
+            # Check if the ETags are the same. S3 doesn't seem to care about quotes, so we shouldn't either
+            elif if_match.replace('"', "") != obj.etag.replace('"', ""):
+                raise PreconditionFailed("If-Match")
+
         _, response_meta = self.backend.delete_object(
             self.bucket_name, key_name, version_id=version_id, bypass=bypass
         )
@@ -2933,7 +2964,7 @@ S3_DELETE_BUCKET_SUCCESS = """<DeleteBucketResponse xmlns="http://s3.amazonaws.c
 S3_DELETE_BUCKET_WITH_ITEMS_ERROR = """<?xml version="1.0" encoding="UTF-8"?>
 <Error><Code>BucketNotEmpty</Code>
 <Message>The bucket you tried to delete is not empty</Message>
-<BucketName>{{ bucket.name }}</BucketName>
+<BucketName>{{ bucket_name }}</BucketName>
 <RequestId>asdfasdfsdafds</RequestId>
 <HostId>sdfgdsfgdsfgdfsdsfgdfs</HostId>
 </Error>"""
@@ -2974,6 +3005,8 @@ S3_BUCKET_LIFECYCLE_CONFIGURATION = """<?xml version="1.0" encoding="UTF-8"?>
         {% else %}
             {% if rule.prefix != None %}
             <Prefix>{{ rule.prefix }}</Prefix>
+            {% else %}
+            <Filter/>
             {% endif %}
         {% endif %}
         <Status>{{ rule.status }}</Status>
