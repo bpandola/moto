@@ -348,7 +348,7 @@ def test_bucket_deletion():
     )
 
     client.delete_object(Bucket=bucket_name, Key="the-key")
-    client.delete_bucket(Bucket=bucket_name)
+    resp = client.delete_bucket(Bucket=bucket_name)
     assert resp["ResponseMetadata"]["HTTPStatusCode"] == 204
 
     # Delete non-existent bucket
