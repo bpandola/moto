@@ -438,9 +438,9 @@ class BaseRestParser(RequestParser):
                 qs = response["values"]
                 member_name = member_shape.serialization.get("name", name)
                 if member_shape.type_name == "list":
-                    # This is for dealing with our test multidict vs a real multidict.
-                    get = qs.get_list if hasattr(qs, "get_list") else qs.get
-                    value = get(member_name, [])
+                    # This is for dealing with our test multidict vs a real Werkzeug CombinedMultiDict.
+                    get = qs.getlist if hasattr(qs, "getlist") else qs.get
+                    value = get(member_name)
                 elif member_shape.type_name == "map":
                     value = qs
                     # Handle rest-xml case "String to string maps in querystring"
