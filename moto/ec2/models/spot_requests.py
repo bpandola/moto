@@ -35,12 +35,26 @@ class LaunchSpecification(BaseModel):
         self.instance_type = instance_type
         self.image_id = image_id
         self.groups: list[SecurityGroup] = []
-        self.placement = placement
-        self.kernel = kernel_id
-        self.ramdisk = ramdisk_id
+        self.availability_zone = placement
+        self.kernel_id = kernel_id
+        self.ramdisk_id = ramdisk_id
         self.monitored = monitored
         self.subnet_id = subnet_id
         self.ebs_optimized = False
+
+    @property
+    def placement(self) -> Optional[dict[str, Optional[str]]]:
+        if self.availability_zone:
+            return {"AvailabilityZone": self.availability_zone}
+        return None
+
+    @property
+    def security_groups(self) -> list["SecurityGroup"]:
+        return self.groups
+
+    @property
+    def monitoring(self) -> dict[str, bool]:
+        return {"Enabled": self.monitored}
 
 
 class SpotInstanceRequest(TaggedEC2Resource):
@@ -83,7 +97,7 @@ class SpotInstanceRequest(TaggedEC2Resource):
         )
         self.id = spot_request_id
         self.state = "open"
-        self.status = "pending-evaluation"
+        self._status_code = "pending-evaluation"
         self.status_message = "Your Spot request has been submitted for review, and is pending evaluation."
         if price:
             price = f"{float(price):.6f}"  # round up/down to 6 decimals
@@ -115,8 +129,40 @@ class SpotInstanceRequest(TaggedEC2Resource):
 
         self.instance = self.launch_instance()
         self.state = "active"
-        self.status = "fulfilled"
+        self._status_code = "fulfilled"
         self.status_message = ""
+
+    @property
+    def spot_instance_request_id(self) -> str:
+        return self.id
+
+    @property
+    def spot_price(self) -> str:
+        return self.price
+
+    @property
+    def instance_id(self) -> str:
+        return self.instance.id
+
+    @property
+    def status(self) -> dict[str, Any]:
+        return {
+            "Code": self._status_code,
+            "Message": self.status_message,
+            "UpdateTime": "2015-01-01T00:00:00.000Z",
+        }
+
+    @property
+    def product_description(self) -> str:
+        return "Linux/UNIX"
+
+    @property
+    def create_time(self) -> str:
+        return "2015-01-01T00:00:00.000Z"
+
+    @property
+    def instance_interruption_behavior(self) -> str:
+        return self.instance_interruption_behaviour
 
     @property
     def valid_from_as_string(self) -> Optional[str]:
