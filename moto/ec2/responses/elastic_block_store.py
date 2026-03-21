@@ -93,10 +93,6 @@ class ElasticBlockStore(EC2BaseResponse):
             multi_attach_enabled=multi_attach_enabled,
         )
         volume.add_tags(volume_tags)
-        # Create response uses "creating" status instead of model's computed status
-        self.RESPONSE_KEY_PATH_TO_TRANSFORMER["CreateVolumeResponse.State"] = (
-            lambda _: "creating"
-        )
         return ActionResult(volume)
 
     def modify_volume(self) -> ActionResult:
@@ -118,13 +114,6 @@ class ElasticBlockStore(EC2BaseResponse):
             target_multi_attach_enabled,
         )
         modification = volume.modifications[-1]
-        # ModifyVolume response uses "modifying" state and progress 0
-        self.RESPONSE_KEY_PATH_TO_TRANSFORMER[
-            "ModifyVolumeResponse.VolumeModification.ModificationState"
-        ] = lambda _: "modifying"
-        self.RESPONSE_KEY_PATH_TO_TRANSFORMER[
-            "ModifyVolumeResponse.VolumeModification.Progress"
-        ] = lambda _: 0
         return ActionResult({"VolumeModification": modification})
 
     def describe_volumes_modifications(self) -> ActionResult:

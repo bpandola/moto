@@ -9,11 +9,13 @@ from ..exceptions import (
     EmptyTagSpecError,
     InvalidParameter,
 )
-from ..utils import convert_tag_spec
+from ..utils import convert_tag_spec, format_timestamp
 
 
 class EC2BaseResponse(BaseResponse):
     RESPONSE_KEY_PATH_TO_TRANSFORMER = {
+        # AMI
+        "Image.CreationDate": format_timestamp,
         # ENI
         "DescribeNetworkInterfacesResult.NetworkInterfaces.NetworkInterface.Association": return_if_not_empty,
         # IAM Instance Profiles
@@ -33,6 +35,9 @@ class EC2BaseResponse(BaseResponse):
         "TransitGatewayVpcAttachments.TransitGatewayVpcAttachment.Tags": return_if_not_empty,
         "TransitGatewayAttachments.TransitGatewayAttachment.Tags": return_if_not_empty,
         # Volumes
+        "CreateVolumeResponse.State": lambda _: "creating",
+        "ModifyVolumeResponse.VolumeModification.ModificationState": lambda _: "modifying",
+        "ModifyVolumeResponse.VolumeModification.Progress": lambda _: 0,
         "Volume.Tags": return_if_not_empty,
         "Volumes.Volume.Tags": return_if_not_empty,
         # VPC Endpoint Service Configuration
