@@ -103,18 +103,6 @@ class VolumeModification:
     def progress(self) -> int:
         return 100
 
-    @property
-    def volume_id(self) -> str:
-        return self.volume.id
-
-    @property
-    def modification_state(self) -> str:
-        return "completed"
-
-    @property
-    def progress(self) -> int:
-        return 100
-
     def get_filter_value(self, filter_name: str) -> Any:
         if filter_name == "original-size":
             return self.original_size
