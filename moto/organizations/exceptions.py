@@ -1,9 +1,7 @@
-from moto.core.exceptions import JsonRESTError
+from moto.core.exceptions import ServiceException as JsonRESTError
 
 
 class AccountAlreadyRegisteredException(JsonRESTError):
-    code = 400
-
     def __init__(self) -> None:
         super().__init__(
             "AccountAlreadyRegisteredException",
@@ -12,8 +10,6 @@ class AccountAlreadyRegisteredException(JsonRESTError):
 
 
 class AccountAlreadyClosedException(JsonRESTError):
-    code = 400
-
     def __init__(self) -> None:
         super().__init__(
             "AccountAlreadyClosedException",
@@ -22,8 +18,6 @@ class AccountAlreadyClosedException(JsonRESTError):
 
 
 class AccountNotRegisteredException(JsonRESTError):
-    code = 400
-
     def __init__(self) -> None:
         super().__init__(
             "AccountNotRegisteredException",
@@ -32,8 +26,6 @@ class AccountNotRegisteredException(JsonRESTError):
 
 
 class AccountNotFoundException(JsonRESTError):
-    code = 400
-
     def __init__(self) -> None:
         super().__init__(
             "AccountNotFoundException", "You specified an account that doesn't exist."
@@ -41,8 +33,6 @@ class AccountNotFoundException(JsonRESTError):
 
 
 class AlreadyInOrganizationException(JsonRESTError):
-    code = 400
-
     def __init__(self) -> None:
         super().__init__(
             "AlreadyInOrganizationException",
@@ -51,8 +41,6 @@ class AlreadyInOrganizationException(JsonRESTError):
 
 
 class AWSOrganizationsNotInUseException(JsonRESTError):
-    code = 400
-
     def __init__(self) -> None:
         super().__init__(
             "AWSOrganizationsNotInUseException",
@@ -61,22 +49,16 @@ class AWSOrganizationsNotInUseException(JsonRESTError):
 
 
 class ConstraintViolationException(JsonRESTError):
-    code = 400
-
     def __init__(self, message: str):
         super().__init__("ConstraintViolationException", message)
 
 
 class InvalidInputException(JsonRESTError):
-    code = 400
-
     def __init__(self, message: str):
         super().__init__("InvalidInputException", message)
 
 
 class DuplicateOrganizationalUnitException(JsonRESTError):
-    code = 400
-
     def __init__(self) -> None:
         super().__init__(
             "DuplicateOrganizationalUnitException",
@@ -85,8 +67,6 @@ class DuplicateOrganizationalUnitException(JsonRESTError):
 
 
 class DuplicatePolicyException(JsonRESTError):
-    code = 400
-
     def __init__(self) -> None:
         super().__init__(
             "DuplicatePolicyException", "A policy with the same name already exists."
@@ -94,8 +74,6 @@ class DuplicatePolicyException(JsonRESTError):
 
 
 class OrganizationNotEmptyException(JsonRESTError):
-    code = 400
-
     def __init__(self) -> None:
         super().__init__(
             "OrganizationNotEmptyException",
@@ -104,8 +82,6 @@ class OrganizationNotEmptyException(JsonRESTError):
 
 
 class PolicyTypeAlreadyEnabledException(JsonRESTError):
-    code = 400
-
     def __init__(self) -> None:
         super().__init__(
             "PolicyTypeAlreadyEnabledException",
@@ -114,8 +90,6 @@ class PolicyTypeAlreadyEnabledException(JsonRESTError):
 
 
 class PolicyTypeNotEnabledException(JsonRESTError):
-    code = 400
-
     def __init__(self) -> None:
         super().__init__(
             "PolicyTypeNotEnabledException",
@@ -124,8 +98,6 @@ class PolicyTypeNotEnabledException(JsonRESTError):
 
 
 class RootNotFoundException(JsonRESTError):
-    code = 400
-
     def __init__(self) -> None:
         super().__init__(
             "RootNotFoundException", "You specified a root that doesn't exist."
@@ -133,8 +105,6 @@ class RootNotFoundException(JsonRESTError):
 
 
 class TargetNotFoundException(JsonRESTError):
-    code = 400
-
     def __init__(self) -> None:
         super().__init__(
             "TargetNotFoundException", "You specified a target that doesn't exist."
@@ -142,7 +112,5 @@ class TargetNotFoundException(JsonRESTError):
 
 
 class PolicyNotFoundException(JsonRESTError):
-    code = 400
-
     def __init__(self, message: str) -> None:
         super().__init__("PolicyNotFoundException", message)

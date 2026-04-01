@@ -4,7 +4,7 @@ from typing import Any, Optional
 
 from moto.core.base_backend import BackendDict, BaseBackend
 from moto.core.common_models import BaseModel
-from moto.core.exceptions import RESTError
+from moto.core.exceptions import ServiceException as RESTError
 from moto.core.utils import unix_time, utcnow
 from moto.organizations import utils
 from moto.organizations.exceptions import (
