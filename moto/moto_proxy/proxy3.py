@@ -9,6 +9,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from botocore.awsrequest import AWSPreparedRequest
+from werkzeug.exceptions import RequestedRangeNotSatisfiable
 
 from moto.backend_index import backend_url_patterns
 from moto.backends import get_backend
@@ -194,6 +195,12 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
                 res_status, res_headers, res_body = response
             else:
                 res_status, res_headers, res_body = (200, {}, response)
+
+        except RequestedRangeNotSatisfiable as e:
+            response = e.get_response()
+            res_status = response.status_code
+            res_headers = response.headers
+            res_body = ""
 
         except RESTError as e:
             if isinstance(e.get_headers(), list):
