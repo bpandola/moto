@@ -91,8 +91,13 @@ class ServiceModel(BotocoreServiceModel):
 
     @instance_cache
     def operation_model(self, operation_name: str) -> OperationModel:  # type: ignore[misc]
-        operation_model = super().operation_model(operation_name)
-        model = getattr(operation_model, "_operation_model", {})
+        from botocore.model import OperationNotFoundError
+
+        try:
+            operation_model = super().operation_model(operation_name)
+            model = getattr(operation_model, "_operation_model", {})
+        except OperationNotFoundError:
+            model = {}
         return OperationModel(model, self, operation_name)
 
     @CachedProperty
