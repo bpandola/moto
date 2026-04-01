@@ -28,7 +28,7 @@ from moto.s3bucket_path.utils import (
 )
 from moto.utilities.utils import PARTITION_NAMES, get_partition
 
-from ..core.exceptions import ServiceException, SignatureDoesNotMatchError
+from ..core.exceptions import SignatureDoesNotMatchError
 from .exceptions import (
     AccessForbidden,
     BucketAccessDeniedError,
@@ -111,24 +111,24 @@ ACTION_MAP = {
             "acl": "GetBucketAcl",
             "tagging": "GetBucketTagging",
             "logging": "GetBucketLogging",
-            "cors": "GetBucketCORS",
+            "cors": "GetBucketCors",
             "notification": "GetBucketNotification",
-            "accelerate": "GetAccelerateConfiguration",
+            "accelerate": "GetBucketAccelerateConfiguration",
             "versions": "ListBucketVersions",
             "public_access_block": "GetPublicAccessBlock",
-            "DEFAULT": "ListBucket",
+            "DEFAULT": "ListObjects",
         },
         "PUT": {
-            "lifecycle": "PutLifecycleConfiguration",
+            "lifecycle": "PutBucketLifecycleConfiguration",
             "versioning": "PutBucketVersioning",
             "policy": "PutBucketPolicy",
             "website": "PutBucketWebsite",
             "acl": "PutBucketAcl",
             "tagging": "PutBucketTagging",
             "logging": "PutBucketLogging",
-            "cors": "PutBucketCORS",
+            "cors": "PutBucketCors",
             "notification": "PutBucketNotification",
-            "accelerate": "PutAccelerateConfiguration",
+            "accelerate": "PutBucketAccelerateConfiguration",
             "public_access_block": "PutPublicAccessBlock",
             "DEFAULT": "CreateBucket",
         },
@@ -148,7 +148,7 @@ ACTION_MAP = {
             "uploadId": "ListMultipartUploadParts",
             "acl": "GetObjectAcl",
             "tagging": "GetObjectTagging",
-            "versionId": "GetObjectVersion",
+            "versionId": "GetObject",
             "DEFAULT": "GetObject",
         },
         "PUT": {
@@ -158,14 +158,14 @@ ACTION_MAP = {
         },
         "DELETE": {
             "uploadId": "AbortMultipartUpload",
-            "versionId": "DeleteObjectVersion",
+            "versionId": "DeleteObject",
             "DEFAULT": "DeleteObject",
         },
         "POST": {
             "uploads": "PutObject",
             "restore": "RestoreObject",
             "uploadId": "PutObject",
-            "select": "SelectObject",
+            "select": "SelectObjectContent",
         },
     },
     "CONTROL": {
@@ -239,14 +239,13 @@ class S3Response(BaseResponse):
     def all_buckets(self) -> TYPE_RESPONSE:
         self.data["Action"] = "ListAllMyBuckets"
         self._authenticate_and_authorize_s3_action()
-
+        self.data["Action"] = "ListBuckets"
         # No bucket specified. Listing all buckets
         all_buckets = self.backend.list_buckets()
         buckets = [
             {"Name": bucket.name, "CreationDate": bucket.creation_date_ISO8601}
             for bucket in all_buckets
         ]
-        self.data["Action"] = "ListBuckets"
         return self.serialized(
             ActionResult(
                 {
@@ -382,9 +381,7 @@ class S3Response(BaseResponse):
         try:
             response = self._bucket_response(request, full_url)
         except S3ClientError as s3error:
-            response = s3error.code, {}, s3error.description
-        except ServiceException as e:
-            response = self.serialized(ActionResult(e))
+            response = self.serialized(ActionResult(s3error))
 
         return self._send_response(response)
 
@@ -676,6 +673,7 @@ class S3Response(BaseResponse):
             self.data["Action"] = ACTION_MAP[action_resource_type][method]["DEFAULT"]
 
     def list_multipart_uploads(self) -> TYPE_RESPONSE:
+        self.data["Action"] = "ListMultipartUploads"
         multiparts = list(
             self.backend.list_multipart_uploads(self.bucket_name).values()
         )
@@ -709,10 +707,10 @@ class S3Response(BaseResponse):
             "IsTruncated": False,
             "Uploads": uploads,
         }
-        self.data["Action"] = "ListMultipartUploads"
         return self.serialized(ActionResult(result))
 
     def list_objects(self) -> TYPE_RESPONSE:
+        self.data["Action"] = "ListObjects"
         bucket = self.backend.get_bucket(self.bucket_name)
         querystring = self._get_querystring(self.request, self.uri)
         prefix = querystring.get("prefix", [None])[0]
@@ -769,10 +767,10 @@ class S3Response(BaseResponse):
         if next_marker:
             result["NextMarker"] = next_marker
 
-        self.data["Action"] = "ListObjects"
         return self.serialized(ActionResult(result))
 
     def list_objects_v2(self) -> TYPE_RESPONSE:
+        self.data["Action"] = "ListObjectsV2"
         bucket = self.backend.get_bucket(self.bucket_name)
 
         continuation_token = self.querystring.get("continuation-token", [None])[0]
@@ -849,10 +847,10 @@ class S3Response(BaseResponse):
         if not continuation_token and start_after:
             result["StartAfter"] = start_after
 
-        self.data["Action"] = "ListObjectsV2"
         return self.serialized(ActionResult(result))
 
     def list_object_versions(self) -> TYPE_RESPONSE:
+        self.data["Action"] = "ListObjectVersions"
         delimiter = self.querystring.get("delimiter", [None])[0]
         key_marker = self.querystring.get("key-marker", [None])[0]
         max_keys = int(
@@ -926,7 +924,6 @@ class S3Response(BaseResponse):
             result["NextKeyMarker"] = next_key_marker
             result["NextVersionIdMarker"] = next_version_id_marker
 
-        self.data["Action"] = "ListObjectVersions"
         return self.serialized(ActionResult(result))
 
     @staticmethod
@@ -1082,6 +1079,7 @@ class S3Response(BaseResponse):
             )
             return ""
         else:
+            self.data["Action"] = "CreateBucket"
             # us-east-1, the default AWS region behaves a bit differently
             # - you should not use any location constraint
             location_constraint = self._get_location_constraint()
@@ -1147,7 +1145,7 @@ class S3Response(BaseResponse):
             result: dict[str, Any] = {"Location": f"/{new_bucket.name}"}
             if new_bucket.bucket_namespace == "account-regional":
                 result["BucketArn"] = new_bucket.arn
-            self.data["Action"] = "CreateBucket"
+
             return self.serialized(ActionResult(result))
 
     def get_bucket_accelerate_configuration(self) -> TYPE_RESPONSE:
@@ -1853,7 +1851,7 @@ class S3Response(BaseResponse):
         try:
             response = self._key_response(request, full_url)
         except S3ClientError as s3error:
-            response = s3error.code, {}, s3error.description
+            response = self.serialized(ActionResult(s3error))
 
         status_code, response_headers, response_content = self._send_response(response)
 
@@ -1867,7 +1865,7 @@ class S3Response(BaseResponse):
                     request, response_headers, response_content
                 )
             except S3ClientError as s3error:
-                return s3error.code, {}, s3error.description
+                return self.serialized(ActionResult(s3error))
         return status_code, response_headers, response_content
 
     def _key_response(self, request: Any, full_url: str) -> TYPE_RESPONSE:
@@ -2072,6 +2070,7 @@ class S3Response(BaseResponse):
         return status, headers, body
 
     def list_parts(self) -> TYPE_RESPONSE:
+        self.data["Action"] = "ListParts"
         response_headers = self._get_cors_headers_other()
 
         upload_id = self._get_param("uploadId")
