@@ -1885,7 +1885,7 @@ Member must satisfy regular expression pattern: {expression}"
                 listener.certificates = [c["CertificateArn"] for c in certificates]
             elif len(certificates) == 0 and len(listener.certificates) == 0:  # type: ignore[arg-type]
                 raise RESTError(
-                    "CertificateWereNotPassed",
+                    "InvalidConfigurationRequest",
                     "You must provide a list containing exactly one certificate if the listener protocol is HTTPS.",
                 )
             # else:
