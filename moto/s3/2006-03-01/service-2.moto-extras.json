@@ -325,12 +325,6 @@
         "error": {"httpStatusCode": 412},
         "exception": true
       },
-      "RangeNotSatisfiable": {
-        "type": "structure",
-        "members": {},
-        "error": {"httpStatusCode": 416},
-        "exception": true
-      },
       "ReplicationConfigurationNotFoundError": {
         "type": "structure",
         "members": {
