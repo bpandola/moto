@@ -26,7 +26,7 @@ from werkzeug.http import http_date
 from moto import settings
 from moto.core.authorization import ActionAuthenticatorMixin
 from moto.core.common_types import TYPE_IF_NONE, TYPE_RESPONSE
-from moto.core.exceptions import ServiceException
+from moto.core.exceptions import AccessControlException, ServiceException
 from moto.core.model import OperationModel, ServiceModel
 from moto.core.parse import PROTOCOL_PARSERS, XFormedDict
 from moto.core.request import determine_request_protocol, normalize_request
@@ -588,6 +588,8 @@ class BaseResponse(_TemplateEnvironmentMixin, ActionAuthenticatorMixin):
             headers, body = self._enrich_response(headers, body)
 
             return status, headers, body
+        except AccessControlException as e:
+            return self.serialized(ActionResult(e))
 
         action = camelcase_to_underscores(self._get_action())
         method_names = method_names_from_class(self.__class__)

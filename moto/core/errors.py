@@ -31,6 +31,13 @@ COMMON_ERROR_CODES = [
     "ValidationException",
 ]
 
+AUTH_CODE_TO_STATUS_CODE = {
+    "AccessDenied": 403,
+    "AuthFailure": 401,
+    "InvalidClientTokenId": 403,
+    "SignatureDoesNotMatch": 403,
+}
+
 
 class ErrorShape(StructureShape):
     _shape_model: dict[str, Any]
@@ -134,6 +141,8 @@ def get_error_model(
                 return False
             if code in COMMON_ERROR_CODES:
                 return False
+            if code in AUTH_CODE_TO_STATUS_CODE:
+                return False
             if default_service_model.protocol == "ec2":
                 # EC2 service definition does not contain error models.
                 return False
@@ -153,6 +162,7 @@ def get_error_model(
                 "members": {},
                 "error": {
                     "code": code,
+                    "httpStatusCode": AUTH_CODE_TO_STATUS_CODE.get(code, 400),
                 },
             },
         )

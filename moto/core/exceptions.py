@@ -165,9 +165,11 @@ class JsonRESTError(RESTError):
         return self.description
 
 
-class SignatureDoesNotMatchError(RESTError):
-    code = 403
+class AccessControlException(ServiceException):
+    pass
 
+
+class SignatureDoesNotMatchError(AccessControlException):
     def __init__(self) -> None:
         super().__init__(
             "SignatureDoesNotMatch",
@@ -175,9 +177,7 @@ class SignatureDoesNotMatchError(RESTError):
         )
 
 
-class InvalidClientTokenIdError(RESTError):
-    code = 403
-
+class InvalidClientTokenIdError(AccessControlException):
     def __init__(self) -> None:
         super().__init__(
             "InvalidClientTokenId",
@@ -185,18 +185,14 @@ class InvalidClientTokenIdError(RESTError):
         )
 
 
-class AccessDeniedError(RESTError):
-    code = 403
-
+class AccessDeniedError(AccessControlException):
     def __init__(self, user_arn: str, action: str):
         super().__init__(
             "AccessDenied", f"User: {user_arn} is not authorized to perform: {action}"
         )
 
 
-class AuthFailureError(RESTError):
-    code = 401
-
+class AuthFailureError(AccessControlException):
     def __init__(self) -> None:
         super().__init__(
             "AuthFailure",
