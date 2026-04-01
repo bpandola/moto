@@ -1,6 +1,6 @@
 from typing import Optional
 
-from moto.core.exceptions import RESTError
+from moto.core.exceptions import ServiceException as RESTError
 from moto.core.responses import ActionResult, BaseResponse, EmptyResult
 from moto.core.serialize import return_if_not_empty
 

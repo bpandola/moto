@@ -7,7 +7,6 @@ from botocore.exceptions import ParamValidationError
 
 from moto.core.base_backend import BackendDict, BaseBackend
 from moto.core.common_models import BaseModel, CloudFormationModel
-from moto.core.exceptions import RESTError
 from moto.core.utils import iso_8601_datetime_with_milliseconds
 from moto.ec2.models import EC2Backend, ec2_backends
 from moto.ec2.models.subnets import Subnet
@@ -45,6 +44,9 @@ from .exceptions import (
     TooManyCertificatesError,
     TooManyTagsError,
     ValidationError,
+)
+from .exceptions import (
+    ELBClientError as RESTError,
 )
 from .utils import make_arn_for_load_balancer, make_arn_for_target_group
 
