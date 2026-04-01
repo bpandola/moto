@@ -5,7 +5,7 @@ from typing import Any, Optional
 
 from moto.core.base_backend import BackendDict, BaseBackend
 from moto.core.common_models import BaseModel
-from moto.core.exceptions import RESTError
+from moto.core.exceptions import ServiceException as RESTError
 from moto.organizations.exceptions import AWSOrganizationsNotInUseException
 from moto.organizations.models import organizations_backends
 from moto.securityhub.exceptions import InvalidInputException
