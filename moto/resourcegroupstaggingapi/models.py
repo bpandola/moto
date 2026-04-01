@@ -15,7 +15,7 @@ from moto.connectcampaigns.models import (
     connectcampaigns_backends,
 )
 from moto.core.base_backend import BackendDict, BaseBackend
-from moto.core.exceptions import RESTError
+from moto.core.exceptions import ServiceException as RESTError
 from moto.directconnect.models import DirectConnectBackend, directconnect_backends
 from moto.dms.models import DatabaseMigrationServiceBackend, dms_backends
 from moto.dynamodb.models import DynamoDBBackend, dynamodb_backends
