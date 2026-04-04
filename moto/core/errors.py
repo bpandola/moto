@@ -10,8 +10,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 from warnings import warn
 
-from botocore.exceptions import UnknownServiceError
-
 from moto.core.model import StructureShape
 
 if TYPE_CHECKING:
@@ -30,13 +28,6 @@ COMMON_ERROR_CODES = [
     "ValidationError",
     "ValidationException",
 ]
-
-AUTH_CODE_TO_STATUS_CODE = {
-    "AccessDenied": 403,
-    "AuthFailure": 401,
-    "InvalidClientTokenId": 403,
-    "SignatureDoesNotMatch": 403,
-}
 
 
 class ErrorShape(StructureShape):
@@ -110,10 +101,7 @@ def get_exception_service_model(exception: Exception) -> ServiceModel | None:
     if not exception_module.startswith("moto"):
         return None
     service = exception_module.split(".")[1]
-    try:
-        service_model = get_service_model(service)
-    except UnknownServiceError:
-        return None
+    service_model = get_service_model(service)
     return service_model
 
 
@@ -141,8 +129,6 @@ def get_error_model(
                 return False
             if code in COMMON_ERROR_CODES:
                 return False
-            if code in AUTH_CODE_TO_STATUS_CODE:
-                return False
             if default_service_model.protocol == "ec2":
                 # EC2 service definition does not contain error models.
                 return False
@@ -155,14 +141,13 @@ def get_error_model(
             warning = f"Exception({exception.__class__.__name__}) with code {code} does not match an error shape in service models(s): {services_checked}"  # pragma: no cover
             warn(warning, stacklevel=2)  # pragma: no cover
         error = ErrorShape(
-            shape_name=code,  # exception.__class__.__name__,
+            shape_name=code,
             shape_model={
                 "exception": True,
                 "type": "structure",
                 "members": {},
                 "error": {
                     "code": code,
-                    "httpStatusCode": AUTH_CODE_TO_STATUS_CODE.get(code, 400),
                 },
             },
         )
