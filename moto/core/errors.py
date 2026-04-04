@@ -10,6 +10,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 from warnings import warn
 
+from botocore.exceptions import UnknownServiceError
+
 from moto.core.model import StructureShape
 
 if TYPE_CHECKING:
@@ -101,7 +103,10 @@ def get_exception_service_model(exception: Exception) -> ServiceModel | None:
     if not exception_module.startswith("moto"):
         return None
     service = exception_module.split(".")[1]
-    service_model = get_service_model(service)
+    try:
+        service_model = get_service_model(service)
+    except UnknownServiceError:
+        service_model = None
     return service_model
 
 
