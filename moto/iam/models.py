@@ -47,9 +47,7 @@ from .exceptions import (
     TooManyTags,
     ValidationError,
 )
-from .exceptions import (
-    IAMException as RESTError,
-)
+from .exceptions import IAMException as RESTError
 from .utils import (
     generate_access_key_id_from_account_id,
     random_access_key,

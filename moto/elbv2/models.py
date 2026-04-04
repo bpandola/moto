@@ -45,9 +45,7 @@ from .exceptions import (
     TooManyTagsError,
     ValidationError,
 )
-from .exceptions import (
-    ELBClientError as RESTError,
-)
+from .exceptions import ELBClientError as RESTError
 from .utils import make_arn_for_load_balancer, make_arn_for_target_group
 
 ALLOWED_ACTIONS = [
