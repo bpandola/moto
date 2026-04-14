@@ -1986,6 +1986,56 @@ class S3Response(BaseResponse):
                     response_headers.pop(header)
             return 304, response_headers, "Not Modified"
 
+        result = {
+            "Body": key.value,
+            # "DeleteMarker": True | False,
+            "AcceptRanges": "bytes",
+            # "Expiration": "string",
+            # "Restore": "string",
+            "LastModified": key.last_modified,
+            "ContentLength": key.size,
+            "ETag": key.etag,
+            # "ChecksumCRC32": "string",
+            # "ChecksumCRC32C": "string",
+            # "ChecksumCRC64NVME": "string",
+            # "ChecksumSHA1": "string",
+            # "ChecksumSHA256": "string",
+            # "ChecksumType": "COMPOSITE" | "FULL_OBJECT",
+            # "MissingMeta": 123,
+            "VersionId": key.version_id if key._is_versioned else None,
+            # "CacheControl": "string",
+            # "ContentDisposition": "string",
+            "ContentEncoding": key.metadata.get("Content-Encoding"),
+            # "ContentLanguage": "string",
+            # "ContentRange": "string",
+            "ContentType": key.metadata.get("Content-Type"),
+            # "Expires": datetime(2015, 1, 1),
+            # "ExpiresString": "string",
+            "WebsiteRedirectLocation": key.website_redirect_location
+            or key.metadata.get("x-amz-website-redirect-location"),
+            "ServerSideEncryption": key.encryption,
+            "Metadata": {
+                k[11:]: v
+                for k, v in key.metadata.items()
+                if k.startswith("x-amz-meta-")
+            },
+            # "SSECustomerAlgorithm": "string",
+            # "SSECustomerKeyMD5": "string",
+            "SSEKMSKeyId": key.kms_key_id if key.encryption == "aws:kms" else None,
+            "BucketKeyEnabled": key.bucket_key_enabled
+            if key.encryption == "aws:kms"
+            else None,
+            "StorageClass": key._storage_class
+            if key._storage_class != "STANDARD"
+            else None,
+            # "RequestCharged": "requester",
+            # "ReplicationStatus": "COMPLETE",
+            # "PartsCount": 123,
+            # "TagCount": self.backend.tagger.get_tag_dict_for_resource(key.arn),
+            "ObjectLockMode": key.lock_mode,
+            "ObjectLockRetainUntilDate": key.lock_until,
+            "ObjectLockLegalHoldStatus": key.lock_legal_status,
+        }
         # set the checksum after not_modified has been checked
         if (
             self.headers.get("x-amz-checksum-mode") == "ENABLED"
@@ -1995,15 +2045,17 @@ class S3Response(BaseResponse):
             if key.checksum_type == "COMPOSITE":
                 qualified_checksum = f"{key.checksum_value}-{key.checksum_parts}"
 
-            response_headers[f"x-amz-checksum-{key.checksum_algorithm.lower()}"] = (
-                qualified_checksum
-            )
+            result[f"Checksum{key.checksum_algorithm}"] = qualified_checksum
 
             if key.checksum_type:
-                response_headers["x-amz-checksum-type"] = key.checksum_type
+                result["ChecksumType"] = key.checksum_type
 
-        response_headers.update(key.metadata)
-        response_headers.update({"Accept-Ranges": "bytes"})
+        tags = self.backend.tagger.get_tag_dict_for_resource(key.arn)
+        if tags:
+            result["TagCount"] = len(tags.keys())
+
+        # response_headers.update(key.metadata)
+        # response_headers.update({"Accept-Ranges": "bytes"})
 
         part_number = self._get_int_param("partNumber")
         if part_number:
@@ -2013,9 +2065,12 @@ class S3Response(BaseResponse):
             else:
                 if part_number > 1:
                     raise RangeNotSatisfiable
-                response_headers["content-range"] = f"bytes 0-{key.size - 1}/{key.size}"
-                return 206, response_headers, key.value
-        return 200, response_headers, key.value
+                result["ContentRange"] = f"bytes 0-{key.size - 1}/{key.size}"
+                # return 206, response_headers, key.value
+        self.data["Action"] = "GetObject"
+        status_code, headers, body = self.serialized(ActionResult(result))
+        headers.update(self._get_cors_headers_other())
+        return 206 if "ContentRange" in result else 200, headers, body
 
     def get_object_attributes(self) -> TYPE_RESPONSE:
         # Get the Key, but do not validate StorageClass - we can retrieve the attributes of Glacier-objects
@@ -2297,10 +2352,31 @@ class S3Response(BaseResponse):
         if checksum_algorithm:
             new_key.checksum_algorithm = checksum_algorithm
         self.backend.put_object_tagging(new_key, tagging)
-        response_headers.update(new_key.response_dict)
-        # Remove content-length - the response body is empty for this request
-        response_headers.pop("content-length", None)
-        return 200, response_headers, ""
+        result = {
+            "ETag": new_key.etag,
+            # "ChecksumCRC32": "string",
+            # "ChecksumCRC32C": "string",
+            # "ChecksumCRC64NVME": "string",
+            # "ChecksumSHA1": "string",
+            # "ChecksumSHA256": "string",
+            "ChecksumType": new_key.checksum_type,
+            "ServerSideEncryption": new_key.encryption,
+            "VersionId": str(new_key.version_id) if new_key._is_versioned else None,
+            "SSEKMSKeyId": new_key.kms_key_id
+            if new_key.encryption == "aws:kms"
+            else None,
+            "BucketKeyEnabled": new_key.bucket_key_enabled
+            if new_key.encryption == "aws:kms"
+            else None,
+            "Size": new_key.size,
+        }
+        if checksum_algorithm:
+            result[f"Checksum{checksum_algorithm}"] = checksum_value
+        status_code, headers, body = self.serialized(ActionResult(result))
+        headers.update(self._get_cors_headers_other())
+        # I don't think AWS does this, but Moto asserts on it.
+        headers["x-amz-sdk-checksum-algorithm"] = checksum_algorithm
+        return status_code, headers, body
 
     def _get_checksum(
         self, response_headers: dict[str, Any]
