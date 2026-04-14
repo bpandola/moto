@@ -39,6 +39,8 @@ def normalize_request(request: AWSPreparedRequest | Request) -> Request:
 def determine_request_protocol(
     service_model: ServiceModel, content_type: str | None = None
 ) -> str:
+    if service_model.service_name == "s3":
+        return "rest-xml"
     protocol = str(service_model.protocol)
     supported_protocols = service_model.metadata.get("protocols", [protocol])
     content_type = content_type if content_type is not None else ""
