@@ -1802,10 +1802,16 @@ class S3Response(BaseResponse):
 
         response_headers["content-range"] = f"bytes {begin}-{end}/{length}"
         content = response_content[begin : end + 1]
+        # TODO: we need to use a case-insensitive dictionary for headers.
+        content_length_key = (
+            "content-length"
+            if "content-length" in response_headers
+            else "Content-Length"
+        )
         if request.method == "HEAD":
-            response_headers["content-length"] = str((end - begin) + 1)
+            response_headers[content_length_key] = str((end - begin) + 1)
         else:
-            response_headers["content-length"] = str(len(content))
+            response_headers[content_length_key] = str(len(content))
         return 206, response_headers, content
 
     def _handle_v4_chunk_signatures(self, body: bytes, content_length: int) -> bytes:
