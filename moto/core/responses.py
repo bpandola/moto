@@ -15,11 +15,10 @@ from typing import (
     Union,
     cast,
 )
-from urllib.parse import parse_qs, parse_qsl, urlparse
-from xml.dom.minidom import parseString as parseXML
+from urllib.parse import parse_qs, parse_qsl, unquote, urlparse
 
 import boto3
-from jinja2 import DictLoader, Environment, Template
+from botocore.model import OperationNotFoundError
 from werkzeug.exceptions import HTTPException
 from werkzeug.http import http_date
 
@@ -28,7 +27,7 @@ from moto.core.authorization import ActionAuthenticatorMixin
 from moto.core.common_types import TYPE_IF_NONE, TYPE_RESPONSE
 from moto.core.exceptions import ServiceException
 from moto.core.model import OperationModel, ServiceModel
-from moto.core.parsers import PROTOCOL_PARSERS, XFormedDict
+from moto.core.parse import PROTOCOL_PARSERS, XFormedDict
 from moto.core.request import determine_request_protocol, normalize_request
 from moto.core.serialize import (
     ResponseSerializer,
@@ -51,8 +50,6 @@ from moto.utilities.paginator import paginate
 from moto.utilities.utils import get_partition
 
 log = logging.getLogger(__name__)
-
-JINJA_ENVS: dict[type, Environment] = {}
 
 
 ResponseShape = TypeVar("ResponseShape", bound="BaseResponse")
@@ -112,71 +109,12 @@ def _get_method_urls(service_name: str, region: str) -> dict[str, dict[str, str]
         if service_name == "opensearch" and request_uri.endswith("/tags/"):
             # AWS GO SDK behaves differently from other SDK's, does not send a trailing slash
             request_uri += "?"
+        if service_name == "backup" and request_uri.endswith("/"):
+            request_uri += "?"
         uri_regexp = BaseResponse.uri_to_regexp(request_uri)
         method_urls[_method][uri_regexp] = op_model.name
 
     return method_urls
-
-
-class DynamicDictLoader(DictLoader):
-    def update(self, mapping: dict[str, str]) -> None:
-        self.mapping.update(mapping)  # type: ignore[attr-defined]
-
-    def contains(self, template: str) -> bool:
-        return bool(template in self.mapping)
-
-
-class _TemplateEnvironmentMixin:
-    LEFT_PATTERN = re.compile(r"[\s\n]+<")
-    RIGHT_PATTERN = re.compile(r">[\s\n]+")
-
-    @property
-    def should_autoescape(self) -> bool:
-        # Allow for subclass to overwrite
-        return False
-
-    @property
-    def environment(self) -> Environment:
-        key = type(self)
-        try:
-            environment = JINJA_ENVS[key]
-        except KeyError:
-            loader = DynamicDictLoader({})
-            environment = Environment(
-                loader=loader,
-                autoescape=self.should_autoescape,
-                trim_blocks=True,
-                lstrip_blocks=True,
-            )
-            JINJA_ENVS[key] = environment
-
-        return environment
-
-    def contains_template(self, template_id: str) -> bool:
-        return self.environment.loader.contains(template_id)  # type: ignore[union-attr]
-
-    @classmethod
-    def _make_template_id(cls, source: str) -> str:
-        """
-        Return a numeric string that's unique for the lifetime of the source.
-
-        Jinja2 expects to template IDs to be strings.
-        """
-        return str(id(source))
-
-    def response_template(self, source: str) -> Template:
-        template_id = self._make_template_id(source)
-        if not self.contains_template(template_id):
-            if settings.PRETTIFY_RESPONSES:
-                # pretty xml
-                xml = parseXML(source).toprettyxml()
-            else:
-                # collapsed xml
-                xml = re.sub(
-                    self.RIGHT_PATTERN, ">", re.sub(self.LEFT_PATTERN, "<", source)
-                )
-            self.environment.loader.update({template_id: xml})  # type: ignore[union-attr]
-        return self.environment.get_template(template_id)
 
 
 @dataclass
@@ -249,7 +187,7 @@ class EmptyResult(ActionResult):
         super().__init__(None)
 
 
-class BaseResponse(_TemplateEnvironmentMixin, ActionAuthenticatorMixin):
+class BaseResponse(ActionAuthenticatorMixin):
     PROTOCOL_PARSER_MAP_TYPE: Any = dict
     RESPONSE_KEY_PATH_TO_TRANSFORMER: dict[str, Callable[[Any], Any]] = {}
 
@@ -270,35 +208,15 @@ class BaseResponse(_TemplateEnvironmentMixin, ActionAuthenticatorMixin):
         self.allow_request_decompression = True
         self.automated_parameter_parsing = False
 
+    @property
+    def boto3_service_name(self) -> str:
+        if self.service_name is None:
+            return ""
+        return boto3_service_name.get(self.service_name, self.service_name)
+
     @classmethod
     def dispatch(cls, *args: Any, **kwargs: Any) -> Any:  # type: ignore[misc]
         return cls()._dispatch(*args, **kwargs)
-
-    @classmethod
-    def method_dispatch(  # type: ignore[misc]
-        cls, to_call: Callable[[ResponseShape, Any, str, Any], TYPE_RESPONSE]
-    ) -> Callable[[Any, str, Any], TYPE_RESPONSE]:
-        """
-        Takes a given unbound function (part of a Response class) and executes it for a new instance of this
-        response class.
-        Can be used wherever we want to specify different methods for dispatching in urls.py
-        :param to_call: Unbound method residing in this Response class
-        :return: A wrapper executing the given method on a new instance of this class
-        """
-
-        @functools.wraps(to_call)  # type: ignore
-        def _inner(request: Any, full_url: str, headers: Any) -> TYPE_RESPONSE:  # type: ignore[misc]
-            response = getattr(cls(), to_call.__name__)(request, full_url, headers)
-            if isinstance(response, str):
-                status = 200
-                body = response
-                headers = {}
-            else:
-                status, headers, body = response
-            headers, body = cls._enrich_response(headers, body)
-            return status, headers, body
-
-        return _inner
 
     def setup_class(
         self, request: Any, full_url: str, headers: Any, use_raw_body: bool = False
@@ -495,15 +413,17 @@ class BaseResponse(_TemplateEnvironmentMixin, ActionAuthenticatorMixin):
                 # We don't want to our regex to think this marks an end-of-line, so let's escape it
                 return elem.replace("$", r"\$")
 
-            # When the element ends with +} the parameter can contain a / otherwise not.
-            slash_allowed = elem.endswith("+}")
+            # In the Smithy specification, a plus sign indicates a greedy label, which
+            # allows the label to match multiple path segments, including forward slashes.
+            # If a label is the last segment of a uri, we default it to greedy as well.
+            greedy = elem.endswith("+}") or uri.endswith(elem)
             name = (
                 elem.replace("{", "")
                 .replace("}", "")
                 .replace("+", "")
                 .replace("-", "_")
             )
-            if slash_allowed:
+            if greedy:
                 return f"(?P<{name}>.+)"
             return f"(?P<{name}>[^/]+)"
 
@@ -514,13 +434,20 @@ class BaseResponse(_TemplateEnvironmentMixin, ActionAuthenticatorMixin):
     def _get_action_from_method_and_request_uri(
         self, method: str, request_uri: str
     ) -> str:
-        """basically used for `rest-json` APIs
-        You can refer to example from link below
-        https://github.com/boto/botocore/blob/develop/botocore/data/iot/2015-05-28/service-2.json
-        """
+        """Used for AWS restJson1 and restXml API protocols"""
         methods_url = _get_method_urls(self.service_name, self.region)
         regexp_and_names = methods_url[method]
-        for regexp, name in regexp_and_names.items():
+        # Sort patterns by length (descending) so more specific patterns match before more general ones.
+        #
+        # This fixes problems with service definitions that contain uris like:
+        # - /mrap/instances/{name+} (GetMultiRegionAccessPoint)
+        # - /mrap/instances/{name+}/policy (GetMultiRegionAccessPointPolicy)
+        #
+        # Both urls match the regex for the first url, but we want to ensure we match the more specific pattern.
+        sorted_patterns = sorted(
+            regexp_and_names.items(), key=lambda x: len(x[0]), reverse=True
+        )
+        for regexp, name in sorted_patterns:
             match = re.match(regexp, request_uri)
             self.uri_match = match
             if match:
@@ -559,21 +486,23 @@ class BaseResponse(_TemplateEnvironmentMixin, ActionAuthenticatorMixin):
 
         assert isinstance(request, (AWSPreparedRequest, Request)), str(request)
         normalized_request = normalize_request(request)
-        service_model = get_service_model(self.service_name)
+        service_model = get_service_model(self.boto3_service_name)
         operation_model = service_model.operation_model(self._get_action())
         protocol = determine_request_protocol(
             service_model, normalized_request.content_type
         )
         parser_cls = PROTOCOL_PARSERS[protocol]
-        parser = parser_cls(map_type=self.PROTOCOL_PARSER_MAP_TYPE)  # type: ignore[no-untyped-call]
+        parser = parser_cls(operation_model, map_type=self.PROTOCOL_PARSER_MAP_TYPE)
         parsed = parser.parse(
             {
-                "query_params": normalized_request.values,
+                "method": normalized_request.method,
+                "values": normalized_request.values,
                 "headers": normalized_request.headers,
                 "body": normalized_request.data,
-            },
-            operation_model,
-        )  # type: ignore[no-untyped-call]
+                "url_path": normalized_request.path,
+                "url_params": self.uri_match.groupdict() if self.uri_match else {},
+            }
+        )
         self.params = cast(Any, parsed)
         _, args = self._get_action_and_args()
         self.params.update(args)
@@ -586,8 +515,12 @@ class BaseResponse(_TemplateEnvironmentMixin, ActionAuthenticatorMixin):
         return protocol
 
     def serialized(self, action_result: ActionResult) -> TYPE_RESPONSE:
-        service_model = get_service_model(self.service_name)
-        operation_model = service_model.operation_model(self._get_action())
+        service_model = get_service_model(self.boto3_service_name)
+        try:
+            operation_model = service_model.operation_model(self._get_action())
+        except OperationNotFoundError:
+            assert isinstance(action_result.result, Exception)
+            operation_model = OperationModel({}, service_model)
         protocol = self.determine_response_protocol(service_model)
         serializer_cls = get_serializer_class(service_model.service_name, protocol)
         context = ActionContext(service_model, operation_model, serializer_cls, self)
@@ -696,7 +629,8 @@ class BaseResponse(_TemplateEnvironmentMixin, ActionAuthenticatorMixin):
         return if_none
         if self.uri_match:
             try:
-                return self.uri_match.group(param_name)
+                val = self.uri_match.group(param_name)
+                return unquote(val)
             except IndexError:
                 # do nothing if param is not found
                 pass

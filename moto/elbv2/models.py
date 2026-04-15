@@ -7,7 +7,6 @@ from botocore.exceptions import ParamValidationError
 
 from moto.core.base_backend import BackendDict, BaseBackend
 from moto.core.common_models import BaseModel, CloudFormationModel
-from moto.core.exceptions import RESTError
 from moto.core.utils import iso_8601_datetime_with_milliseconds
 from moto.ec2.models import EC2Backend, ec2_backends
 from moto.ec2.models.subnets import Subnet
@@ -46,6 +45,7 @@ from .exceptions import (
     TooManyTagsError,
     ValidationError,
 )
+from .exceptions import ELBClientError as RESTError
 from .utils import make_arn_for_load_balancer, make_arn_for_target_group
 
 ALLOWED_ACTIONS = [
@@ -598,6 +598,7 @@ class FakeLoadBalancer(CloudFormationModel):
         state: str,
         scheme: str = "internet-facing",
         loadbalancer_type: Optional[str] = None,
+        ip_address_type: str = "ipv4",
     ):
         self.name = name
         self.created_time = iso_8601_datetime_with_milliseconds()
@@ -612,7 +613,7 @@ class FakeLoadBalancer(CloudFormationModel):
         self.state = state
         self.type = loadbalancer_type or "application"
 
-        self.ip_address_type = "ipv4"
+        self.ip_address_type = ip_address_type
         self.attrs = {
             # "access_logs.s3.enabled": "false",  # commented out for TF compatibility
             "access_logs.s3.bucket": "",
@@ -736,6 +737,7 @@ class ELBv2Backend(BaseBackend):
         subnet_mappings: Optional[list[dict[str, str]]] = None,
         scheme: str = "internet-facing",
         loadbalancer_type: Optional[str] = None,
+        ip_address_type: str = "ipv4",
         tags: Optional[list[dict[str, str]]] = None,
     ) -> FakeLoadBalancer:
         vpc_id = None
@@ -744,6 +746,12 @@ class ELBv2Backend(BaseBackend):
 
         if not subnet_ids and not subnet_mappings:
             raise SubnetNotFoundError()
+
+        if ip_address_type not in ("ipv4", "dualstack"):
+            raise RESTError(
+                "ValidationError",
+                f"1 validation error detected: Value '{ip_address_type}' at 'ipAddressType' failed to satisfy constraint: Member must satisfy enum value set: [ipv4, dualstack]",
+            )
         for subnet_id in subnet_ids:
             subnet = self.ec2_backend.get_subnet(subnet_id)
             if subnet is None:
@@ -779,6 +787,7 @@ class ELBv2Backend(BaseBackend):
             dns_name=dns_name,
             state=state,
             loadbalancer_type=loadbalancer_type,
+            ip_address_type=ip_address_type,
         )
         self.load_balancers[arn] = new_load_balancer
         self.tagging_service.tag_resource(arn, tags)
@@ -1705,12 +1714,6 @@ Member must satisfy regular expression pattern: {expression}"
         if balancer is None:
             raise LoadBalancerNotFoundError()
 
-        if ip_type == "dualstack" and balancer.scheme == "internal":
-            raise RESTError(
-                "InvalidConfigurationRequest",
-                "Internal load balancers cannot be dualstack",
-            )
-
         balancer.ip_address_type = ip_type
 
     def set_security_groups(self, arn: str, sec_groups: list[str]) -> None:
@@ -1880,7 +1883,7 @@ Member must satisfy regular expression pattern: {expression}"
                 listener.certificates = [c["CertificateArn"] for c in certificates]
             elif len(certificates) == 0 and len(listener.certificates) == 0:  # type: ignore[arg-type]
                 raise RESTError(
-                    "CertificateWereNotPassed",
+                    "InvalidConfigurationRequest",
                     "You must provide a list containing exactly one certificate if the listener protocol is HTTPS.",
                 )
             # else:

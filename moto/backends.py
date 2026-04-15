@@ -24,6 +24,8 @@ if TYPE_CHECKING:
     from moto.batch.models import BatchBackend
     from moto.bedrock.models import BedrockBackend
     from moto.bedrockagent.models import AgentsforBedrockBackend
+    from moto.bedrockagentcorecontrol.models import BedrockAgentCoreControlBackend
+    from moto.bedrockruntime.models import BedrockRuntimeBackend
     from moto.budgets.models import BudgetsBackend
     from moto.ce.models import CostExplorerBackend
     from moto.clouddirectory.models import CloudDirectoryBackend
@@ -39,6 +41,7 @@ if TYPE_CHECKING:
     from moto.cognitoidp.models import CognitoIdpBackend
     from moto.comprehend.models import ComprehendBackend
     from moto.config.models import ConfigBackend
+    from moto.connect.models import ConnectBackend
     from moto.connectcampaigns.models import ConnectCampaignServiceBackend
     from moto.core.base_backend import SERVICE_BACKEND, BackendDict
     from moto.databrew.models import DataBrewBackend
@@ -216,6 +219,8 @@ SERVICE_NAMES = Union[
     "Literal['batch']",
     "Literal['bedrock']",
     "Literal['bedrock-agent']",
+    "Literal['bedrock-agentcore-control']",
+    "Literal['bedrock-runtime']",
     "Literal['budgets']",
     "Literal['ce']",
     "Literal['clouddirectory']",
@@ -230,8 +235,9 @@ SERVICE_NAMES = Union[
     "Literal['cognito-identity']",
     "Literal['cognito-idp']",
     "Literal['comprehend']",
-    "Literal['connectcampaigns']",
     "Literal['config']",
+    "Literal['connect']",
+    "Literal['connectcampaigns']",
     "Literal['databrew']",
     "Literal['datapipeline']",
     "Literal['datasync']",
@@ -409,6 +415,15 @@ def get_backend(
     name: "Literal['bedrock-agent']",
 ) -> "BackendDict[AgentsforBedrockBackend]": ...
 @overload
+def get_backend(
+    name: "Literal['bedrock-agentcore-control']",
+) -> "BackendDict[BedrockAgentCoreControlBackend]": ...
+@overload
+def get_backend(
+    name: "Literal['bedrock-runtime']",
+) -> "BackendDict[BedrockRuntimeBackend]": ...
+@overload
+@overload
 def get_backend(name: "Literal['budgets']") -> "BackendDict[BudgetsBackend]": ...
 @overload
 def get_backend(name: "Literal['ce']") -> "BackendDict[CostExplorerBackend]": ...
@@ -445,11 +460,13 @@ def get_backend(name: "Literal['cognito-idp']") -> "BackendDict[CognitoIdpBacken
 @overload
 def get_backend(name: "Literal['comprehend']") -> "BackendDict[ComprehendBackend]": ...
 @overload
+def get_backend(name: "Literal['config']") -> "BackendDict[ConfigBackend]": ...
+@overload
+def get_backend(name: "Literal['connect']") -> "BackendDict[ConnectBackend]": ...
+@overload
 def get_backend(
     name: "Literal['connectcampaigns']",
 ) -> "BackendDict[ConnectCampaignServiceBackend]": ...
-@overload
-def get_backend(name: "Literal['config']") -> "BackendDict[ConfigBackend]": ...
 @overload
 def get_backend(name: "Literal['databrew']") -> "BackendDict[DataBrewBackend]": ...
 @overload

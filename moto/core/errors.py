@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 from warnings import warn
 
+from moto.core import utils
 from moto.core.model import StructureShape
 
 if TYPE_CHECKING:
@@ -100,8 +101,9 @@ def get_exception_service_model(exception: Exception) -> ServiceModel | None:
     exception_module = exception.__module__
     if not exception_module.startswith("moto"):
         return None
-    service = exception_module.split(".")[1]
-    service_model = get_service_model(service)
+    package = exception_module.split(".")[1]
+    service_name = utils.service_name_from_moto_package_name(package)
+    service_model = get_service_model(service_name)
     return service_model
 
 
@@ -123,11 +125,25 @@ def get_error_model(
         if error is not None:
             break
     if error is None:
-        if services_checked and code not in COMMON_ERROR_CODES:
-            warning = f"Exception({exception.__class__.__name__}) with code {code} does not match an eror shape in service models(s): {services_checked}"  # pragma: no cover
+
+        def should_warn() -> bool:
+            if not services_checked:
+                return False
+            if code in COMMON_ERROR_CODES:
+                return False
+            if default_service_model.protocol == "ec2":
+                # EC2 service definition does not contain error models.
+                return False
+            if default_service_model.service_id == "S3":
+                # S3 service definition omits nearly all error models.
+                return False
+            return True
+
+        if should_warn():
+            warning = f"Exception({exception.__class__.__name__}) with code {code} does not match an error shape in service models(s): {services_checked}"  # pragma: no cover
             warn(warning, stacklevel=2)  # pragma: no cover
         error = ErrorShape(
-            shape_name=exception.__class__.__name__,
+            shape_name=code,
             shape_model={
                 "exception": True,
                 "type": "structure",

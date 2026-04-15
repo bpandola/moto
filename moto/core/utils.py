@@ -10,6 +10,7 @@ from typing import Any, Optional
 from urllib.parse import ParseResult, urlparse
 
 from botocore.exceptions import ClientError
+from botocore.session import Session
 
 from moto.core.model import ServiceModel
 
@@ -83,6 +84,9 @@ def convert_regex_to_flask_path(url_path: str) -> str:
     """
     for token in ["$"]:
         url_path = url_path.replace(token, "")
+
+    if url_path == "/.*":
+        url_path = "/<path:route>"
 
     def caller(reg: Any) -> str:
         match_name, match_pattern = reg.groups()
@@ -406,7 +410,10 @@ ISO_REGION_DOMAINS = {
     "isoe": "cloud.adc-e.uk",
     "isof": "csp.hci.ic.gov",
 }
-ALT_DOMAIN_SUFFIXES = list(ISO_REGION_DOMAINS.values()) + ["amazonaws.com.cn"]
+ALT_DOMAIN_SUFFIXES = list(ISO_REGION_DOMAINS.values()) + [
+    "amazonaws.com.cn",
+    "amazonaws.eu",
+]
 
 
 def get_equivalent_url_in_aws_domain(url: str) -> tuple[ParseResult, bool]:
@@ -512,3 +519,12 @@ def _set_value_for_key(obj: Any, key: str, value: Any) -> None:
         obj[key] = value
     except (KeyError, IndexError, TypeError, AttributeError):
         setattr(obj, key, value)
+
+
+@cache
+def service_name_from_moto_package_name(moto_package_name: str) -> str:
+    # Unfortunately, Moto replaces hyphens found in service names with an empty string,
+    # so we can't just do a simple reverse replacement.  We have to create a lookup
+    # table of all possible service names and their Moto counterparts.
+    lut = {name.replace("-", ""): name for name in Session().get_available_services()}
+    return lut.get(moto_package_name, moto_package_name)

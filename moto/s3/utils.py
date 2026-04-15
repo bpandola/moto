@@ -10,6 +10,7 @@ from urllib.parse import urlparse
 
 from requests.structures import CaseInsensitiveDict
 
+from moto.core.compat import HAS_CRT
 from moto.settings import S3_IGNORE_SUBDOMAIN_BUCKETNAME
 
 log = logging.getLogger(__name__)
@@ -26,6 +27,7 @@ user_settable_fields = {
     "content-disposition",
     "x-robots-tag",
     "x-amz-checksum-algorithm",
+    "x-amz-checksum-type",
     "x-amz-content-sha256",
     "x-amz-content-crc32",
     "x-amz-content-crc32c",
@@ -80,8 +82,8 @@ def bucket_and_name_from_url(url: str) -> Union[tuple[str, str], tuple[None, Non
 
 
 REGION_URL_REGEX = re.compile(
-    r"^https?://(s3[-\.](?P<region1>.+)\.amazonaws\.com/(.+)|"
-    r"(.+)\.s3[-\.](?P<region2>.+)\.amazonaws\.com)/?"
+    r"^https?://(s3[-\.](?:(?:dualstack|fips)[.\-])?(?P<region1>.+)\.amazonaws\.com/(.+)|"
+    r"(.+)\.s3[-\.](?:(?:dualstack|fips)[.\-])?(?P<region2>.+)\.amazonaws\.com)/?"
 )
 
 
@@ -210,6 +212,14 @@ def compute_checksum(body: bytes, algorithm: str, encode_base64: bool = True) ->
             hashed_body = binascii.crc32(body).to_bytes(4, "big")
     elif algorithm == "CRC32":
         hashed_body = binascii.crc32(body).to_bytes(4, "big")
+    elif algorithm == "CRC64NVME":
+        if HAS_CRT:
+            from awscrt import checksums
+
+            hashed_body = checksums.crc64nvme(body).to_bytes(8, "big")
+        else:
+            # Optional library Can't be found - just revert to CRC32
+            hashed_body = binascii.crc32(body).to_bytes(4, "big")
     else:
         hashed_body = _hash(hashlib.sha256, (body,))
     if encode_base64:

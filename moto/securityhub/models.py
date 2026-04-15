@@ -5,10 +5,13 @@ from typing import Any, Optional
 
 from moto.core.base_backend import BackendDict, BaseBackend
 from moto.core.common_models import BaseModel
-from moto.core.exceptions import RESTError
-from moto.organizations.exceptions import AWSOrganizationsNotInUseException
+from moto.organizations.exceptions import (
+    AWSOrganizationsNotInUseException,
+    OrganizationsClientError,
+)
 from moto.organizations.models import organizations_backends
 from moto.securityhub.exceptions import InvalidInputException
+from moto.securityhub.exceptions import SecurityHubClientError as RESTError
 from moto.utilities.paginator import paginate
 
 
@@ -31,7 +34,14 @@ class SecurityHubBackend(BaseBackend):
             "limit_default": 100,
             "unique_attribute": "Id",
             "fail_on_invalid_token": True,
-        }
+        },
+        "list_members": {
+            "input_token": "next_token",
+            "limit_key": "max_results",
+            "limit_default": 50,
+            "unique_attribute": "AccountId",
+            "fail_on_invalid_token": False,
+        },
     }
 
     _org_configs: dict[str, dict[str, Any]] = {}
@@ -43,13 +53,14 @@ class SecurityHubBackend(BaseBackend):
         self.org_backend = organizations_backends[self.account_id]["aws"]
         self.enabled_at: Optional[str] = None
         self.enabled = False
+        self.members: dict[str, dict[str, str]] = {}
 
     def _get_org_config(self) -> dict[str, Any]:
         """Get organization config for the current account."""
         try:
             org = self.org_backend.describe_organization()
             org_id = org["Organization"]["Id"]
-        except RESTError:
+        except OrganizationsClientError:
             raise AWSOrganizationsNotInUseException()
 
         if org_id not in SecurityHubBackend._org_configs:
@@ -125,10 +136,9 @@ class SecurityHubBackend(BaseBackend):
         filters: Optional[dict[str, Any]] = None,
         sort_criteria: Optional[list[dict[str, str]]] = None,
         max_results: Optional[int] = None,
-        next_token: Optional[str] = None,
     ) -> list[dict[str, str]]:
         """
-        Returns findings based on optional filters and sort criteria.
+        Filters and SortCriteria is not yet implemented
         """
         if max_results is not None:
             try:
@@ -143,25 +153,11 @@ class SecurityHubBackend(BaseBackend):
                     op="GetFindings", msg="MaxResults must be a number greater than 0"
                 )
 
-        findings = self.findings
-
-        # TODO: Apply filters if provided
-        # TODO: Apply sort criteria if provided
-
-        return [f.as_dict() for f in findings]
+        return [f.as_dict() for f in self.findings]
 
     def batch_import_findings(
         self, findings: list[dict[str, Any]]
     ) -> tuple[int, int, list[dict[str, Any]]]:
-        """
-        Import findings in batch to SecurityHub.
-
-        Args:
-            findings: List of finding dictionaries to import
-
-        Returns:
-            Tuple of (failed_count, success_count, failed_findings)
-        """
         failed_count = 0
         success_count = 0
         failed_findings = []
@@ -207,7 +203,7 @@ class SecurityHubBackend(BaseBackend):
         try:
             org = self.org_backend.describe_organization()
             org_id = org["Organization"]["Id"]
-        except RESTError:
+        except OrganizationsClientError:
             raise AWSOrganizationsNotInUseException()
 
         if self.account_id != org["Organization"]["MasterAccountId"]:
@@ -220,7 +216,7 @@ class SecurityHubBackend(BaseBackend):
 
         try:
             self.org_backend.get_account_by_id(admin_account_id)
-        except RESTError:
+        except OrganizationsClientError:
             raise RESTError(
                 "InvalidInputException",
                 f"The request was rejected because the account {admin_account_id} is not "
@@ -238,7 +234,7 @@ class SecurityHubBackend(BaseBackend):
     ) -> None:
         try:
             self.org_backend.describe_organization()
-        except RESTError:
+        except OrganizationsClientError:
             raise RESTError(
                 "ResourceNotFoundException",
                 "The request was rejected because AWS Organizations is not in use or not "
@@ -308,7 +304,7 @@ class SecurityHubBackend(BaseBackend):
         try:
             org = self.org_backend.describe_organization()
             management_account_id = org["Organization"]["MasterAccountId"]
-        except RESTError:
+        except OrganizationsClientError:
             return {}
 
         org_config = self._get_org_config()
@@ -335,7 +331,7 @@ class SecurityHubBackend(BaseBackend):
     def describe_organization_configuration(self) -> dict[str, Any]:
         try:
             self.org_backend.describe_organization()
-        except RESTError:
+        except OrganizationsClientError:
             raise RESTError(
                 "AccessDeniedException",
                 "You do not have sufficient access to perform this action.",
@@ -360,6 +356,109 @@ class SecurityHubBackend(BaseBackend):
             "AutoEnableStandards": org_config["auto_enable_standards"],
             "OrganizationConfiguration": org_config["configuration"],
         }
+
+    def create_members(
+        self, account_details: list[dict[str, str]]
+    ) -> list[dict[str, str]]:
+        unprocessed_accounts: list[dict[str, str]] = []
+
+        if not account_details:
+            return unprocessed_accounts
+
+        for account in account_details:
+            account_id = account.get("AccountId")
+            email = account.get("Email", "")
+
+            if not account_id:
+                unprocessed_accounts.append(
+                    {
+                        "AccountId": account_id or "",
+                        "ProcessingResult": "Invalid input: AccountId is required",
+                    }
+                )
+                continue
+
+            if account_id in self.members:
+                unprocessed_accounts.append(
+                    {
+                        "AccountId": account_id,
+                        "ProcessingResult": f"Account {account_id} is already a member",
+                    }
+                )
+                continue
+
+            self.members[account_id] = {
+                "AccountId": account_id,
+                "Email": email,
+                "MemberStatus": "ENABLED",
+                "InvitedAt": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                "UpdatedAt": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            }
+
+        return unprocessed_accounts
+
+    def get_members(
+        self, account_ids: list[str]
+    ) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
+        members = []
+        unprocessed_accounts = []
+
+        try:
+            org_config = self._get_org_config()
+            admin_account_id = org_config.get("admin_account_id")
+        except Exception:
+            admin_account_id = None
+
+        for account_id in account_ids:
+            if account_id in self.members:
+                member_data = self.members[account_id].copy()
+                if admin_account_id:
+                    member_data["AdministratorId"] = admin_account_id
+                    member_data["MasterId"] = admin_account_id
+                members.append(member_data)
+            else:
+                unprocessed_accounts.append(
+                    {
+                        "AccountId": account_id,
+                        "ProcessingResult": f"Account {account_id} is not a member",
+                    }
+                )
+
+        return members, unprocessed_accounts
+
+    @paginate(pagination_model=PAGINATION_MODEL)  # type: ignore[misc]
+    def list_members(
+        self, only_associated: Optional[bool] = None
+    ) -> list[dict[str, str]]:
+        if only_associated is None:
+            only_associated = True
+
+        try:
+            org_config = self._get_org_config()
+            admin_account_id = org_config.get("admin_account_id")
+        except Exception:
+            admin_account_id = None
+
+        members = []
+        for member_data in self.members.values():
+            if only_associated and member_data.get("MemberStatus") != "ENABLED":
+                continue
+
+            member = member_data.copy()
+            if admin_account_id:
+                member["AdministratorId"] = admin_account_id
+                member["MasterId"] = admin_account_id
+            members.append(member)
+
+        return members
+
+    def get_master_account(self) -> dict[str, Any]:
+        admin_result = self.get_administrator_account()
+
+        if not admin_result or "Administrator" not in admin_result:
+            return {}
+
+        return {"Master": admin_result["Administrator"]}
 
 
 securityhub_backends = BackendDict(SecurityHubBackend, "securityhub")
