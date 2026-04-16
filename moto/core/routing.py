@@ -598,6 +598,8 @@ def test_s3_router() -> None:
     model = get_service_model("s3")
     router = ServiceOperationRouter(model)
     req = Request.from_values(method="GET", path="/my-bucket-name?list-type=2")
+    # Alternative url
+    # req = Request.from_values(method="GET", base_url="https://my-bucket-name.localhost", path="/?list-type=2")
     op, args = router.match(req)
 
     assert op.name == "ListObjectsV2"
