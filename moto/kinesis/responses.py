@@ -1,4 +1,8 @@
+import datetime
+from base64 import b64encode
+
 from moto.core.responses import ActionResult, BaseResponse, EmptyResult
+from moto.core.utils import unix_time
 
 from .models import KinesisBackend, kinesis_backends
 
@@ -6,6 +10,7 @@ from .models import KinesisBackend, kinesis_backends
 class KinesisResponse(BaseResponse):
     def __init__(self) -> None:
         super().__init__(service_name="kinesis")
+        self.automated_parameter_parsing = True
 
     @property
     def kinesis_backend(self) -> KinesisBackend:
@@ -74,6 +79,8 @@ class KinesisResponse(BaseResponse):
         shard_iterator_type = self._get_param("ShardIteratorType")
         starting_sequence_number = self._get_param("StartingSequenceNumber")
         at_timestamp = self._get_param("Timestamp")
+        if isinstance(at_timestamp, datetime.datetime):
+            at_timestamp = unix_time(at_timestamp)
 
         shard_iterator = self.kinesis_backend.get_shard_iterator(
             stream_arn,
@@ -111,6 +118,8 @@ class KinesisResponse(BaseResponse):
         partition_key = self._get_param("PartitionKey")
         explicit_hash_key = self._get_param("ExplicitHashKey")
         data = self._get_param("Data")
+        if isinstance(data, bytes):
+            data = b64encode(data).decode("utf-8")
 
         sequence_number, shard_id = self.kinesis_backend.put_record(
             stream_arn,
@@ -126,6 +135,9 @@ class KinesisResponse(BaseResponse):
         stream_arn = self._get_param("StreamARN")
         stream_name = self._get_param("StreamName")
         records = self._get_param("Records")
+        for record in records:
+            if isinstance(record.get("Data"), bytes):
+                record["Data"] = b64encode(record["Data"]).decode("utf-8")
 
         response = self.kinesis_backend.put_records(stream_arn, stream_name, records)
 
