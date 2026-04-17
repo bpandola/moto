@@ -9,6 +9,7 @@ from .models import TimestreamWriteBackend, timestreamwrite_backends
 class TimestreamWriteResponse(BaseResponse):
     def __init__(self) -> None:
         super().__init__(service_name="timestream-write")
+        self.automated_parameter_parsing = True
 
     @property
     def timestreamquery_backend(self) -> TimestreamQueryBackend:
