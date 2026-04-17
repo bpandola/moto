@@ -9,6 +9,7 @@ from .models import ALLOWED_CONTACT_TYPES, account_backends
 class AccountResponse(BaseResponse):
     def __init__(self) -> None:
         super().__init__(service_name="account")
+        self.automated_parameter_parsing = True
 
     def put_alternate_contact(self) -> ActionResult:
         account_id = self._get_account_id()
