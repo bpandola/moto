@@ -12,6 +12,11 @@ class NetworkFirewallResponse(BaseResponse):
 
     def __init__(self) -> None:
         super().__init__(service_name="networkfirewall")
+        self.automated_parameter_parsing = True
+
+    @property
+    def boto3_service_name(self) -> str:
+        return "network-firewall"
 
     @property
     def networkfirewall_backend(self) -> NetworkFirewallBackend:
