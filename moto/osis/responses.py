@@ -13,6 +13,7 @@ class OpenSearchIngestionResponse(BaseResponse):
 
     def __init__(self) -> None:
         super().__init__(service_name="osis")
+        self.automated_parameter_parsing = True
 
     @property
     def osis_backend(self) -> OpenSearchIngestionBackend:
@@ -20,16 +21,15 @@ class OpenSearchIngestionResponse(BaseResponse):
         return osis_backends[self.current_account][self.region]
 
     def create_pipeline(self) -> str:
-        params = json.loads(self.body)
-        pipeline_name = params.get("PipelineName")
-        min_units = params.get("MinUnits")
-        max_units = params.get("MaxUnits")
-        pipeline_configuration_body = params.get("PipelineConfigurationBody")
-        log_publishing_options = params.get("LogPublishingOptions")
-        vpc_options = params.get("VpcOptions")
-        buffer_options = params.get("BufferOptions")
-        encryption_at_rest_options = params.get("EncryptionAtRestOptions")
-        tags = params.get("Tags")
+        pipeline_name = self._get_param("PipelineName")
+        min_units = self._get_param("MinUnits")
+        max_units = self._get_param("MaxUnits")
+        pipeline_configuration_body = self._get_param("PipelineConfigurationBody")
+        log_publishing_options = self._get_param("LogPublishingOptions")
+        vpc_options = self._get_param("VpcOptions")
+        buffer_options = self._get_param("BufferOptions")
+        encryption_at_rest_options = self._get_param("EncryptionAtRestOptions")
+        tags = self._get_param("Tags")
         pipeline = self.osis_backend.create_pipeline(
             pipeline_name=pipeline_name,
             min_units=min_units,
@@ -72,19 +72,18 @@ class OpenSearchIngestionResponse(BaseResponse):
         )
 
     def list_tags_for_resource(self) -> str:
-        arn = self._get_param("arn")
+        arn = self._get_param("Arn")
         tags = self.osis_backend.list_tags_for_resource(arn=arn)
         return json.dumps(dict(tags))
 
     def update_pipeline(self) -> str:
-        params = json.loads(self.body)
-        pipeline_name = self.path.split("/")[-1]
-        min_units = params.get("MinUnits")
-        max_units = params.get("MaxUnits")
-        pipeline_configuration_body = params.get("PipelineConfigurationBody")
-        log_publishing_options = params.get("LogPublishingOptions")
-        buffer_options = params.get("BufferOptions")
-        encryption_at_rest_options = params.get("EncryptionAtRestOptions")
+        pipeline_name = self._get_param("PipelineName")
+        min_units = self._get_param("MinUnits")
+        max_units = self._get_param("MaxUnits")
+        pipeline_configuration_body = self._get_param("PipelineConfigurationBody")
+        log_publishing_options = self._get_param("LogPublishingOptions")
+        buffer_options = self._get_param("BufferOptions")
+        encryption_at_rest_options = self._get_param("EncryptionAtRestOptions")
         pipeline = self.osis_backend.update_pipeline(
             pipeline_name=pipeline_name,
             min_units=min_units,
@@ -98,9 +97,8 @@ class OpenSearchIngestionResponse(BaseResponse):
         return json.dumps({"Pipeline": pipeline.to_dict()})
 
     def tag_resource(self) -> str:
-        params = json.loads(self.body)
-        arn = self._get_param("arn")
-        tags = params.get("Tags")
+        arn = self._get_param("Arn")
+        tags = self._get_param("Tags")
         self.osis_backend.tag_resource(
             arn=arn,
             tags=tags,
@@ -108,9 +106,8 @@ class OpenSearchIngestionResponse(BaseResponse):
         return json.dumps({})
 
     def untag_resource(self) -> str:
-        params = json.loads(self.body)
-        arn = self._get_param("arn")
-        tag_keys = params.get("TagKeys")
+        arn = self._get_param("Arn")
+        tag_keys = self._get_param("TagKeys")
         self.osis_backend.untag_resource(
             arn=arn,
             tag_keys=tag_keys,
