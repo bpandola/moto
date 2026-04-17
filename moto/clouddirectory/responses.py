@@ -12,6 +12,7 @@ class CloudDirectoryResponse(BaseResponse):
 
     def __init__(self) -> None:
         super().__init__(service_name="clouddirectory")
+        self.automated_parameter_parsing = True
 
     @property
     def clouddirectory_backend(self) -> "CloudDirectoryBackend":
