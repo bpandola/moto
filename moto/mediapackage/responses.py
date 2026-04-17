@@ -1,6 +1,4 @@
-import json
-
-from moto.core.responses import BaseResponse
+from moto.core.responses import ActionResult, BaseResponse
 
 from .models import MediaPackageBackend, mediapackage_backends
 
@@ -8,49 +6,80 @@ from .models import MediaPackageBackend, mediapackage_backends
 class MediaPackageResponse(BaseResponse):
     def __init__(self) -> None:
         super().__init__(service_name="mediapackage")
+        self.automated_parameter_parsing = True
 
     @property
     def mediapackage_backend(self) -> MediaPackageBackend:
         return mediapackage_backends[self.current_account][self.region]
 
-    def create_channel(self) -> str:
-        description = self._get_param("description")
-        channel_id = self._get_param("id")
-        tags = self._get_param("tags")
+    @staticmethod
+    def _channel_result(channel):  # type: ignore[no-untyped-def]
+        return {
+            "Arn": channel.arn,
+            "Id": channel.channel_id,
+            "Description": channel.description,
+            "Tags": channel.tags,
+        }
+
+    @staticmethod
+    def _endpoint_result(endpoint):  # type: ignore[no-untyped-def]
+        return {
+            "Arn": endpoint.arn,
+            "Authorization": endpoint.authorization,
+            "ChannelId": endpoint.channel_id,
+            "CmafPackage": endpoint.cmaf_package,
+            "DashPackage": endpoint.dash_package,
+            "Description": endpoint.description,
+            "HlsPackage": endpoint.hls_package,
+            "Id": endpoint.id,
+            "ManifestName": endpoint.manifest_name,
+            "MssPackage": endpoint.mss_package,
+            "Origination": endpoint.origination,
+            "StartoverWindowSeconds": endpoint.startover_window_seconds,
+            "Tags": endpoint.tags,
+            "TimeDelaySeconds": endpoint.time_delay_seconds,
+            "Url": endpoint.url,
+            "Whitelist": endpoint.whitelist,
+        }
+
+    def create_channel(self) -> ActionResult:
+        description = self._get_param("Description")
+        channel_id = self._get_param("Id")
+        tags = self._get_param("Tags")
         channel = self.mediapackage_backend.create_channel(
             description=description, channel_id=channel_id, tags=tags
         )
-        return json.dumps(channel.to_dict())
+        return ActionResult(self._channel_result(channel))
 
-    def list_channels(self) -> str:
+    def list_channels(self) -> ActionResult:
         channels = self.mediapackage_backend.list_channels()
-        return json.dumps({"channels": channels})
+        return ActionResult({"Channels": channels})
 
-    def describe_channel(self) -> str:
-        channel_id = self._get_param("id")
+    def describe_channel(self) -> ActionResult:
+        channel_id = self._get_param("Id")
         channel = self.mediapackage_backend.describe_channel(channel_id=channel_id)
-        return json.dumps(channel.to_dict())
+        return ActionResult(self._channel_result(channel))
 
-    def delete_channel(self) -> str:
-        channel_id = self._get_param("id")
-        channel = self.mediapackage_backend.delete_channel(channel_id=channel_id)
-        return json.dumps(channel.to_dict())
+    def delete_channel(self) -> ActionResult:
+        channel_id = self._get_param("Id")
+        self.mediapackage_backend.delete_channel(channel_id=channel_id)
+        return ActionResult({})
 
-    def create_origin_endpoint(self) -> str:
-        authorization = self._get_param("authorization")
-        channel_id = self._get_param("channelId")
-        cmaf_package = self._get_param("cmafPackage")
-        dash_package = self._get_param("dashPackage")
-        description = self._get_param("description")
-        hls_package = self._get_param("hlsPackage")
-        endpoint_id = self._get_param("id")
-        manifest_name = self._get_param("manifestName")
-        mss_package = self._get_param("mssPackage")
-        origination = self._get_param("origination")
-        startover_window_seconds = self._get_int_param("startoverWindowSeconds")
-        tags = self._get_param("tags")
-        time_delay_seconds = self._get_int_param("timeDelaySeconds")
-        whitelist = self._get_param("whitelist")
+    def create_origin_endpoint(self) -> ActionResult:
+        authorization = self._get_param("Authorization")
+        channel_id = self._get_param("ChannelId")
+        cmaf_package = self._get_param("CmafPackage")
+        dash_package = self._get_param("DashPackage")
+        description = self._get_param("Description")
+        hls_package = self._get_param("HlsPackage")
+        endpoint_id = self._get_param("Id")
+        manifest_name = self._get_param("ManifestName")
+        mss_package = self._get_param("MssPackage")
+        origination = self._get_param("Origination")
+        startover_window_seconds = self._get_int_param("StartoverWindowSeconds")
+        tags = self._get_param("Tags")
+        time_delay_seconds = self._get_int_param("TimeDelaySeconds")
+        whitelist = self._get_param("Whitelist")
         origin_endpoint = self.mediapackage_backend.create_origin_endpoint(
             authorization=authorization,
             channel_id=channel_id,
@@ -67,39 +96,37 @@ class MediaPackageResponse(BaseResponse):
             time_delay_seconds=time_delay_seconds,
             whitelist=whitelist,  # type: ignore[arg-type]
         )
-        return json.dumps(origin_endpoint.to_dict())
+        return ActionResult(self._endpoint_result(origin_endpoint))
 
-    def list_origin_endpoints(self) -> str:
+    def list_origin_endpoints(self) -> ActionResult:
         origin_endpoints = self.mediapackage_backend.list_origin_endpoints()
-        return json.dumps({"originEndpoints": origin_endpoints})
+        return ActionResult({"OriginEndpoints": origin_endpoints})
 
-    def describe_origin_endpoint(self) -> str:
-        endpoint_id = self._get_param("id")
+    def describe_origin_endpoint(self) -> ActionResult:
+        endpoint_id = self._get_param("Id")
         endpoint = self.mediapackage_backend.describe_origin_endpoint(
             endpoint_id=endpoint_id
         )
-        return json.dumps(endpoint.to_dict())
+        return ActionResult(self._endpoint_result(endpoint))
 
-    def delete_origin_endpoint(self) -> str:
-        endpoint_id = self._get_param("id")
-        endpoint = self.mediapackage_backend.delete_origin_endpoint(
-            endpoint_id=endpoint_id
-        )
-        return json.dumps(endpoint.to_dict())
+    def delete_origin_endpoint(self) -> ActionResult:
+        endpoint_id = self._get_param("Id")
+        self.mediapackage_backend.delete_origin_endpoint(endpoint_id=endpoint_id)
+        return ActionResult({})
 
-    def update_origin_endpoint(self) -> str:
-        authorization = self._get_param("authorization")
-        cmaf_package = self._get_param("cmafPackage")
-        dash_package = self._get_param("dashPackage")
-        description = self._get_param("description")
-        hls_package = self._get_param("hlsPackage")
-        endpoint_id = self._get_param("id")
-        manifest_name = self._get_param("manifestName")
-        mss_package = self._get_param("mssPackage")
-        origination = self._get_param("origination")
-        startover_window_seconds = self._get_int_param("startoverWindowSeconds")
-        time_delay_seconds = self._get_int_param("timeDelaySeconds")
-        whitelist = self._get_param("whitelist")
+    def update_origin_endpoint(self) -> ActionResult:
+        authorization = self._get_param("Authorization")
+        cmaf_package = self._get_param("CmafPackage")
+        dash_package = self._get_param("DashPackage")
+        description = self._get_param("Description")
+        hls_package = self._get_param("HlsPackage")
+        endpoint_id = self._get_param("Id")
+        manifest_name = self._get_param("ManifestName")
+        mss_package = self._get_param("MssPackage")
+        origination = self._get_param("Origination")
+        startover_window_seconds = self._get_int_param("StartoverWindowSeconds")
+        time_delay_seconds = self._get_int_param("TimeDelaySeconds")
+        whitelist = self._get_param("Whitelist")
         origin_endpoint = self.mediapackage_backend.update_origin_endpoint(
             authorization=authorization,
             cmaf_package=cmaf_package,
@@ -114,4 +141,4 @@ class MediaPackageResponse(BaseResponse):
             time_delay_seconds=time_delay_seconds,
             whitelist=whitelist,  # type: ignore[arg-type]
         )
-        return json.dumps(origin_endpoint.to_dict())
+        return ActionResult(self._endpoint_result(origin_endpoint))
