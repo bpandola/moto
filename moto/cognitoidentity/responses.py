@@ -7,6 +7,7 @@ from .utils import get_random_identity_id
 class CognitoIdentityResponse(BaseResponse):
     def __init__(self) -> None:
         super().__init__(service_name="cognito-identity")
+        self.automated_parameter_parsing = True
 
     @property
     def backend(self) -> CognitoIdentityBackend:
