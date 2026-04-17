@@ -12,13 +12,14 @@ class DirectConnectResponse(BaseResponse):
 
     def __init__(self) -> None:
         super().__init__(service_name="directconnect")
+        self.automated_parameter_parsing = True
 
     @property
     def directconnect_backend(self) -> DirectConnectBackend:
         return directconnect_backends[self.current_account][self.region]
 
     def describe_connections(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         connections = self.directconnect_backend.describe_connections(
             connection_id=params.get("connectionId"),
         )
@@ -27,7 +28,7 @@ class DirectConnectResponse(BaseResponse):
         )
 
     def create_connection(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         connection: Connection = self.directconnect_backend.create_connection(
             location=params.get("location"),
             bandwidth=params.get("bandwidth"),
@@ -40,14 +41,14 @@ class DirectConnectResponse(BaseResponse):
         return json.dumps(connection.to_dict())
 
     def delete_connection(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         connection: Connection = self.directconnect_backend.delete_connection(
             connection_id=params.get("connectionId"),
         )
         return json.dumps(connection.to_dict())
 
     def update_connection(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         connection: Connection = self.directconnect_backend.update_connection(
             connection_id=params.get("connectionId"),
             new_connection_name=params.get("connectionName"),
@@ -56,7 +57,7 @@ class DirectConnectResponse(BaseResponse):
         return json.dumps(connection.to_dict())
 
     def associate_mac_sec_key(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         connection_id = params.get("connectionId")
         secret_arn = params.get("secretARN")
         ckn = params.get("ckn")
@@ -75,7 +76,7 @@ class DirectConnectResponse(BaseResponse):
         )
 
     def create_lag(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         number_of_connections = params.get("numberOfConnections")
         location = params.get("location")
         connections_bandwidth = params.get("connectionsBandwidth")
@@ -99,14 +100,14 @@ class DirectConnectResponse(BaseResponse):
         return json.dumps(lag.to_dict())
 
     def describe_lags(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         lags = self.directconnect_backend.describe_lags(
             lag_id=params.get("lagId"),
         )
         return json.dumps({"lags": [lag.to_dict() for lag in lags]})
 
     def disassociate_mac_sec_key(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         connection_id = params.get("connectionId")
         secret_arn = params.get("secretARN")
         connection_id, mac_sec_key = (
@@ -123,14 +124,14 @@ class DirectConnectResponse(BaseResponse):
         )
 
     def tag_resource(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         resource_arn = params.get("resourceArn")
         tags = params.get("tags")
         self.directconnect_backend.tag_resource(resource_arn=resource_arn, tags=tags)
         return json.dumps({})
 
     def untag_resource(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         resource_arn = params.get("resourceArn")
         tag_keys = params.get("tagKeys", [])
         self.directconnect_backend.untag_resource(
@@ -139,7 +140,7 @@ class DirectConnectResponse(BaseResponse):
         return json.dumps({})
 
     def describe_tags(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         resource_arns = params.get("resourceArns")
         tags = self.directconnect_backend.list_tags_for_resources(
             resource_arns=resource_arns
