@@ -13,6 +13,7 @@ class FSxResponse(BaseResponse):
 
     def __init__(self) -> None:
         super().__init__(service_name="fsx")
+        self.automated_parameter_parsing = True
 
     @property
     def fsx_backend(self) -> FSxBackend:
@@ -20,7 +21,7 @@ class FSxResponse(BaseResponse):
         return fsx_backends[self.current_account][self.region]
 
     def create_file_system(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         client_request_token = params.get("ClientRequestToken")
         file_system_type = params.get("FileSystemType")
         storage_capacity = params.get("StorageCapacity")
@@ -53,7 +54,7 @@ class FSxResponse(BaseResponse):
         return json.dumps({"FileSystem": file_system.to_dict()})
 
     def describe_file_systems(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         file_system_ids = params.get("FileSystemIds")
         max_results = params.get("MaxResults")
         next_token = params.get("NextToken")
@@ -66,7 +67,7 @@ class FSxResponse(BaseResponse):
         return json.dumps({"FileSystems": list_file_systems, "NextToken": next_token})
 
     def delete_file_system(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         file_system_id = params.get("FileSystemId")
         client_request_token = params.get("ClientRequestToken")
         windows_configuration = params.get("WindowsConfiguration")
@@ -97,7 +98,7 @@ class FSxResponse(BaseResponse):
         )
 
     def create_backup(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         file_system_id = params.get("FileSystemId")
         client_request_token = params.get("ClientRequestToken")
         tags = params.get("Tags")
@@ -112,7 +113,7 @@ class FSxResponse(BaseResponse):
         return json.dumps({"Backup": backup.to_dict()})
 
     def delete_backup(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         backup_id = params.get("BackupId")
         client_request_token = params.get("ClientRequestToken")
         resp = self.fsx_backend.delete_backup(
@@ -121,7 +122,7 @@ class FSxResponse(BaseResponse):
         return json.dumps(resp)
 
     def describe_backups(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         backup_ids = params.get("BackupIds")
         filters = params.get("Filters")
         max_results = params.get("MaxResults")
@@ -136,7 +137,7 @@ class FSxResponse(BaseResponse):
         return json.dumps({"Backups": list_backups, "NextToken": next_token})
 
     def tag_resource(self) -> TYPE_RESPONSE:
-        params = json.loads(self.body)
+        params = self._get_params()
         resource_arn = params.get("ResourceARN")
         tags = params.get("Tags")
         self.fsx_backend.tag_resource(
@@ -146,7 +147,7 @@ class FSxResponse(BaseResponse):
         return 200, {}, json.dumps({})
 
     def untag_resource(self) -> TYPE_RESPONSE:
-        params = json.loads(self.body)
+        params = self._get_params()
         resource_arn = params.get("ResourceARN")
         tag_keys = params.get("TagKeys")
         self.fsx_backend.untag_resource(
@@ -156,7 +157,7 @@ class FSxResponse(BaseResponse):
         return 200, {}, json.dumps({})
 
     def list_tags_for_resource(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         resource_arn = params.get("ResourceARN")
         tags = self.fsx_backend.list_tags_for_resource(resource_arn=resource_arn)
         return json.dumps({"Tags": tags})
