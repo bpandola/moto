@@ -12,6 +12,7 @@ class IVSResponse(BaseResponse):
 
     def __init__(self) -> None:
         super().__init__(service_name="ivs")
+        self.automated_parameter_parsing = True
 
     @property
     def ivs_backend(self) -> IVSBackend:
