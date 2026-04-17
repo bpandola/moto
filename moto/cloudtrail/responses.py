@@ -14,6 +14,7 @@ class CloudTrailResponse(BaseResponse):
 
     def __init__(self) -> None:
         super().__init__(service_name="cloudtrail")
+        self.automated_parameter_parsing = True
 
     @property
     def cloudtrail_backend(self) -> CloudTrailBackend:
@@ -117,7 +118,7 @@ class CloudTrailResponse(BaseResponse):
         return json.dumps(trail.description())
 
     def put_event_selectors(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         trail_name = params.get("TrailName")
         event_selectors = params.get("EventSelectors")
         advanced_event_selectors = params.get("AdvancedEventSelectors")
@@ -139,7 +140,7 @@ class CloudTrailResponse(BaseResponse):
         )
 
     def get_event_selectors(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         trail_name = params.get("TrailName")
         (
             trail_arn,
@@ -155,7 +156,7 @@ class CloudTrailResponse(BaseResponse):
         )
 
     def add_tags(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         resource_id = params.get("ResourceId")
         tags_list = params.get("TagsList")
         self.cloudtrail_backend.add_tags(resource_id=resource_id, tags_list=tags_list)
@@ -170,7 +171,7 @@ class CloudTrailResponse(BaseResponse):
         return json.dumps({})
 
     def list_tags(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         resource_id_list = params.get("ResourceIdList")
         resource_tag_list = self.cloudtrail_backend.list_tags(
             resource_id_list=resource_id_list
