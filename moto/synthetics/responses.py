@@ -18,6 +18,7 @@ class SyntheticsResponse(BaseResponse):
         Initialize the SyntheticsResponse with the synthetics service name.
         """
         super().__init__(service_name="synthetics")
+        self.automated_parameter_parsing = True
 
     @property
     def synthetics_backend(self) -> SyntheticsBackend:
@@ -30,7 +31,7 @@ class SyntheticsResponse(BaseResponse):
         """
         Create a new canary using the provided parameters.
         """
-        params = json.loads(self.body)
+        params = self._get_params()
         canary = self.synthetics_backend.create_canary(
             name=params["Name"],
             code=params.get("Code", {}),
@@ -60,11 +61,7 @@ class SyntheticsResponse(BaseResponse):
         """
         Retrieve details for a specific canary by name.
         """
-        # Extract name from the URL path /canary/MyCanary
-        path_parts = self.path.split("/")
-        name = path_parts[-1] if len(path_parts) > 1 else None
-        if not name:
-            raise ValueError("Canary name not found in URL")
+        name = self._get_param("Name")
         canary = self.synthetics_backend.get_canary(name)
         return json.dumps({"Canary": canary.to_dict()})
 
@@ -79,11 +76,7 @@ class SyntheticsResponse(BaseResponse):
         """
         List tags for a given resource ARN.
         """
-        # Extract ARN from the URL path /tags/{resourceArn}
-        path_parts = self.path.split("/")
-        arn = path_parts[-1] if len(path_parts) > 1 else None
-        if not arn:
-            raise ValueError("Resource ARN not found in URL")
+        arn = self._get_param("ResourceArn")
         tags = self.synthetics_backend.list_tags_for_resource(arn)
         return json.dumps({"Tags": tags})
 
@@ -95,6 +88,14 @@ class SyntheticsResponse(BaseResponse):
         if action is None and self.path == "/":
             return "GetHealthCheck"  # Default action for root endpoint
         return action or "Unknown"
+
+    def parse_parameters(self, request: object) -> None:
+        """
+        Skip automated parameter parsing for the non-existent GetHealthCheck action.
+        """
+        if self._get_action() == "GetHealthCheck":
+            return
+        super().parse_parameters(request)  # type: ignore[arg-type]
 
     def get_health_check(self) -> str:
         """
