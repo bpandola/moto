@@ -1,6 +1,5 @@
 import json
 from typing import Any
-from urllib.parse import unquote
 
 from moto.core.responses import BaseResponse
 
@@ -10,6 +9,7 @@ from .models import Inspector2Backend, inspector2_backends
 class Inspector2Response(BaseResponse):
     def __init__(self) -> None:
         super().__init__(service_name="inspector2")
+        self.automated_parameter_parsing = True
 
     @property
     def inspector2_backend(self) -> Inspector2Backend:
@@ -125,18 +125,18 @@ class Inspector2Response(BaseResponse):
         return json.dumps({"member": member.to_json()})
 
     def list_tags_for_resource(self) -> str:
-        arn = unquote(self.path.split("/tags/")[-1])
+        arn = self._get_param("resourceArn")
         tags = self.inspector2_backend.list_tags_for_resource(arn)
         return json.dumps({"tags": tags})
 
     def tag_resource(self) -> str:
-        resource_arn = unquote(self.path.split("/tags/")[-1])
+        resource_arn = self._get_param("resourceArn")
         tags = self._get_param("tags")
         self.inspector2_backend.tag_resource(resource_arn=resource_arn, tags=tags)
         return "{}"
 
     def untag_resource(self) -> str:
-        resource_arn = unquote(self.path.split("/tags/")[-1])
-        tag_keys = self.querystring.get("tagKeys")
-        self.inspector2_backend.untag_resource(resource_arn, tag_keys)  # type: ignore
+        resource_arn = self._get_param("resourceArn")
+        tag_keys = self._get_param("tagKeys")
+        self.inspector2_backend.untag_resource(resource_arn, tag_keys)
         return "{}"
