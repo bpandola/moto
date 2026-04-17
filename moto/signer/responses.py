@@ -2,7 +2,6 @@
 
 import json
 from typing import Any
-from urllib.parse import unquote
 
 from moto.core.responses import BaseResponse
 
@@ -12,6 +11,7 @@ from .models import SignerBackend, signer_backends
 class SignerResponse(BaseResponse):
     def __init__(self) -> None:
         super().__init__(service_name="signer")
+        self.automated_parameter_parsing = True
 
     @property
     def signer_backend(self) -> SignerBackend:
@@ -19,18 +19,18 @@ class SignerResponse(BaseResponse):
         return signer_backends[self.current_account][self.region]
 
     def cancel_signing_profile(self) -> str:
-        profile_name = self.path.split("/")[-1]
+        profile_name = self._get_param("profileName")
         self.signer_backend.cancel_signing_profile(profile_name=profile_name)
         return "{}"
 
     def get_signing_profile(self) -> str:
-        profile_name = self.path.split("/")[-1]
+        profile_name = self._get_param("profileName")
         profile = self.signer_backend.get_signing_profile(profile_name=profile_name)
         return json.dumps(profile.to_dict())
 
     def put_signing_profile(self) -> str:
-        params = json.loads(self.body)
-        profile_name = self.path.split("/")[-1]
+        params = self._get_params()
+        profile_name = self._get_param("profileName")
         signature_validity_period = params.get("signatureValidityPeriod")
         platform_id = params.get("platformId")
         tags = params.get("tags")
@@ -49,20 +49,20 @@ class SignerResponse(BaseResponse):
         return json.dumps({"platforms": platforms})
 
     def list_tags_for_resource(self) -> str:
-        resource_arn = unquote(self.path.split("/tags/")[-1])
+        resource_arn = self._get_param("resourceArn")
         return json.dumps(
             {"tags": self.signer_backend.list_tags_for_resource(resource_arn)}
         )
 
     def tag_resource(self) -> str:
-        resource_arn = unquote(self.path.split("/tags/")[-1])
+        resource_arn = self._get_param("resourceArn")
         tags = self._get_param("tags")
         self.signer_backend.tag_resource(resource_arn, tags)
         return "{}"
 
     def untag_resource(self) -> str:
-        resource_arn = unquote(self.path.split("/tags/")[-1])
-        tag_keys = self.querystring.get("tagKeys")
+        resource_arn = self._get_param("resourceArn")
+        tag_keys = self._get_param("tagKeys")
         self.signer_backend.untag_resource(resource_arn, tag_keys)  # type: ignore
         return "{}"
 
