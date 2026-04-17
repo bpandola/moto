@@ -6,6 +6,7 @@ from .models import DynamoDBStreamsBackend, dynamodbstreams_backends
 class DynamoDBStreamsHandler(BaseResponse):
     def __init__(self) -> None:
         super().__init__(service_name="dynamodbstreams")
+        self.automated_parameter_parsing = True
 
     @property
     def backend(self) -> DynamoDBStreamsBackend:
