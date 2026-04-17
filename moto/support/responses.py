@@ -8,6 +8,7 @@ from .models import SupportBackend, support_backends
 class SupportResponse(BaseResponse):
     def __init__(self) -> None:
         super().__init__(service_name="support")
+        self.automated_parameter_parsing = True
 
     @property
     def support_backend(self) -> SupportBackend:
