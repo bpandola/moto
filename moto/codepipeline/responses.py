@@ -8,6 +8,7 @@ from .models import CodePipelineBackend, codepipeline_backends
 class CodePipelineResponse(BaseResponse):
     def __init__(self) -> None:
         super().__init__(service_name="codepipeline")
+        self.automated_parameter_parsing = True
 
     @property
     def codepipeline_backend(self) -> CodePipelineBackend:
