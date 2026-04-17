@@ -21,15 +21,7 @@ from .policy_validator import validate_policy
 class KmsResponse(BaseResponse):
     def __init__(self) -> None:
         super().__init__(service_name="kms")
-
-    def _get_param(self, param_name: str, if_none: Any = None) -> Any:
-        params = json.loads(self.body)
-
-        for key in ("Plaintext", "CiphertextBlob", "Message"):
-            if key in params:
-                params[key] = base64.b64decode(params[key].encode("utf-8"))
-
-        return params.get(param_name, if_none)
+        self.automated_parameter_parsing = True
 
     @property
     def kms_backend(self) -> KmsBackend:
@@ -429,9 +421,6 @@ class KmsResponse(BaseResponse):
 
         self._validate_key_id(key_id)
 
-        if isinstance(plaintext, str):
-            plaintext = plaintext.encode("utf-8")
-
         ciphertext_blob, arn = self.kms_backend.encrypt(
             key_id=key_id, plaintext=plaintext, encryption_context=encryption_context
         )
@@ -646,9 +635,6 @@ class KmsResponse(BaseResponse):
 
         self._validate_key_id(key_id)
 
-        if isinstance(message, str):
-            message = message.encode("utf-8")
-
         if message == b"":
             raise ValidationException(
                 "1 validation error detected: Value at 'Message' failed to satisfy constraint: Member must have length greater than or equal to 1"
@@ -686,17 +672,10 @@ class KmsResponse(BaseResponse):
         if not message_type:
             message_type = "RAW"
 
-        if isinstance(message, str):
-            message = message.encode("utf-8")
-
         if message == b"":
             raise ValidationException(
                 "1 validation error detected: Value at 'Message' failed to satisfy constraint: Member must have length greater than or equal to 1"
             )
-
-        if isinstance(signature, str):
-            # we return base64 signatures, when signing
-            signature = base64.b64decode(signature.encode("utf-8"))
 
         if signature == b"":
             raise ValidationException(
@@ -743,7 +722,7 @@ class KmsResponse(BaseResponse):
             message=message,
             key_id=key_id,
             mac_algorithm=mac_algorithm,
-            mac=mac,
+            mac=base64.b64encode(mac).decode("utf-8"),
             grant_tokens=grant_tokens,
             dry_run=dry_run,
         )
