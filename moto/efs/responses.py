@@ -11,6 +11,7 @@ TYPE_RESPONSE = tuple[str, dict[str, Union[str, int]]]
 class EFSResponse(BaseResponse):
     def __init__(self) -> None:
         super().__init__(service_name="efs")
+        self.automated_parameter_parsing = True
 
     @property
     def efs_backend(self) -> EFSBackend:
@@ -194,7 +195,7 @@ class EFSResponse(BaseResponse):
 
     def untag_resource(self) -> TYPE_RESPONSE:
         resource_id = self._get_param("ResourceId")
-        tag_keys = self.querystring.get("tagKeys", [])
+        tag_keys = self._get_param("TagKeys") or []
         self.efs_backend.untag_resource(resource_id, tag_keys)
         return "{}", {"Content-Type": "application/json"}
 
