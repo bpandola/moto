@@ -18,6 +18,7 @@ class S3VectorsResponse(BaseResponse):
 
     def __init__(self) -> None:
         super().__init__(service_name="s3vectors")
+        self.automated_parameter_parsing = True
 
     @property
     def s3vectors_backend(self) -> S3VectorsBackend:
