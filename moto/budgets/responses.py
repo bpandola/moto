@@ -8,6 +8,7 @@ from .models import BudgetsBackend, budgets_backends
 class BudgetsResponse(BaseResponse):
     def __init__(self) -> None:
         super().__init__(service_name="budgets")
+        self.automated_parameter_parsing = True
 
     @property
     def backend(self) -> BudgetsBackend:
