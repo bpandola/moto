@@ -10,6 +10,7 @@ from .models import ResourceGroupsBackend, resourcegroups_backends
 class ResourceGroupsResponse(BaseResponse):
     def __init__(self) -> None:
         super().__init__(service_name="resource-groups")
+        self.automated_parameter_parsing = True
 
     @property
     def resourcegroups_backend(self) -> ResourceGroupsBackend:
