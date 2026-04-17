@@ -17,13 +17,14 @@ from .models import (
 class CognitoIdpResponse(BaseResponse):
     def __init__(self) -> None:
         super().__init__(service_name="cognito-idp")
+        self.automated_parameter_parsing = True
 
     def _get_region_agnostic_backend(self) -> RegionAgnosticBackend:
         return RegionAgnosticBackend(self.current_account, self.region)
 
     @property
     def parameters(self) -> dict[str, Any]:  # type: ignore[misc]
-        return json.loads(self.body)
+        return self._get_params()
 
     @property
     def backend(self) -> CognitoIdpBackend:
