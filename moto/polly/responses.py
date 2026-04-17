@@ -1,7 +1,6 @@
 import json
 import re
 from typing import Any, Union
-from urllib.parse import urlsplit
 
 from moto.core.responses import BaseResponse
 
@@ -14,29 +13,17 @@ LEXICON_NAME_REGEX = re.compile(r"^[0-9A-Za-z]{1,20}$")
 class PollyResponse(BaseResponse):
     def __init__(self) -> None:
         super().__init__(service_name="polly")
+        self.automated_parameter_parsing = True
 
     @property
     def polly_backend(self) -> PollyBackend:
         return polly_backends[self.current_account][self.region]
 
-    @property
-    def json(self) -> dict[str, Any]:  # type: ignore[misc]
-        if not hasattr(self, "_json"):
-            self._json = json.loads(self.body)
-        return self._json
-
     def _error(self, code: str, message: str) -> tuple[str, dict[str, int]]:
         return json.dumps({"__type": code, "message": message}), {"status": 400}
 
-    def _get_action(self) -> str:
-        # Amazon is now naming things /v1/api_name
-        url_parts = urlsplit(self.uri).path.lstrip("/").split("/")
-        # [0] = 'v1'
-
-        return url_parts[1]
-
     # DescribeVoices
-    def voices(self) -> Union[str, tuple[str, dict[str, int]]]:
+    def describe_voices(self) -> Union[str, tuple[str, dict[str, int]]]:
         language_code = self._get_param("LanguageCode")
 
         if language_code is not None and language_code not in LANGUAGE_CODES:
@@ -51,48 +38,32 @@ class PollyResponse(BaseResponse):
 
         return json.dumps({"Voices": voices})
 
-    def lexicons(self) -> Union[str, tuple[str, dict[str, int]]]:
-        # Dish out requests based on methods
-
-        # anything after the /v1/lexicons/
-        args = urlsplit(self.uri).path.lstrip("/").split("/")[2:]
-
-        if self.method == "GET":
-            if len(args) == 0:
-                return self._get_lexicons_list()
-            else:
-                return self._get_lexicon(*args)
-        elif self.method == "PUT":
-            return self._put_lexicons(*args)
-        elif self.method == "DELETE":
-            return self._delete_lexicon(*args)
-
-        return self._error("InvalidAction", "Bad route")
-
     # PutLexicon
-    def _put_lexicons(
-        self, lexicon_name: str
-    ) -> Union[str, tuple[str, dict[str, int]]]:
+    def put_lexicon(self) -> Union[str, tuple[str, dict[str, int]]]:
+        lexicon_name = self._get_param("Name")
+
         if LEXICON_NAME_REGEX.match(lexicon_name) is None:
             return self._error(
                 "InvalidParameterValue", "Lexicon name must match [0-9A-Za-z]{1,20}"
             )
 
-        if "Content" not in self.json:
+        if "Content" not in self._get_params():
             return self._error("MissingParameter", "Content is missing from the body")
 
-        self.polly_backend.put_lexicon(lexicon_name, self.json["Content"])
+        self.polly_backend.put_lexicon(lexicon_name, self._get_params()["Content"])
 
         return ""
 
     # ListLexicons
-    def _get_lexicons_list(self) -> str:
+    def list_lexicons(self) -> str:
         result = {"Lexicons": self.polly_backend.list_lexicons()}
 
         return json.dumps(result)
 
     # GetLexicon
-    def _get_lexicon(self, lexicon_name: str) -> Union[str, tuple[str, dict[str, int]]]:
+    def get_lexicon(self) -> Union[str, tuple[str, dict[str, int]]]:
+        lexicon_name = self._get_param("Name")
+
         try:
             lexicon = self.polly_backend.get_lexicon(lexicon_name)
         except KeyError:
@@ -106,9 +77,9 @@ class PollyResponse(BaseResponse):
         return json.dumps(result)
 
     # DeleteLexicon
-    def _delete_lexicon(
-        self, lexicon_name: str
-    ) -> Union[str, tuple[str, dict[str, int]]]:
+    def delete_lexicon(self) -> Union[str, tuple[str, dict[str, int]]]:
+        lexicon_name = self._get_param("Name")
+
         try:
             self.polly_backend.delete_lexicon(lexicon_name)
         except KeyError:
@@ -117,7 +88,8 @@ class PollyResponse(BaseResponse):
         return ""
 
     # SynthesizeSpeech
-    def speech(self) -> tuple[str, dict[str, Any]]:
+    def synthesize_speech(self) -> tuple[str, dict[str, Any]]:
+        params = self._get_params()
         # Sanity check params
         args = {
             "lexicon_names": None,
@@ -127,25 +99,25 @@ class PollyResponse(BaseResponse):
             "text_type": "text",
         }
 
-        if "LexiconNames" in self.json:
-            for lex in self.json["LexiconNames"]:
+        if "LexiconNames" in params:
+            for lex in params["LexiconNames"]:
                 try:
                     self.polly_backend.get_lexicon(lex)
                 except KeyError:
                     return self._error("LexiconNotFoundException", "Lexicon not found")
 
-            args["lexicon_names"] = self.json["LexiconNames"]
+            args["lexicon_names"] = params["LexiconNames"]
 
-        if "OutputFormat" not in self.json:
+        if "OutputFormat" not in params:
             return self._error("MissingParameter", "Missing parameter OutputFormat")
-        if self.json["OutputFormat"] not in ("json", "mp3", "ogg_vorbis", "pcm"):
+        if params["OutputFormat"] not in ("json", "mp3", "ogg_vorbis", "pcm"):
             return self._error(
                 "InvalidParameterValue", "Not one of json, mp3, ogg_vorbis, pcm"
             )
-        args["output_format"] = self.json["OutputFormat"]
+        args["output_format"] = params["OutputFormat"]
 
-        if "SampleRate" in self.json:
-            sample_rate = int(self.json["SampleRate"])
+        if "SampleRate" in params:
+            sample_rate = int(params["SampleRate"])
             if sample_rate not in (8000, 16000, 22050):
                 return self._error(
                     "InvalidSampleRateException",
@@ -153,30 +125,30 @@ class PollyResponse(BaseResponse):
                 )
             args["sample_rate"] = sample_rate
 
-        if "SpeechMarkTypes" in self.json:
-            for value in self.json["SpeechMarkTypes"]:
+        if "SpeechMarkTypes" in params:
+            for value in params["SpeechMarkTypes"]:
                 if value not in ("sentance", "ssml", "viseme", "word"):
                     return self._error(
                         "InvalidParameterValue",
                         "Not one of sentance, ssml, viseme, word",
                     )
-            args["speech_marks"] = self.json["SpeechMarkTypes"]
+            args["speech_marks"] = params["SpeechMarkTypes"]
 
-        if "Text" not in self.json:
+        if "Text" not in params:
             return self._error("MissingParameter", "Missing parameter Text")
-        args["text"] = self.json["Text"]
+        args["text"] = params["Text"]
 
-        if "TextType" in self.json:
-            if self.json["TextType"] not in ("ssml", "text"):
+        if "TextType" in params:
+            if params["TextType"] not in ("ssml", "text"):
                 return self._error("InvalidParameterValue", "Not one of ssml, text")
-            args["text_type"] = self.json["TextType"]
+            args["text_type"] = params["TextType"]
 
-        if "VoiceId" not in self.json:
+        if "VoiceId" not in params:
             return self._error("MissingParameter", "Missing parameter VoiceId")
-        if self.json["VoiceId"] not in VOICE_IDS:
+        if params["VoiceId"] not in VOICE_IDS:
             all_voices = ", ".join(VOICE_IDS)  # type: ignore
             return self._error("InvalidParameterValue", f"Not one of {all_voices}")
-        args["voice_id"] = self.json["VoiceId"]
+        args["voice_id"] = params["VoiceId"]
 
         # More validation
         if len(args["text"]) > 3000:  # type: ignore
