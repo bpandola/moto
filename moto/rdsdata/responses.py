@@ -8,6 +8,7 @@ from .models import RDSDataServiceBackend, rdsdata_backends
 class RDSDataServiceResponse(BaseResponse):
     def __init__(self) -> None:
         super().__init__(service_name="rds-data")
+        self.automated_parameter_parsing = True
 
     @property
     def rdsdata_backend(self) -> RDSDataServiceBackend:
