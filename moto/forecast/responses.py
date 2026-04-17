@@ -9,6 +9,7 @@ from .models import ForecastBackend, forecast_backends
 class ForecastResponse(BaseResponse):
     def __init__(self) -> None:
         super().__init__(service_name="forecast")
+        self.automated_parameter_parsing = True
 
     @property
     def forecast_backend(self) -> ForecastBackend:
