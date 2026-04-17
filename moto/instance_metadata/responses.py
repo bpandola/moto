@@ -33,6 +33,7 @@ INSTANCE_METADATA = {
 class InstanceMetadataResponse(BaseResponse):
     def __init__(self) -> None:
         super().__init__(service_name=None)
+        self.automated_parameter_parsing = True
 
     def backends(self) -> None:
         pass
