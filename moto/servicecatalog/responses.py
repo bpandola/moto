@@ -1,7 +1,5 @@
 """Handles incoming servicecatalog requests, invokes methods, returns responses."""
 
-import json
-
 from moto.core.responses import ActionResult, BaseResponse, EmptyResult
 
 from .models import ServiceCatalogBackend, servicecatalog_backends
@@ -12,6 +10,7 @@ class ServiceCatalogResponse(BaseResponse):
 
     def __init__(self) -> None:
         super().__init__(service_name="servicecatalog")
+        self.automated_parameter_parsing = True
 
     @property
     def servicecatalog_backend(self) -> ServiceCatalogBackend:
@@ -22,7 +21,7 @@ class ServiceCatalogResponse(BaseResponse):
         return servicecatalog_backends[self.current_account][self.region]
 
     def list_portfolio_access(self) -> ActionResult:
-        params = json.loads(self.body)
+        params = self._get_params()
         accept_language = params.get("AcceptLanguage")
         portfolio_id = params.get("PortfolioId")
         organization_parent_id = params.get("OrganizationParentId")
@@ -46,7 +45,7 @@ class ServiceCatalogResponse(BaseResponse):
         )
 
     def delete_portfolio(self) -> ActionResult:
-        params = json.loads(self.body)
+        params = self._get_params()
         accept_language = params.get("AcceptLanguage")
         id = params.get("Id")
 
@@ -58,7 +57,7 @@ class ServiceCatalogResponse(BaseResponse):
         return EmptyResult()
 
     def delete_portfolio_share(self) -> ActionResult:
-        params = json.loads(self.body)
+        params = self._get_params()
         accept_language = params.get("AcceptLanguage")
         portfolio_id = params.get("PortfolioId")
         account_id = params.get("AccountId")
@@ -78,7 +77,7 @@ class ServiceCatalogResponse(BaseResponse):
         return ActionResult(response)
 
     def create_portfolio(self) -> ActionResult:
-        params = json.loads(self.body)
+        params = self._get_params()
 
         accept_language = params.get("AcceptLanguage")
         display_name = params.get("DisplayName")
@@ -99,7 +98,7 @@ class ServiceCatalogResponse(BaseResponse):
         return ActionResult({"PortfolioDetail": portfolio_detail, "Tags": tags})
 
     def create_portfolio_share(self) -> ActionResult:
-        params = json.loads(self.body)
+        params = self._get_params()
         accept_language = params.get("AcceptLanguage")
         portfolio_id = params.get("PortfolioId")
         account_id = params.get("AccountId")
@@ -143,7 +142,7 @@ class ServiceCatalogResponse(BaseResponse):
         return ActionResult(response)
 
     def describe_portfolio_shares(self) -> ActionResult:
-        params = json.loads(self.body)
+        params = self._get_params()
         portfolio_id = params.get("PortfolioId")
         type = params.get("Type")
         page_token = params.get("PageToken")
@@ -167,7 +166,7 @@ class ServiceCatalogResponse(BaseResponse):
 
     def describe_portfolio(self) -> ActionResult:
         """Handle describe_portfolio request."""
-        params = json.loads(self.body)
+        params = self._get_params()
         accept_language = params.get("AcceptLanguage")
         id = params.get("Id")
 
@@ -188,7 +187,7 @@ class ServiceCatalogResponse(BaseResponse):
         return ActionResult(response)
 
     def create_product(self) -> ActionResult:
-        params = json.loads(self.body)
+        params = self._get_params()
         name = params.get("Name")
         owner = params.get("Owner")
         description = params.get("Description")
@@ -236,7 +235,7 @@ class ServiceCatalogResponse(BaseResponse):
         )
 
     def describe_product(self) -> ActionResult:
-        params = json.loads(self.body)
+        params = self._get_params()
         accept_language = params.get("AcceptLanguage")
         id = params.get("Id")
         name = params.get("Name")
@@ -255,7 +254,7 @@ class ServiceCatalogResponse(BaseResponse):
         return ActionResult(result)
 
     def delete_product(self) -> ActionResult:
-        params = json.loads(self.body)
+        params = self._get_params()
         accept_language = params.get("AcceptLanguage")
         id = params.get("Id")
 
