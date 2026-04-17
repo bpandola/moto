@@ -1,5 +1,3 @@
-from urllib.parse import unquote
-
 from moto.core.responses import ActionResult, BaseResponse, EmptyResult
 
 from .models import IoTBackend, iot_backends
@@ -8,6 +6,7 @@ from .models import IoTBackend, iot_backends
 class IoTResponse(BaseResponse):
     def __init__(self) -> None:
         super().__init__(service_name="iot")
+        self.automated_parameter_parsing = True
 
     @property
     def iot_backend(self) -> IoTBackend:
@@ -329,7 +328,7 @@ class IoTResponse(BaseResponse):
         )
 
     def delete_ca_certificate(self) -> ActionResult:
-        certificate_id = self.path.split("/")[-1]
+        certificate_id = self._get_param("certificateId")
         self.iot_backend.delete_ca_certificate(certificate_id=certificate_id)
         return EmptyResult()
 
@@ -340,7 +339,7 @@ class IoTResponse(BaseResponse):
         return EmptyResult()
 
     def describe_ca_certificate(self) -> ActionResult:
-        certificate_id = self.path.split("/")[-1]
+        certificate_id = self._get_param("certificateId")
         certificate = self.iot_backend.describe_ca_certificate(
             certificate_id=certificate_id
         )
@@ -418,7 +417,7 @@ class IoTResponse(BaseResponse):
         )
 
     def update_ca_certificate(self) -> ActionResult:
-        certificate_id = self.path.split("/")[-1]
+        certificate_id = self._get_param("certificateId")
         new_status = self._get_param("newStatus")
         config = self._get_param("registrationConfig")
         self.iot_backend.update_ca_certificate(
@@ -589,14 +588,14 @@ class IoTResponse(BaseResponse):
         return ActionResult({"thingPrincipalObjects": thing_principal_objects})
 
     def describe_thing_group(self) -> ActionResult:
-        thing_group_name = unquote(self.path.split("/thing-groups/")[-1])
+        thing_group_name = self._get_param("thingGroupName")
         thing_group = self.iot_backend.describe_thing_group(
             thing_group_name=thing_group_name
         )
         return ActionResult(thing_group.to_dict())
 
     def create_thing_group(self) -> ActionResult:
-        thing_group_name = unquote(self.path.split("/thing-groups/")[-1])
+        thing_group_name = self._get_param("thingGroupName")
         parent_group_name = self._get_param("parentGroupName")
         thing_group_properties = self._get_param("thingGroupProperties")
         (
@@ -617,7 +616,7 @@ class IoTResponse(BaseResponse):
         )
 
     def delete_thing_group(self) -> ActionResult:
-        thing_group_name = unquote(self.path.split("/thing-groups/")[-1])
+        thing_group_name = self._get_param("thingGroupName")
         self.iot_backend.delete_thing_group(thing_group_name=thing_group_name)
         return EmptyResult()
 
@@ -640,7 +639,7 @@ class IoTResponse(BaseResponse):
         return ActionResult({"thingGroups": rets, "nextToken": next_token})
 
     def update_thing_group(self) -> ActionResult:
-        thing_group_name = unquote(self.path.split("/thing-groups/")[-1])
+        thing_group_name = self._get_param("thingGroupName")
         thing_group_properties = self._get_param("thingGroupProperties")
         expected_version = self._get_param("expectedVersion")
         version = self.iot_backend.update_thing_group(
@@ -715,26 +714,28 @@ class IoTResponse(BaseResponse):
         )
 
     def create_topic_rule(self) -> ActionResult:
+        payload = self._get_param("topicRulePayload") or {}
         self.iot_backend.create_topic_rule(
             rule_name=self._get_param("ruleName"),
-            description=self._get_param("description"),
-            rule_disabled=self._get_param("ruleDisabled"),
-            actions=self._get_param("actions"),
-            error_action=self._get_param("errorAction"),
-            sql=self._get_param("sql"),
-            aws_iot_sql_version=self._get_param("awsIotSqlVersion"),
+            description=payload.get("description"),
+            rule_disabled=payload.get("ruleDisabled"),
+            actions=payload.get("actions"),
+            error_action=payload.get("errorAction"),
+            sql=payload.get("sql"),
+            aws_iot_sql_version=payload.get("awsIotSqlVersion"),
         )
         return EmptyResult()
 
     def replace_topic_rule(self) -> ActionResult:
+        payload = self._get_param("topicRulePayload") or {}
         self.iot_backend.replace_topic_rule(
             rule_name=self._get_param("ruleName"),
-            description=self._get_param("description"),
-            rule_disabled=self._get_param("ruleDisabled"),
-            actions=self._get_param("actions"),
-            error_action=self._get_param("errorAction"),
-            sql=self._get_param("sql"),
-            aws_iot_sql_version=self._get_param("awsIotSqlVersion"),
+            description=payload.get("description"),
+            rule_disabled=payload.get("ruleDisabled"),
+            actions=payload.get("actions"),
+            error_action=payload.get("errorAction"),
+            sql=payload.get("sql"),
+            aws_iot_sql_version=payload.get("awsIotSqlVersion"),
         )
         return EmptyResult()
 
