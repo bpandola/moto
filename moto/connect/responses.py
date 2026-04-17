@@ -14,6 +14,7 @@ class ConnectResponse(BaseResponse):
 
     def __init__(self) -> None:
         super().__init__(service_name="connect")
+        self.automated_parameter_parsing = True
 
     @property
     def connect_backend(self) -> ConnectBackend:
@@ -27,9 +28,8 @@ class ConnectResponse(BaseResponse):
 
     def associate_analytics_data_set(self) -> str:
         instance_id = self._get_instance_id()
-        params = json.loads(self.body) if self.body else {}
-        data_set_id = str(params["DataSetId"])
-        target_account_id = params.get("TargetAccountId")
+        data_set_id = str(self._get_param("DataSetId"))
+        target_account_id = self._get_param("TargetAccountId")
 
         result = self.connect_backend.associate_analytics_data_set(
             instance_id=instance_id,
@@ -41,8 +41,7 @@ class ConnectResponse(BaseResponse):
 
     def disassociate_analytics_data_set(self) -> str:
         instance_id = self._get_instance_id()
-        params = json.loads(self.body) if self.body else {}
-        data_set_id = str(params["DataSetId"])
+        data_set_id = str(self._get_param("DataSetId"))
 
         self.connect_backend.disassociate_analytics_data_set(
             instance_id=instance_id,
@@ -54,8 +53,8 @@ class ConnectResponse(BaseResponse):
     def list_analytics_data_associations(self) -> str:
         instance_id = self._get_instance_id()
         data_set_id = self._get_param("DataSetId")
-        max_results = self._get_int_param("maxResults")
-        next_token = self._get_param("nextToken")
+        max_results = self._get_int_param("MaxResults")
+        next_token = self._get_param("NextToken")
 
         results: list[dict[str, str]]
         token: Optional[str]
@@ -73,12 +72,11 @@ class ConnectResponse(BaseResponse):
         return json.dumps(response)
 
     def create_instance(self) -> str:
-        params = json.loads(self.body) if self.body else {}
-        identity_management_type = str(params["IdentityManagementType"])
-        instance_alias = params.get("InstanceAlias")
-        inbound_calls_enabled = params.get("InboundCallsEnabled", False)
-        outbound_calls_enabled = params.get("OutboundCallsEnabled", False)
-        tags = params.get("Tags")
+        identity_management_type = str(self._get_param("IdentityManagementType"))
+        instance_alias = self._get_param("InstanceAlias")
+        inbound_calls_enabled = self._get_param("InboundCallsEnabled", False)
+        outbound_calls_enabled = self._get_param("OutboundCallsEnabled", False)
+        tags = self._get_param("Tags")
 
         result = self.connect_backend.create_instance(
             identity_management_type=identity_management_type,
@@ -98,8 +96,8 @@ class ConnectResponse(BaseResponse):
         return json.dumps({"Instance": instance})
 
     def list_instances(self) -> str:
-        max_results = self._get_int_param("maxResults")
-        next_token = self._get_param("nextToken")
+        max_results = self._get_int_param("MaxResults")
+        next_token = self._get_param("NextToken")
 
         results: list[dict[str, Any]]
         token: Optional[str]
@@ -128,8 +126,7 @@ class ConnectResponse(BaseResponse):
 
     def tag_resource(self) -> str:
         resource_arn = self._get_resource_arn()
-        params = json.loads(self.body) if self.body else {}
-        tags = params.get("tags", {})
+        tags = self._get_param("tags", {})
 
         self.connect_backend.tag_resource(resource_arn=resource_arn, tags=tags)
 
@@ -137,7 +134,7 @@ class ConnectResponse(BaseResponse):
 
     def untag_resource(self) -> str:
         resource_arn = self._get_resource_arn()
-        tag_keys = self.querystring.get("tagKeys", [])
+        tag_keys = self._get_param("tagKeys") or []
 
         self.connect_backend.untag_resource(
             resource_arn=resource_arn, tag_keys=tag_keys
