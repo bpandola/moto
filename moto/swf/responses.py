@@ -10,6 +10,7 @@ from .models import GenericType, SWFBackend, swf_backends
 class SWFResponse(BaseResponse):
     def __init__(self) -> None:
         super().__init__(service_name="swf")
+        self.automated_parameter_parsing = True
 
     @property
     def swf_backend(self) -> SWFBackend:
