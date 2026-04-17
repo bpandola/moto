@@ -10,6 +10,7 @@ from .models import GreengrassBackend, greengrass_backends
 class GreengrassResponse(BaseResponse):
     def __init__(self) -> None:
         super().__init__(service_name="greengrass")
+        self.automated_parameter_parsing = True
 
     @property
     def greengrass_backend(self) -> GreengrassBackend:
@@ -30,21 +31,21 @@ class GreengrassResponse(BaseResponse):
         return 201, {"status": 201}, json.dumps(res.to_dict())
 
     def get_core_definition(self) -> str:
-        core_definition_id = self.path.split("/")[-1]
+        core_definition_id = self._get_param("CoreDefinitionId")
         res = self.greengrass_backend.get_core_definition(
             core_definition_id=core_definition_id
         )
         return json.dumps(res.to_dict())
 
     def delete_core_definition(self) -> str:
-        core_definition_id = self.path.split("/")[-1]
+        core_definition_id = self._get_param("CoreDefinitionId")
         self.greengrass_backend.delete_core_definition(
             core_definition_id=core_definition_id
         )
         return json.dumps({})
 
     def update_core_definition(self) -> str:
-        core_definition_id = self.path.split("/")[-1]
+        core_definition_id = self._get_param("CoreDefinitionId")
         name = self._get_param("Name")
         self.greengrass_backend.update_core_definition(
             core_definition_id=core_definition_id, name=name
@@ -52,7 +53,7 @@ class GreengrassResponse(BaseResponse):
         return "{}"
 
     def create_core_definition_version(self) -> TYPE_RESPONSE:
-        core_definition_id = self.path.split("/")[-2]
+        core_definition_id = self._get_param("CoreDefinitionId")
         cores = self._get_param("Cores")
 
         res = self.greengrass_backend.create_core_definition_version(
@@ -61,15 +62,15 @@ class GreengrassResponse(BaseResponse):
         return 201, {"status": 201}, json.dumps(res.to_dict())
 
     def list_core_definition_versions(self) -> str:
-        core_definition_id = self.path.split("/")[-2]
+        core_definition_id = self._get_param("CoreDefinitionId")
         res = self.greengrass_backend.list_core_definition_versions(core_definition_id)
         return json.dumps(
             {"Versions": [core_def_ver.to_dict() for core_def_ver in res]}
         )
 
     def get_core_definition_version(self) -> str:
-        core_definition_id = self.path.split("/")[-3]
-        core_definition_version_id = self.path.split("/")[-1]
+        core_definition_id = self._get_param("CoreDefinitionId")
+        core_definition_version_id = self._get_param("CoreDefinitionVersionId")
         res = self.greengrass_backend.get_core_definition_version(
             core_definition_id=core_definition_id,
             core_definition_version_id=core_definition_version_id,
@@ -91,7 +92,7 @@ class GreengrassResponse(BaseResponse):
         )
 
     def create_device_definition_version(self) -> TYPE_RESPONSE:
-        device_definition_id = self.path.split("/")[-2]
+        device_definition_id = self._get_param("DeviceDefinitionId")
         devices = self._get_param("Devices")
 
         res = self.greengrass_backend.create_device_definition_version(
@@ -100,7 +101,7 @@ class GreengrassResponse(BaseResponse):
         return 201, {"status": 201}, json.dumps(res.to_dict())
 
     def list_device_definition_versions(self) -> str:
-        device_definition_id = self.path.split("/")[-2]
+        device_definition_id = self._get_param("DeviceDefinitionId")
         res = self.greengrass_backend.list_device_definition_versions(
             device_definition_id
         )
@@ -109,21 +110,21 @@ class GreengrassResponse(BaseResponse):
         )
 
     def get_device_definition(self) -> str:
-        device_definition_id = self.path.split("/")[-1]
+        device_definition_id = self._get_param("DeviceDefinitionId")
         res = self.greengrass_backend.get_device_definition(
             device_definition_id=device_definition_id
         )
         return json.dumps(res.to_dict())
 
     def delete_device_definition(self) -> str:
-        device_definition_id = self.path.split("/")[-1]
+        device_definition_id = self._get_param("DeviceDefinitionId")
         self.greengrass_backend.delete_device_definition(
             device_definition_id=device_definition_id
         )
         return json.dumps({})
 
     def update_device_definition(self) -> str:
-        device_definition_id = self.path.split("/")[-1]
+        device_definition_id = self._get_param("DeviceDefinitionId")
         name = self._get_param("Name")
         self.greengrass_backend.update_device_definition(
             device_definition_id=device_definition_id, name=name
@@ -131,8 +132,8 @@ class GreengrassResponse(BaseResponse):
         return "{}"
 
     def get_device_definition_version(self) -> str:
-        device_definition_id = self.path.split("/")[-3]
-        device_definition_version_id = self.path.split("/")[-1]
+        device_definition_id = self._get_param("DeviceDefinitionId")
+        device_definition_version_id = self._get_param("DeviceDefinitionVersionId")
         res = self.greengrass_backend.get_device_definition_version(
             device_definition_id=device_definition_id,
             device_definition_version_id=device_definition_version_id,
@@ -152,21 +153,21 @@ class GreengrassResponse(BaseResponse):
         return json.dumps({"Definitions": [i.to_dict() for i in res]})
 
     def get_resource_definition(self) -> str:
-        resource_definition_id = self.path.split("/")[-1]
+        resource_definition_id = self._get_param("ResourceDefinitionId")
         res = self.greengrass_backend.get_resource_definition(
             resource_definition_id=resource_definition_id
         )
         return json.dumps(res.to_dict())
 
     def delete_resource_definition(self) -> str:
-        resource_definition_id = self.path.split("/")[-1]
+        resource_definition_id = self._get_param("ResourceDefinitionId")
         self.greengrass_backend.delete_resource_definition(
             resource_definition_id=resource_definition_id
         )
         return "{}"
 
     def update_resource_definition(self) -> str:
-        resource_definition_id = self.path.split("/")[-1]
+        resource_definition_id = self._get_param("ResourceDefinitionId")
         name = self._get_param("Name")
         self.greengrass_backend.update_resource_definition(
             resource_definition_id=resource_definition_id, name=name
@@ -174,7 +175,7 @@ class GreengrassResponse(BaseResponse):
         return "{}"
 
     def create_resource_definition_version(self) -> TYPE_RESPONSE:
-        resource_definition_id = self.path.split("/")[-2]
+        resource_definition_id = self._get_param("ResourceDefinitionId")
         resources = self._get_param("Resources")
 
         res = self.greengrass_backend.create_resource_definition_version(
@@ -183,7 +184,7 @@ class GreengrassResponse(BaseResponse):
         return 201, {"status": 201}, json.dumps(res.to_dict())
 
     def list_resource_definition_versions(self) -> str:
-        resource_device_definition_id = self.path.split("/")[-2]
+        resource_device_definition_id = self._get_param("ResourceDefinitionId")
         res = self.greengrass_backend.list_resource_definition_versions(
             resource_device_definition_id
         )
@@ -193,8 +194,8 @@ class GreengrassResponse(BaseResponse):
         )
 
     def get_resource_definition_version(self) -> str:
-        resource_definition_id = self.path.split("/")[-3]
-        resource_definition_version_id = self.path.split("/")[-1]
+        resource_definition_id = self._get_param("ResourceDefinitionId")
+        resource_definition_version_id = self._get_param("ResourceDefinitionVersionId")
         res = self.greengrass_backend.get_resource_definition_version(
             resource_definition_id=resource_definition_id,
             resource_definition_version_id=resource_definition_version_id,
@@ -216,21 +217,21 @@ class GreengrassResponse(BaseResponse):
         )
 
     def get_function_definition(self) -> str:
-        function_definition_id = self.path.split("/")[-1]
+        function_definition_id = self._get_param("FunctionDefinitionId")
         res = self.greengrass_backend.get_function_definition(
             function_definition_id=function_definition_id,
         )
         return json.dumps(res.to_dict())
 
     def delete_function_definition(self) -> str:
-        function_definition_id = self.path.split("/")[-1]
+        function_definition_id = self._get_param("FunctionDefinitionId")
         self.greengrass_backend.delete_function_definition(
             function_definition_id=function_definition_id,
         )
         return "{}"
 
     def update_function_definition(self) -> str:
-        function_definition_id = self.path.split("/")[-1]
+        function_definition_id = self._get_param("FunctionDefinitionId")
         name = self._get_param("Name")
         self.greengrass_backend.update_function_definition(
             function_definition_id=function_definition_id, name=name
@@ -239,7 +240,7 @@ class GreengrassResponse(BaseResponse):
 
     def create_function_definition_version(self) -> TYPE_RESPONSE:
         default_config = self._get_param("DefaultConfig")
-        function_definition_id = self.path.split("/")[-2]
+        function_definition_id = self._get_param("FunctionDefinitionId")
         functions = self._get_param("Functions")
 
         res = self.greengrass_backend.create_function_definition_version(
@@ -250,7 +251,7 @@ class GreengrassResponse(BaseResponse):
         return 201, {"status": 201}, json.dumps(res.to_dict())
 
     def list_function_definition_versions(self) -> str:
-        function_definition_id = self.path.split("/")[-2]
+        function_definition_id = self._get_param("FunctionDefinitionId")
         res = self.greengrass_backend.list_function_definition_versions(
             function_definition_id=function_definition_id
         )
@@ -258,8 +259,8 @@ class GreengrassResponse(BaseResponse):
         return json.dumps({"Versions": versions})
 
     def get_function_definition_version(self) -> str:
-        function_definition_id = self.path.split("/")[-3]
-        function_definition_version_id = self.path.split("/")[-1]
+        function_definition_id = self._get_param("FunctionDefinitionId")
+        function_definition_version_id = self._get_param("FunctionDefinitionVersionId")
         res = self.greengrass_backend.get_function_definition_version(
             function_definition_id=function_definition_id,
             function_definition_version_id=function_definition_version_id,
@@ -285,21 +286,21 @@ class GreengrassResponse(BaseResponse):
         )
 
     def get_subscription_definition(self) -> str:
-        subscription_definition_id = self.path.split("/")[-1]
+        subscription_definition_id = self._get_param("SubscriptionDefinitionId")
         res = self.greengrass_backend.get_subscription_definition(
             subscription_definition_id=subscription_definition_id
         )
         return json.dumps(res.to_dict())
 
     def delete_subscription_definition(self) -> str:
-        subscription_definition_id = self.path.split("/")[-1]
+        subscription_definition_id = self._get_param("SubscriptionDefinitionId")
         self.greengrass_backend.delete_subscription_definition(
             subscription_definition_id=subscription_definition_id
         )
         return "{}"
 
     def update_subscription_definition(self) -> str:
-        subscription_definition_id = self.path.split("/")[-1]
+        subscription_definition_id = self._get_param("SubscriptionDefinitionId")
         name = self._get_param("Name")
         self.greengrass_backend.update_subscription_definition(
             subscription_definition_id=subscription_definition_id, name=name
@@ -307,7 +308,7 @@ class GreengrassResponse(BaseResponse):
         return "{}"
 
     def create_subscription_definition_version(self) -> TYPE_RESPONSE:
-        subscription_definition_id = self.path.split("/")[-2]
+        subscription_definition_id = self._get_param("SubscriptionDefinitionId")
         subscriptions = self._get_param("Subscriptions")
         res = self.greengrass_backend.create_subscription_definition_version(
             subscription_definition_id=subscription_definition_id,
@@ -316,7 +317,7 @@ class GreengrassResponse(BaseResponse):
         return 201, {"status": 201}, json.dumps(res.to_dict())
 
     def list_subscription_definition_versions(self) -> str:
-        subscription_definition_id = self.path.split("/")[-2]
+        subscription_definition_id = self._get_param("SubscriptionDefinitionId")
         res = self.greengrass_backend.list_subscription_definition_versions(
             subscription_definition_id=subscription_definition_id
         )
@@ -324,8 +325,10 @@ class GreengrassResponse(BaseResponse):
         return json.dumps({"Versions": versions})
 
     def get_subscription_definition_version(self) -> str:
-        subscription_definition_id = self.path.split("/")[-3]
-        subscription_definition_version_id = self.path.split("/")[-1]
+        subscription_definition_id = self._get_param("SubscriptionDefinitionId")
+        subscription_definition_version_id = self._get_param(
+            "SubscriptionDefinitionVersionId"
+        )
         res = self.greengrass_backend.get_subscription_definition_version(
             subscription_definition_id=subscription_definition_id,
             subscription_definition_version_id=subscription_definition_version_id,
@@ -345,23 +348,23 @@ class GreengrassResponse(BaseResponse):
         return json.dumps({"Groups": [group.to_dict() for group in res]})
 
     def get_group(self) -> str:
-        group_id = self.path.split("/")[-1]
+        group_id = self._get_param("GroupId")
         res = self.greengrass_backend.get_group(group_id=group_id)
         return json.dumps(res.to_dict())  # type: ignore
 
     def delete_group(self) -> str:
-        group_id = self.path.split("/")[-1]
+        group_id = self._get_param("GroupId")
         self.greengrass_backend.delete_group(group_id=group_id)
         return "{}"
 
     def update_group(self) -> str:
-        group_id = self.path.split("/")[-1]
+        group_id = self._get_param("GroupId")
         name = self._get_param("Name")
         self.greengrass_backend.update_group(group_id=group_id, name=name)
         return "{}"
 
     def create_group_version(self) -> TYPE_RESPONSE:
-        group_id = self.path.split("/")[-2]
+        group_id = self._get_param("GroupId")
 
         core_definition_version_arn = self._get_param("CoreDefinitionVersionArn")
         device_definition_version_arn = self._get_param("DeviceDefinitionVersionArn")
@@ -386,13 +389,13 @@ class GreengrassResponse(BaseResponse):
         return 201, {"status": 201}, json.dumps(res.to_dict())
 
     def list_group_versions(self) -> str:
-        group_id = self.path.split("/")[-2]
+        group_id = self._get_param("GroupId")
         res = self.greengrass_backend.list_group_versions(group_id=group_id)
         return json.dumps({"Versions": [group_ver.to_dict() for group_ver in res]})
 
     def get_group_version(self) -> str:
-        group_id = self.path.split("/")[-3]
-        group_version_id = self.path.split("/")[-1]
+        group_id = self._get_param("GroupId")
+        group_version_id = self._get_param("GroupVersionId")
         res = self.greengrass_backend.get_group_version(
             group_id=group_id,
             group_version_id=group_version_id,
@@ -400,7 +403,7 @@ class GreengrassResponse(BaseResponse):
         return json.dumps(res.to_dict(include_detail=True))
 
     def create_deployment(self) -> str:
-        group_id = self.path.split("/")[-2]
+        group_id = self._get_param("GroupId")
         group_version_id = self._get_param("GroupVersionId")
         deployment_type = self._get_param("DeploymentType")
         deployment_id = self._get_param("DeploymentId")
@@ -414,7 +417,7 @@ class GreengrassResponse(BaseResponse):
         return json.dumps(res.to_dict())
 
     def list_deployments(self) -> str:
-        group_id = self.path.split("/")[-2]
+        group_id = self._get_param("GroupId")
         res = self.greengrass_backend.list_deployments(group_id=group_id)
 
         deployments = [deployment.to_dict(include_detail=True) for deployment in res]
@@ -422,8 +425,8 @@ class GreengrassResponse(BaseResponse):
         return json.dumps({"Deployments": deployments})
 
     def get_deployment_status(self) -> str:
-        group_id = self.path.split("/")[-4]
-        deployment_id = self.path.split("/")[-2]
+        group_id = self._get_param("GroupId")
+        deployment_id = self._get_param("DeploymentId")
 
         res = self.greengrass_backend.get_deployment_status(
             group_id=group_id,
@@ -432,13 +435,13 @@ class GreengrassResponse(BaseResponse):
         return json.dumps(res.to_dict())
 
     def reset_deployments(self) -> str:
-        group_id = self.path.split("/")[-3]
+        group_id = self._get_param("GroupId")
 
         res = self.greengrass_backend.reset_deployments(group_id=group_id)
         return json.dumps(res.to_dict())
 
     def associate_role_to_group(self) -> str:
-        group_id = self.path.split("/")[-2]
+        group_id = self._get_param("GroupId")
         role_arn = self._get_param("RoleArn")
         res = self.greengrass_backend.associate_role_to_group(
             group_id=group_id,
@@ -447,11 +450,11 @@ class GreengrassResponse(BaseResponse):
         return json.dumps(res.to_dict())
 
     def get_associated_role(self) -> str:
-        group_id = self.path.split("/")[-2]
+        group_id = self._get_param("GroupId")
         res = self.greengrass_backend.get_associated_role(group_id=group_id)
         return json.dumps(res.to_dict(include_detail=True))
 
     def disassociate_role_from_group(self) -> str:
-        group_id = self.path.split("/")[-2]
+        group_id = self._get_param("GroupId")
         self.greengrass_backend.disassociate_role_from_group(group_id=group_id)
         return json.dumps({"DisassociatedAt": iso_8601_datetime_with_milliseconds()})
