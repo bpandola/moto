@@ -8,6 +8,7 @@ from .models import ResourceGroupsTaggingAPIBackend, resourcegroupstaggingapi_ba
 class ResourceGroupsTaggingAPIResponse(BaseResponse):
     def __init__(self) -> None:
         super().__init__(service_name="resourcegroupstaggingapi")
+        self.automated_parameter_parsing = True
 
     @property
     def backend(self) -> ResourceGroupsTaggingAPIBackend:
