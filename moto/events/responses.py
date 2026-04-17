@@ -8,6 +8,7 @@ from moto.events.models import EventsBackend, events_backends
 class EventsHandler(BaseResponse):
     def __init__(self) -> None:
         super().__init__(service_name="events")
+        self.automated_parameter_parsing = True
 
     @property
     def events_backend(self) -> EventsBackend:
