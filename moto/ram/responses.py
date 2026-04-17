@@ -9,6 +9,7 @@ from .models import ResourceAccessManagerBackend, ram_backends
 class ResourceAccessManagerResponse(BaseResponse):
     def __init__(self) -> None:
         super().__init__(service_name="ram")
+        self.automated_parameter_parsing = True
 
     @property
     def ram_backend(self) -> ResourceAccessManagerBackend:
@@ -17,7 +18,7 @@ class ResourceAccessManagerResponse(BaseResponse):
     @property
     def request_params(self) -> dict[str, Any]:  # type: ignore[misc]
         try:
-            return json.loads(self.body)
+            return self._get_params()
         except ValueError:
             return {}
 
