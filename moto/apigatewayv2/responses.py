@@ -15,6 +15,7 @@ class ApiGatewayV2Response(BaseResponse):
 
     def __init__(self) -> None:
         super().__init__(service_name="apigatewayv2")
+        self.automated_parameter_parsing = True
 
     @property
     def apigatewayv2_backend(self) -> ApiGatewayV2Backend:
@@ -22,18 +23,16 @@ class ApiGatewayV2Response(BaseResponse):
         return apigatewayv2_backends[self.current_account][self.region]
 
     def create_api(self) -> TYPE_RESPONSE:
-        params = json.loads(self.body)
-
-        api_key_selection_expression = params.get("apiKeySelectionExpression")
-        cors_configuration = params.get("corsConfiguration")
-        description = params.get("description")
-        disable_schema_validation = params.get("disableSchemaValidation")
-        disable_execute_api_endpoint = params.get("disableExecuteApiEndpoint")
-        name = params.get("name")
-        protocol_type = params.get("protocolType")
-        route_selection_expression = params.get("routeSelectionExpression")
-        tags = params.get("tags")
-        version = params.get("version")
+        api_key_selection_expression = self._get_param("ApiKeySelectionExpression")
+        cors_configuration = self._get_param("CorsConfiguration")
+        description = self._get_param("Description")
+        disable_schema_validation = self._get_param("DisableSchemaValidation")
+        disable_execute_api_endpoint = self._get_param("DisableExecuteApiEndpoint")
+        name = self._get_param("Name")
+        protocol_type = self._get_param("ProtocolType")
+        route_selection_expression = self._get_param("RouteSelectionExpression")
+        tags = self._get_param("Tags")
+        version = self._get_param("Version")
 
         if protocol_type not in ["HTTP", "WEBSOCKET"]:
             raise UnknownProtocol
@@ -77,15 +76,14 @@ class ApiGatewayV2Response(BaseResponse):
 
     def update_api(self) -> TYPE_RESPONSE:
         api_id = self.path.split("/")[-1]
-        params = json.loads(self.body)
-        api_key_selection_expression = params.get("apiKeySelectionExpression")
-        cors_configuration = params.get("corsConfiguration")
-        description = params.get("description")
-        disable_schema_validation = params.get("disableSchemaValidation")
-        disable_execute_api_endpoint = params.get("disableExecuteApiEndpoint")
-        name = params.get("name")
-        route_selection_expression = params.get("routeSelectionExpression")
-        version = params.get("version")
+        api_key_selection_expression = self._get_param("ApiKeySelectionExpression")
+        cors_configuration = self._get_param("CorsConfiguration")
+        description = self._get_param("Description")
+        disable_schema_validation = self._get_param("DisableSchemaValidation")
+        disable_execute_api_endpoint = self._get_param("DisableExecuteApiEndpoint")
+        name = self._get_param("Name")
+        route_selection_expression = self._get_param("RouteSelectionExpression")
+        version = self._get_param("Version")
         api = self.apigatewayv2_backend.update_api(
             api_id=api_id,
             api_key_selection_expression=api_key_selection_expression,
@@ -101,10 +99,9 @@ class ApiGatewayV2Response(BaseResponse):
 
     def reimport_api(self) -> TYPE_RESPONSE:
         api_id = self.path.split("/")[-1]
-        params = json.loads(self.body)
-        body = params.get("body")
+        body = self._get_param("Body")
         fail_on_warnings = (
-            str(self._get_param("failOnWarnings", "false")).lower() == "true"
+            str(self._get_param("FailOnWarnings", "false")).lower() == "true"
         )
 
         api = self.apigatewayv2_backend.reimport_api(api_id, body, fail_on_warnings)
@@ -112,18 +109,17 @@ class ApiGatewayV2Response(BaseResponse):
 
     def create_authorizer(self) -> TYPE_RESPONSE:
         api_id = self.path.split("/")[-2]
-        params = json.loads(self.body)
 
-        auth_creds_arn = params.get("authorizerCredentialsArn")
-        auth_payload_format_version = params.get("authorizerPayloadFormatVersion")
-        auth_result_ttl = params.get("authorizerResultTtlInSeconds")
-        authorizer_type = params.get("authorizerType")
-        authorizer_uri = params.get("authorizerUri")
-        enable_simple_response = params.get("enableSimpleResponses")
-        identity_source = params.get("identitySource")
-        identity_validation_expr = params.get("identityValidationExpression")
-        jwt_config = params.get("jwtConfiguration")
-        name = params.get("name")
+        auth_creds_arn = self._get_param("AuthorizerCredentialsArn")
+        auth_payload_format_version = self._get_param("AuthorizerPayloadFormatVersion")
+        auth_result_ttl = self._get_param("AuthorizerResultTtlInSeconds")
+        authorizer_type = self._get_param("AuthorizerType")
+        authorizer_uri = self._get_param("AuthorizerUri")
+        enable_simple_response = self._get_param("EnableSimpleResponses")
+        identity_source = self._get_param("IdentitySource")
+        identity_validation_expr = self._get_param("IdentityValidationExpression")
+        jwt_config = self._get_param("JwtConfiguration")
+        name = self._get_param("Name")
         authorizer = self.apigatewayv2_backend.create_authorizer(
             api_id,
             auth_creds_arn=auth_creds_arn,
@@ -156,18 +152,17 @@ class ApiGatewayV2Response(BaseResponse):
     def update_authorizer(self) -> TYPE_RESPONSE:
         api_id = self.path.split("/")[-3]
         authorizer_id = self.path.split("/")[-1]
-        params = json.loads(self.body)
 
-        auth_creds_arn = params.get("authorizerCredentialsArn")
-        auth_payload_format_version = params.get("authorizerPayloadFormatVersion")
-        auth_result_ttl = params.get("authorizerResultTtlInSeconds")
-        authorizer_type = params.get("authorizerType")
-        authorizer_uri = params.get("authorizerUri")
-        enable_simple_response = params.get("enableSimpleResponses")
-        identity_source = params.get("identitySource")
-        identity_validation_expr = params.get("identityValidationExpression")
-        jwt_config = params.get("jwtConfiguration")
-        name = params.get("name")
+        auth_creds_arn = self._get_param("AuthorizerCredentialsArn")
+        auth_payload_format_version = self._get_param("AuthorizerPayloadFormatVersion")
+        auth_result_ttl = self._get_param("AuthorizerResultTtlInSeconds")
+        authorizer_type = self._get_param("AuthorizerType")
+        authorizer_uri = self._get_param("AuthorizerUri")
+        enable_simple_response = self._get_param("EnableSimpleResponses")
+        identity_source = self._get_param("IdentitySource")
+        identity_validation_expr = self._get_param("IdentityValidationExpression")
+        jwt_config = self._get_param("JwtConfiguration")
+        name = self._get_param("Name")
         authorizer = self.apigatewayv2_backend.update_authorizer(
             api_id,
             authorizer_id=authorizer_id,
@@ -191,12 +186,11 @@ class ApiGatewayV2Response(BaseResponse):
 
     def create_model(self) -> TYPE_RESPONSE:
         api_id = self.path.split("/")[-2]
-        params = json.loads(self.body)
 
-        content_type = params.get("contentType")
-        description = params.get("description")
-        name = params.get("name")
-        schema = params.get("schema")
+        content_type = self._get_param("ContentType")
+        description = self._get_param("Description")
+        name = self._get_param("Name")
+        schema = self._get_param("Schema")
         model = self.apigatewayv2_backend.create_model(
             api_id, content_type, description, name, schema
         )
@@ -219,12 +213,11 @@ class ApiGatewayV2Response(BaseResponse):
     def update_model(self) -> TYPE_RESPONSE:
         api_id = self.path.split("/")[-3]
         model_id = self.path.split("/")[-1]
-        params = json.loads(self.body)
 
-        content_type = params.get("contentType")
-        description = params.get("description")
-        name = params.get("name")
-        schema = params.get("schema")
+        content_type = self._get_param("ContentType")
+        description = self._get_param("Description")
+        name = self._get_param("Name")
+        schema = self._get_param("Schema")
 
         model = self.apigatewayv2_backend.update_model(
             api_id,
@@ -243,32 +236,31 @@ class ApiGatewayV2Response(BaseResponse):
 
     def tag_resource(self) -> TYPE_RESPONSE:
         resource_arn = unquote(self.path.split("/tags/")[1])
-        tags = json.loads(self.body).get("tags", {})
+        tags = self._get_param("Tags") or {}
         self.apigatewayv2_backend.tag_resource(resource_arn, tags)
         return 201, {}, "{}"
 
     def untag_resource(self) -> TYPE_RESPONSE:
         resource_arn = unquote(self.path.split("/tags/")[1])
-        tag_keys = self.querystring.get("tagKeys") or []
+        tag_keys = self._get_param("TagKeys") or []
         self.apigatewayv2_backend.untag_resource(resource_arn, tag_keys)
         return 200, {}, "{}"
 
     def create_route(self) -> TYPE_RESPONSE:
         api_id = self.path.split("/")[-2]
-        params = json.loads(self.body)
-        api_key_required: bool = params.get("apiKeyRequired", False)
-        authorization_scopes = params.get("authorizationScopes")
-        authorization_type = params.get("authorizationType", "NONE")
-        authorizer_id = params.get("authorizerId")
-        model_selection_expression = params.get("modelSelectionExpression")
-        operation_name = params.get("operationName")
-        request_models = params.get("requestModels")
-        request_parameters = params.get("requestParameters")
-        route_key = params.get("routeKey")
-        route_response_selection_expression = params.get(
-            "routeResponseSelectionExpression"
+        api_key_required: bool = self._get_param("ApiKeyRequired") or False
+        authorization_scopes = self._get_param("AuthorizationScopes")
+        authorization_type = self._get_param("AuthorizationType") or "NONE"
+        authorizer_id = self._get_param("AuthorizerId")
+        model_selection_expression = self._get_param("ModelSelectionExpression")
+        operation_name = self._get_param("OperationName")
+        request_models = self._get_param("RequestModels")
+        request_parameters = self._get_param("RequestParameters")
+        route_key = self._get_param("RouteKey")
+        route_response_selection_expression = self._get_param(
+            "RouteResponseSelectionExpression"
         )
-        target = params.get("target")
+        target = self._get_param("Target")
         route = self.apigatewayv2_backend.create_route(
             api_id=api_id,
             api_key_required=api_key_required,
@@ -315,20 +307,19 @@ class ApiGatewayV2Response(BaseResponse):
         api_id = self.path.split("/")[-3]
         route_id = self.path.split("/")[-1]
 
-        params = json.loads(self.body)
-        api_key_required = params.get("apiKeyRequired")
-        authorization_scopes = params.get("authorizationScopes")
-        authorization_type = params.get("authorizationType")
-        authorizer_id = params.get("authorizerId")
-        model_selection_expression = params.get("modelSelectionExpression")
-        operation_name = params.get("operationName")
-        request_models = params.get("requestModels")
-        request_parameters = params.get("requestParameters")
-        route_key = params.get("routeKey")
-        route_response_selection_expression = params.get(
-            "routeResponseSelectionExpression"
+        api_key_required = self._get_param("ApiKeyRequired")
+        authorization_scopes = self._get_param("AuthorizationScopes")
+        authorization_type = self._get_param("AuthorizationType")
+        authorizer_id = self._get_param("AuthorizerId")
+        model_selection_expression = self._get_param("ModelSelectionExpression")
+        operation_name = self._get_param("OperationName")
+        request_models = self._get_param("RequestModels")
+        request_parameters = self._get_param("RequestParameters")
+        route_key = self._get_param("RouteKey")
+        route_response_selection_expression = self._get_param(
+            "RouteResponseSelectionExpression"
         )
-        target = params.get("target")
+        target = self._get_param("Target")
         api = self.apigatewayv2_backend.update_route(
             api_id=api_id,
             api_key_required=api_key_required,
@@ -349,11 +340,10 @@ class ApiGatewayV2Response(BaseResponse):
     def create_route_response(self) -> TYPE_RESPONSE:
         api_id = self.path.split("/")[-4]
         route_id = self.path.split("/")[-2]
-        params = json.loads(self.body)
 
-        response_models = params.get("responseModels")
-        route_response_key = params.get("routeResponseKey")
-        model_selection_expression = params.get("modelSelectionExpression")
+        response_models = self._get_param("ResponseModels")
+        route_response_key = self._get_param("RouteResponseKey")
+        model_selection_expression = self._get_param("ModelSelectionExpression")
         route_response = self.apigatewayv2_backend.create_route_response(
             api_id,
             route_id,
@@ -386,24 +376,23 @@ class ApiGatewayV2Response(BaseResponse):
     def create_integration(self) -> TYPE_RESPONSE:
         api_id = self.path.split("/")[-2]
 
-        params = json.loads(self.body)
-        connection_id = params.get("connectionId")
-        connection_type = params.get("connectionType")
-        content_handling_strategy = params.get("contentHandlingStrategy")
-        credentials_arn = params.get("credentialsArn")
-        description = params.get("description")
-        integration_method = params.get("integrationMethod")
-        integration_subtype = params.get("integrationSubtype")
-        integration_type = params.get("integrationType")
-        integration_uri = params.get("integrationUri")
-        passthrough_behavior = params.get("passthroughBehavior")
-        payload_format_version = params.get("payloadFormatVersion")
-        request_parameters = params.get("requestParameters")
-        request_templates = params.get("requestTemplates")
-        response_parameters = params.get("responseParameters")
-        template_selection_expression = params.get("templateSelectionExpression")
-        timeout_in_millis = params.get("timeoutInMillis")
-        tls_config = params.get("tlsConfig")
+        connection_id = self._get_param("ConnectionId")
+        connection_type = self._get_param("ConnectionType")
+        content_handling_strategy = self._get_param("ContentHandlingStrategy")
+        credentials_arn = self._get_param("CredentialsArn")
+        description = self._get_param("Description")
+        integration_method = self._get_param("IntegrationMethod")
+        integration_subtype = self._get_param("IntegrationSubtype")
+        integration_type = self._get_param("IntegrationType")
+        integration_uri = self._get_param("IntegrationUri")
+        passthrough_behavior = self._get_param("PassthroughBehavior")
+        payload_format_version = self._get_param("PayloadFormatVersion")
+        request_parameters = self._get_param("RequestParameters")
+        request_templates = self._get_param("RequestTemplates")
+        response_parameters = self._get_param("ResponseParameters")
+        template_selection_expression = self._get_param("TemplateSelectionExpression")
+        timeout_in_millis = self._get_param("TimeoutInMillis")
+        tls_config = self._get_param("TlsConfig")
         integration = self.apigatewayv2_backend.create_integration(
             api_id=api_id,
             connection_id=connection_id,
@@ -454,24 +443,23 @@ class ApiGatewayV2Response(BaseResponse):
         api_id = self.path.split("/")[-3]
         integration_id = self.path.split("/")[-1]
 
-        params = json.loads(self.body)
-        connection_id = params.get("connectionId")
-        connection_type = params.get("connectionType")
-        content_handling_strategy = params.get("contentHandlingStrategy")
-        credentials_arn = params.get("credentialsArn")
-        description = params.get("description")
-        integration_method = params.get("integrationMethod")
-        integration_subtype = params.get("integrationSubtype")
-        integration_type = params.get("integrationType")
-        integration_uri = params.get("integrationUri")
-        passthrough_behavior = params.get("passthroughBehavior")
-        payload_format_version = params.get("payloadFormatVersion")
-        request_parameters = params.get("requestParameters")
-        request_templates = params.get("requestTemplates")
-        response_parameters = params.get("responseParameters")
-        template_selection_expression = params.get("templateSelectionExpression")
-        timeout_in_millis = params.get("timeoutInMillis")
-        tls_config = params.get("tlsConfig")
+        connection_id = self._get_param("ConnectionId")
+        connection_type = self._get_param("ConnectionType")
+        content_handling_strategy = self._get_param("ContentHandlingStrategy")
+        credentials_arn = self._get_param("CredentialsArn")
+        description = self._get_param("Description")
+        integration_method = self._get_param("IntegrationMethod")
+        integration_subtype = self._get_param("IntegrationSubtype")
+        integration_type = self._get_param("IntegrationType")
+        integration_uri = self._get_param("IntegrationUri")
+        passthrough_behavior = self._get_param("PassthroughBehavior")
+        payload_format_version = self._get_param("PayloadFormatVersion")
+        request_parameters = self._get_param("RequestParameters")
+        request_templates = self._get_param("RequestTemplates")
+        response_parameters = self._get_param("ResponseParameters")
+        template_selection_expression = self._get_param("TemplateSelectionExpression")
+        timeout_in_millis = self._get_param("TimeoutInMillis")
+        tls_config = self._get_param("TlsConfig")
         integration = self.apigatewayv2_backend.update_integration(
             api_id=api_id,
             connection_id=connection_id,
@@ -499,12 +487,11 @@ class ApiGatewayV2Response(BaseResponse):
         api_id = self.path.split("/")[-4]
         int_id = self.path.split("/")[-2]
 
-        params = json.loads(self.body)
-        content_handling_strategy = params.get("contentHandlingStrategy")
-        integration_response_key = params.get("integrationResponseKey")
-        response_parameters = params.get("responseParameters")
-        response_templates = params.get("responseTemplates")
-        template_selection_expression = params.get("templateSelectionExpression")
+        content_handling_strategy = self._get_param("ContentHandlingStrategy")
+        integration_response_key = self._get_param("IntegrationResponseKey")
+        response_parameters = self._get_param("ResponseParameters")
+        response_templates = self._get_param("ResponseTemplates")
+        template_selection_expression = self._get_param("TemplateSelectionExpression")
         integration_response = self.apigatewayv2_backend.create_integration_response(
             api_id=api_id,
             integration_id=int_id,
@@ -550,12 +537,11 @@ class ApiGatewayV2Response(BaseResponse):
         int_id = self.path.split("/")[-3]
         int_res_id = self.path.split("/")[-1]
 
-        params = json.loads(self.body)
-        content_handling_strategy = params.get("contentHandlingStrategy")
-        integration_response_key = params.get("integrationResponseKey")
-        response_parameters = params.get("responseParameters")
-        response_templates = params.get("responseTemplates")
-        template_selection_expression = params.get("templateSelectionExpression")
+        content_handling_strategy = self._get_param("ContentHandlingStrategy")
+        integration_response_key = self._get_param("IntegrationResponseKey")
+        response_parameters = self._get_param("ResponseParameters")
+        response_templates = self._get_param("ResponseTemplates")
+        template_selection_expression = self._get_param("TemplateSelectionExpression")
         integration_response = self.apigatewayv2_backend.update_integration_response(
             api_id=api_id,
             integration_id=int_id,
@@ -569,12 +555,10 @@ class ApiGatewayV2Response(BaseResponse):
         return 200, {}, json.dumps(integration_response.to_json())
 
     def create_vpc_link(self) -> TYPE_RESPONSE:
-        params = json.loads(self.body)
-
-        name = params.get("name")
-        sg_ids = params.get("securityGroupIds")
-        subnet_ids = params.get("subnetIds")
-        tags = params.get("tags")
+        name = self._get_param("Name")
+        sg_ids = self._get_param("SecurityGroupIds")
+        subnet_ids = self._get_param("SubnetIds")
+        tags = self._get_param("Tags")
         vpc_link = self.apigatewayv2_backend.create_vpc_link(
             name, sg_ids, subnet_ids, tags
         )
@@ -596,18 +580,16 @@ class ApiGatewayV2Response(BaseResponse):
 
     def update_vpc_link(self) -> TYPE_RESPONSE:
         vpc_link_id = self.path.split("/")[-1]
-        params = json.loads(self.body)
-        name = params.get("name")
+        name = self._get_param("Name")
 
         vpc_link = self.apigatewayv2_backend.update_vpc_link(vpc_link_id, name=name)
         return 200, {}, json.dumps(vpc_link.to_json())
 
     def create_domain_name(self) -> TYPE_RESPONSE:
-        params = json.loads(self.body)
-        domain_name = params.get("domainName")
-        domain_name_configurations = params.get("domainNameConfigurations", [{}])
-        mutual_tls_authentication = params.get("mutualTlsAuthentication", {})
-        tags = params.get("tags", {})
+        domain_name = self._get_param("DomainName")
+        domain_name_configurations = self._get_param("DomainNameConfigurations") or [{}]
+        mutual_tls_authentication = self._get_param("MutualTlsAuthentication") or {}
+        tags = self._get_param("Tags") or {}
         domain_name = self.apigatewayv2_backend.create_domain_name(
             domain_name=domain_name,
             domain_name_configurations=domain_name_configurations,
@@ -630,10 +612,9 @@ class ApiGatewayV2Response(BaseResponse):
 
     def create_api_mapping(self) -> TYPE_RESPONSE:
         domain_name = self.path.split("/")[-2]
-        params = json.loads(self.body)
-        api_id = params.get("apiId")
-        api_mapping_key = params.get("apiMappingKey", "")
-        stage = params.get("stage")
+        api_id = self._get_param("ApiId")
+        api_mapping_key = self._get_param("ApiMappingKey") or ""
+        stage = self._get_param("Stage")
         mapping = self.apigatewayv2_backend.create_api_mapping(
             api_id=api_id,
             api_mapping_key=api_mapping_key,
