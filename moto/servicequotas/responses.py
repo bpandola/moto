@@ -12,6 +12,7 @@ class ServiceQuotasResponse(BaseResponse):
 
     def __init__(self) -> None:
         super().__init__(service_name="service-quotas")
+        self.automated_parameter_parsing = True
 
     @property
     def backend(self) -> ServiceQuotasBackend:
@@ -19,13 +20,13 @@ class ServiceQuotasResponse(BaseResponse):
         return servicequotas_backends[self.current_account][self.region]
 
     def list_aws_default_service_quotas(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         service_code = str(params.get("ServiceCode"))
         quotas = self.backend.list_aws_default_service_quotas(service_code)
         return json.dumps({"Quotas": quotas})
 
     def get_service_quota(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         service_code = str(params.get("ServiceCode"))
         quota_code = str(params.get("QuotaCode"))
         quota = self.backend.get_service_quota(
