@@ -8,6 +8,7 @@ from .models import DataSyncBackend, Location, datasync_backends
 class DataSyncResponse(BaseResponse):
     def __init__(self) -> None:
         super().__init__(service_name="datasync")
+        self.automated_parameter_parsing = True
 
     @property
     def datasync_backend(self) -> DataSyncBackend:
