@@ -12,13 +12,14 @@ class TransferResponse(BaseResponse):
 
     def __init__(self) -> None:
         super().__init__(service_name="transfer")
+        self.automated_parameter_parsing = True
 
     @property
     def transfer_backend(self) -> TransferBackend:
         return transfer_backends[self.current_account][self.region]
 
     def create_user(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         server_id, user_name = self.transfer_backend.create_user(
             home_directory=params.get("HomeDirectory"),
             home_directory_type=params.get("HomeDirectoryType"),
@@ -34,7 +35,7 @@ class TransferResponse(BaseResponse):
         return json.dumps({"ServerId": server_id, "UserName": user_name})
 
     def describe_user(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         server_id, user = self.transfer_backend.describe_user(
             server_id=params.get("ServerId"),
             user_name=params.get("UserName"),
@@ -42,7 +43,7 @@ class TransferResponse(BaseResponse):
         return json.dumps({"ServerId": server_id, "User": user.to_dict()})
 
     def delete_user(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         self.transfer_backend.delete_user(
             server_id=params.get("ServerId"),
             user_name=params.get("UserName"),
@@ -50,7 +51,7 @@ class TransferResponse(BaseResponse):
         return json.dumps({})
 
     def import_ssh_public_key(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         server_id, ssh_public_key_id, user_name = (
             self.transfer_backend.import_ssh_public_key(
                 server_id=params.get("ServerId"),
@@ -67,7 +68,7 @@ class TransferResponse(BaseResponse):
         )
 
     def delete_ssh_public_key(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         self.transfer_backend.delete_ssh_public_key(
             server_id=params.get("ServerId"),
             ssh_public_key_id=params.get("SshPublicKeyId"),
@@ -76,7 +77,7 @@ class TransferResponse(BaseResponse):
         return json.dumps({})
 
     def create_server(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         server_id = self.transfer_backend.create_server(
             certificate=params.get("Certificate"),
             domain=params.get("Domain"),
@@ -101,14 +102,14 @@ class TransferResponse(BaseResponse):
         return json.dumps({"ServerId": server_id})
 
     def describe_server(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         server = self.transfer_backend.describe_server(
             server_id=params.get("ServerId"),
         )
         return json.dumps({"Server": server.to_dict()})
 
     def delete_server(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         self.transfer_backend.delete_server(
             server_id=params.get("ServerId"),
         )
@@ -121,7 +122,7 @@ class TransferResponse(BaseResponse):
 
     # TODO: EgressConfig (VpcLattice) not implemented
     def create_connector(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         connector_id = self.transfer_backend.create_connector(
             url=params.get("Url"),
             access_role=params.get("AccessRole"),
@@ -134,7 +135,7 @@ class TransferResponse(BaseResponse):
         return json.dumps({"ConnectorId": connector_id})
 
     def describe_connector(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         connector = self.transfer_backend.describe_connector(
             connector_id=params.get("ConnectorId"),
         )
@@ -142,7 +143,7 @@ class TransferResponse(BaseResponse):
 
     # TODO: EgressConfig (VpcLattice) not implemented
     def update_connector(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         connector_id = self.transfer_backend.update_connector(
             connector_id=params.get("ConnectorId"),
             url=params.get("Url"),
@@ -155,7 +156,7 @@ class TransferResponse(BaseResponse):
         return json.dumps({"ConnectorId": connector_id})
 
     def delete_connector(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         self.transfer_backend.delete_connector(
             connector_id=params.get("ConnectorId"),
         )
