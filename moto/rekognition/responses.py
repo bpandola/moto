@@ -11,6 +11,7 @@ class RekognitionResponse(BaseResponse):
 
     def __init__(self) -> None:
         super().__init__(service_name="rekognition")
+        self.automated_parameter_parsing = True
 
     @property
     def rekognition_backend(self) -> RekognitionBackend:
