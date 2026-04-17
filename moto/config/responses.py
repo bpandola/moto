@@ -9,6 +9,7 @@ from .models import ConfigBackend, config_backends
 class ConfigResponse(BaseResponse):
     def __init__(self) -> None:
         super().__init__(service_name="config")
+        self.automated_parameter_parsing = True
 
     @property
     def config_backend(self) -> ConfigBackend:
@@ -22,7 +23,7 @@ class ConfigResponse(BaseResponse):
 
     def put_configuration_aggregator(self) -> str:
         aggregator = self.config_backend.put_configuration_aggregator(
-            json.loads(self.body)
+            self._get_params()
         )
         schema = {"ConfigurationAggregator": aggregator}
         return json.dumps(schema)
@@ -280,7 +281,7 @@ class ConfigResponse(BaseResponse):
         return json.dumps(response)
 
     def put_resource_config(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         resource_type: str = params.get("ResourceType", "")
         schema_version_id: str = params.get("SchemaVersionId", "")
         resource_id: str = params.get("ResourceId", "")
@@ -299,7 +300,7 @@ class ConfigResponse(BaseResponse):
         return json.dumps({})
 
     def delete_resource_config(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         resource_type = params.get("ResourceType", "")
         resource_id = params.get("ResourceId", "")
 
