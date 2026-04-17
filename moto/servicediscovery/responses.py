@@ -12,6 +12,7 @@ from .models import ServiceDiscoveryBackend, servicediscovery_backends
 class ServiceDiscoveryResponse(BaseResponse):
     def __init__(self) -> None:
         super().__init__(service_name="servicediscovery")
+        self.automated_parameter_parsing = True
 
     @property
     def servicediscovery_backend(self) -> ServiceDiscoveryBackend:
@@ -23,7 +24,7 @@ class ServiceDiscoveryResponse(BaseResponse):
         return 200, {}, json.dumps({"Namespaces": [ns.to_json() for ns in namespaces]})
 
     def create_http_namespace(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         name = params.get("Name")
         creator_request_id = params.get("CreatorRequestId")
         description = params.get("Description")
@@ -37,7 +38,7 @@ class ServiceDiscoveryResponse(BaseResponse):
         return json.dumps({"OperationId": operation_id})
 
     def delete_namespace(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         namespace_id = params.get("Id")
         operation_id = self.servicediscovery_backend.delete_namespace(
             namespace_id=namespace_id
@@ -53,7 +54,7 @@ class ServiceDiscoveryResponse(BaseResponse):
         )
 
     def get_operation(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         operation_id = params.get("OperationId")
         operation = self.servicediscovery_backend.get_operation(
             operation_id=operation_id
@@ -61,7 +62,7 @@ class ServiceDiscoveryResponse(BaseResponse):
         return json.dumps({"Operation": operation.to_json()})
 
     def get_namespace(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         namespace_id = params.get("Id")
         namespace = self.servicediscovery_backend.get_namespace(
             namespace_id=namespace_id
@@ -69,14 +70,14 @@ class ServiceDiscoveryResponse(BaseResponse):
         return json.dumps({"Namespace": namespace.to_json()})
 
     def tag_resource(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         resource_arn = params.get("ResourceARN")
         tags = params.get("Tags")
         self.servicediscovery_backend.tag_resource(resource_arn=resource_arn, tags=tags)
         return "{}"
 
     def untag_resource(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         resource_arn = params.get("ResourceARN")
         tag_keys = params.get("TagKeys")
         self.servicediscovery_backend.untag_resource(
@@ -85,7 +86,7 @@ class ServiceDiscoveryResponse(BaseResponse):
         return "{}"
 
     def list_tags_for_resource(self) -> TYPE_RESPONSE:
-        params = json.loads(self.body)
+        params = self._get_params()
         resource_arn = params.get("ResourceARN")
         tags = self.servicediscovery_backend.list_tags_for_resource(
             resource_arn=resource_arn
@@ -93,7 +94,7 @@ class ServiceDiscoveryResponse(BaseResponse):
         return 200, {}, json.dumps(tags)
 
     def create_private_dns_namespace(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         name = params.get("Name")
         creator_request_id = params.get("CreatorRequestId")
         description = params.get("Description")
@@ -111,7 +112,7 @@ class ServiceDiscoveryResponse(BaseResponse):
         return json.dumps({"OperationId": operation_id})
 
     def create_public_dns_namespace(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         name = params.get("Name")
         creator_request_id = params.get("CreatorRequestId")
         description = params.get("Description")
@@ -127,7 +128,7 @@ class ServiceDiscoveryResponse(BaseResponse):
         return json.dumps({"OperationId": operation_id})
 
     def create_service(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         name = params.get("Name")
         namespace_id = params.get("NamespaceId")
         creator_request_id = params.get("CreatorRequestId")
@@ -151,13 +152,13 @@ class ServiceDiscoveryResponse(BaseResponse):
         return json.dumps({"Service": service.to_json()})
 
     def get_service(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         service_id = params.get("Id")
         service = self.servicediscovery_backend.get_service(service_id=service_id)
         return json.dumps({"Service": service.to_json()})
 
     def delete_service(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         service_id = params.get("Id")
         self.servicediscovery_backend.delete_service(service_id=service_id)
         return "{}"
@@ -167,7 +168,7 @@ class ServiceDiscoveryResponse(BaseResponse):
         return json.dumps({"Services": [s.to_json() for s in services]})
 
     def update_service(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         service_id = params.get("Id")
         details = params.get("Service")
         operation_id = self.servicediscovery_backend.update_service(
@@ -176,7 +177,7 @@ class ServiceDiscoveryResponse(BaseResponse):
         return json.dumps({"OperationId": operation_id})
 
     def update_http_namespace(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         _id = params.get("Id")
         updater_request_id = params.get("UpdaterRequestId")
         namespace = params.get("Namespace")
@@ -188,7 +189,7 @@ class ServiceDiscoveryResponse(BaseResponse):
         return json.dumps({"operationId": operation_id})
 
     def update_private_dns_namespace(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         _id = params.get("Id")
         description = params["Namespace"].get("Description")
         properties = params["Namespace"].get("Properties", {}).get("DnsProperties")
@@ -200,7 +201,7 @@ class ServiceDiscoveryResponse(BaseResponse):
         return json.dumps({"OperationId": operation_id})
 
     def update_public_dns_namespace(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         _id = params.get("Id")
         description = params["Namespace"].get("Description")
         properties = params["Namespace"].get("Properties", {}).get("DnsProperties")
@@ -212,7 +213,7 @@ class ServiceDiscoveryResponse(BaseResponse):
         return json.dumps({"OperationId": operation_id})
 
     def register_instance(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         service_id = params.get("ServiceId")
         instance_id = params.get("InstanceId")
         creator_request_id = params.get("CreatorRequestId")
@@ -226,7 +227,7 @@ class ServiceDiscoveryResponse(BaseResponse):
         return json.dumps({"OperationId": operation_id})
 
     def deregister_instance(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         service_id = params.get("ServiceId")
         instance_id = params.get("InstanceId")
         operation_id = self.servicediscovery_backend.deregister_instance(
@@ -236,7 +237,7 @@ class ServiceDiscoveryResponse(BaseResponse):
         return json.dumps({"OperationId": operation_id})
 
     def get_instance(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         service_id = params.get("ServiceId")
         instance_id = params.get("InstanceId")
         instance = self.servicediscovery_backend.get_instance(
@@ -246,7 +247,7 @@ class ServiceDiscoveryResponse(BaseResponse):
         return json.dumps({"Instance": instance.to_json()})
 
     def get_instances_health_status(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         service_id = params.get("ServiceId")
         instances = params.get("Instances")
         max_results = params.get("MaxResults")
@@ -266,7 +267,7 @@ class ServiceDiscoveryResponse(BaseResponse):
         return json.dumps(result)
 
     def update_instance_custom_health_status(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         service_id = params.get("ServiceId")
         instance_id = params.get("InstanceId")
         status = params.get("Status")
@@ -278,7 +279,7 @@ class ServiceDiscoveryResponse(BaseResponse):
         return "{}"
 
     def list_instances(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         service_id = params.get("ServiceId")
         next_token = params.get("NextToken")
         max_results = params.get("MaxResults")
@@ -294,7 +295,7 @@ class ServiceDiscoveryResponse(BaseResponse):
         return json.dumps(result)
 
     def discover_instances(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         namespace_name = params.get("NamespaceName")
         service_name = params.get("ServiceName")
         max_results = params.get("MaxResults")
@@ -334,7 +335,7 @@ class ServiceDiscoveryResponse(BaseResponse):
         )
 
     def discover_instances_revision(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         namespace_name = params.get("NamespaceName")
         service_name = params.get("ServiceName")
         instances_revision = self.servicediscovery_backend.discover_instances_revision(
