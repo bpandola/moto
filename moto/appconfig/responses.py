@@ -1,6 +1,5 @@
 import json
 from typing import Any
-from urllib.parse import unquote
 
 from moto.core.responses import BaseResponse
 
@@ -10,6 +9,7 @@ from .models import AppConfigBackend, appconfig_backends
 class AppConfigResponse(BaseResponse):
     def __init__(self) -> None:
         super().__init__(service_name="appconfig")
+        self.automated_parameter_parsing = True
 
     @property
     def appconfig_backend(self) -> AppConfigBackend:
@@ -105,28 +105,28 @@ class AppConfigResponse(BaseResponse):
         return json.dumps({"Items": [p.to_json() for p in profiles]})
 
     def list_tags_for_resource(self) -> str:
-        arn = unquote(self.path.split("/tags/")[-1])
+        arn = self._get_param("ResourceArn")
         tags = self.appconfig_backend.list_tags_for_resource(arn)
         return json.dumps({"Tags": tags})
 
     def tag_resource(self) -> str:
-        arn = unquote(self.path.split("/tags/")[-1])
+        arn = self._get_param("ResourceArn")
         tags = self._get_param("Tags")
         self.appconfig_backend.tag_resource(arn, tags)
         return "{}"
 
     def untag_resource(self) -> str:
-        arn = unquote(self.path.split("/tags/")[-1])
-        tag_keys = self.querystring.get("tagKeys")
+        arn = self._get_param("ResourceArn")
+        tag_keys = self._get_param("TagKeys")
         self.appconfig_backend.untag_resource(arn, tag_keys)  # type: ignore[arg-type]
         return "{}"
 
     def create_hosted_configuration_version(self) -> tuple[str, dict[str, Any]]:
         app_id = self._get_param("ApplicationId")
         config_profile_id = self._get_param("ConfigurationProfileId")
-        description = self.headers.get("Description")
-        content = self.body
-        content_type = self.headers.get("Content-Type")
+        description = self._get_param("Description")
+        content = self._get_param("Content")
+        content_type = self._get_param("ContentType")
         version_label = self.headers.get("VersionLabel")
         version = self.appconfig_backend.create_hosted_configuration_version(
             app_id=app_id,
