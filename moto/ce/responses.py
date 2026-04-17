@@ -10,13 +10,17 @@ from .models import CostExplorerBackend, ce_backends
 class CostExplorerResponse(BaseResponse):
     """Handler for CostExplorer requests and responses."""
 
+    def __init__(self) -> None:
+        super().__init__(service_name="ce")
+        self.automated_parameter_parsing = True
+
     @property
     def ce_backend(self) -> CostExplorerBackend:
         """Return backend instance specific for this region."""
         return ce_backends[self.current_account][self.partition]
 
     def create_cost_category_definition(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         name = params.get("Name")
         rule_version = params.get("RuleVersion")
         rules = params.get("Rules")
@@ -41,7 +45,7 @@ class CostExplorerResponse(BaseResponse):
         )
 
     def describe_cost_category_definition(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         cost_category_arn = params.get("CostCategoryArn")
         cost_category = self.ce_backend.describe_cost_category_definition(
             cost_category_arn=cost_category_arn
@@ -49,7 +53,7 @@ class CostExplorerResponse(BaseResponse):
         return json.dumps({"CostCategory": cost_category.to_json()})
 
     def delete_cost_category_definition(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         cost_category_arn = params.get("CostCategoryArn")
         (
             cost_category_arn,
@@ -62,7 +66,7 @@ class CostExplorerResponse(BaseResponse):
         )
 
     def update_cost_category_definition(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         cost_category_arn = params.get("CostCategoryArn")
         effective_start = params.get("EffectiveStart")
         rule_version = params.get("RuleVersion")
@@ -85,20 +89,20 @@ class CostExplorerResponse(BaseResponse):
         )
 
     def list_tags_for_resource(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         resource_arn = params.get("ResourceArn")
         tags = self.ce_backend.list_tags_for_resource(resource_arn)
         return json.dumps({"ResourceTags": tags})
 
     def tag_resource(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         resource_arn = params.get("ResourceArn")
         tags = params.get("ResourceTags")
         self.ce_backend.tag_resource(resource_arn, tags)
         return json.dumps({})
 
     def untag_resource(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         resource_arn = params.get("ResourceArn")
         tag_names = params.get("ResourceTagKeys")
         self.ce_backend.untag_resource(resource_arn, tag_names)
