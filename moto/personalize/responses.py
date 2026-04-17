@@ -12,6 +12,7 @@ class PersonalizeResponse(BaseResponse):
 
     def __init__(self) -> None:
         super().__init__(service_name="personalize")
+        self.automated_parameter_parsing = True
 
     @property
     def personalize_backend(self) -> PersonalizeBackend:
@@ -19,7 +20,7 @@ class PersonalizeResponse(BaseResponse):
         return personalize_backends[self.current_account][self.region]
 
     def create_schema(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         name = params.get("name")
         schema = params.get("schema")
         domain = params.get("domain")
@@ -31,13 +32,13 @@ class PersonalizeResponse(BaseResponse):
         return json.dumps({"schemaArn": schema_arn})
 
     def delete_schema(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         schema_arn = params.get("schemaArn")
         self.personalize_backend.delete_schema(schema_arn=schema_arn)
         return "{}"
 
     def describe_schema(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         schema_arn = params.get("schemaArn")
         schema = self.personalize_backend.describe_schema(schema_arn=schema_arn)
         return json.dumps({"schema": schema.to_dict()})
