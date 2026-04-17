@@ -1,8 +1,6 @@
 """Handles incoming pipes requests, invokes methods, returns responses."""
 
-import json
 from typing import Any
-from urllib.parse import unquote
 
 from moto.core.responses import ActionResult, BaseResponse, EmptyResult
 
@@ -15,27 +13,28 @@ class EventBridgePipesResponse(BaseResponse):
 
     def __init__(self) -> None:
         super().__init__(service_name="pipes")
+        self.automated_parameter_parsing = True
 
     @property
     def pipes_backend(self) -> EventBridgePipesBackend:
         return pipes_backends[self.current_account][self.region]
 
     def create_pipe(self) -> ActionResult:
-        body_params = json.loads(self.body) if self.body else {}
+        params = self._get_params()
 
-        name = body_params.get("Name") or self.uri.split("/")[-1]
-        description = body_params.get("Description")
-        desired_state = body_params.get("DesiredState")
-        source = body_params.get("Source")
-        source_parameters = body_params.get("SourceParameters")
-        enrichment = body_params.get("Enrichment")
-        enrichment_parameters = body_params.get("EnrichmentParameters")
-        target = body_params.get("Target")
-        target_parameters = body_params.get("TargetParameters")
-        role_arn = body_params.get("RoleArn")
-        tags = body_params.get("Tags")
-        log_configuration = body_params.get("LogConfiguration")
-        kms_key_identifier = body_params.get("KmsKeyIdentifier")
+        name = params.get("Name") or self._get_param("Name")
+        description = params.get("Description")
+        desired_state = params.get("DesiredState")
+        source = params.get("Source")
+        source_parameters = params.get("SourceParameters")
+        enrichment = params.get("Enrichment")
+        enrichment_parameters = params.get("EnrichmentParameters")
+        target = params.get("Target")
+        target_parameters = params.get("TargetParameters")
+        role_arn = params.get("RoleArn")
+        tags = params.get("Tags")
+        log_configuration = params.get("LogConfiguration")
+        kms_key_identifier = params.get("KmsKeyIdentifier")
 
         if not source:
             raise ValidationException("Source is a required parameter")
@@ -71,7 +70,7 @@ class EventBridgePipesResponse(BaseResponse):
         )
 
     def describe_pipe(self) -> ActionResult:
-        name = self.uri.split("?")[0].split("/")[-1]
+        name = self._get_param("Name")
         pipe = self.pipes_backend.describe_pipe(
             name=name,
         )
@@ -110,7 +109,7 @@ class EventBridgePipesResponse(BaseResponse):
         return ActionResult(response_dict)
 
     def delete_pipe(self) -> ActionResult:
-        name = self.uri.split("?")[0].split("/")[-1]
+        name = self._get_param("Name")
 
         pipe = self.pipes_backend.delete_pipe(name=name)
 
@@ -126,9 +125,9 @@ class EventBridgePipesResponse(BaseResponse):
         )
 
     def tag_resource(self) -> ActionResult:
-        resource_arn = unquote(self.uri.split("/tags/")[-1])
-        body_params = json.loads(self.body) if self.body else {}
-        tags = body_params.get("Tags") or body_params.get("tags")
+        resource_arn = self._get_param("resourceArn")
+        params = self._get_params()
+        tags = params.get("Tags") or params.get("tags")
         if not tags:
             raise ValidationException("Tags is a required parameter")
 
@@ -139,8 +138,8 @@ class EventBridgePipesResponse(BaseResponse):
         return EmptyResult()
 
     def untag_resource(self) -> ActionResult:
-        resource_arn = unquote(self.uri.split("?")[0].split("/tags/")[-1])
-        tag_keys = self.querystring.get("tagKeys", [])
+        resource_arn = self._get_param("resourceArn")
+        tag_keys = self._get_param("tagKeys")
 
         self.pipes_backend.untag_resource(
             resource_arn=resource_arn,
@@ -149,25 +148,20 @@ class EventBridgePipesResponse(BaseResponse):
         return EmptyResult()
 
     def list_tags_for_resource(self) -> ActionResult:
-        resource_arn = unquote(self.uri.split("/tags/")[-1])
+        resource_arn = self._get_param("resourceArn")
         tags = self.pipes_backend.list_tags_for_resource(resource_arn)
         return ActionResult({"tags": tags})
 
     def list_pipes(self) -> ActionResult:
-        params = json.loads(self.body) if self.body else {}
-        if not params and self.querystring:
-            params = {
-                k: (v[0] if isinstance(v, list) and len(v) > 0 else v)
-                for k, v in self.querystring.items()
-            }
+        params = self._get_params()
 
-        name_prefix = params.get("NamePrefix") or params.get("namePrefix")
-        desired_state = params.get("DesiredState") or params.get("desiredState")
-        current_state = params.get("CurrentState") or params.get("currentState")
-        source_prefix = params.get("SourcePrefix") or params.get("sourcePrefix")
-        target_prefix = params.get("TargetPrefix") or params.get("targetPrefix")
-        next_token = params.get("NextToken") or params.get("nextToken")
-        limit = params.get("Limit") or params.get("limit")
+        name_prefix = params.get("NamePrefix")
+        desired_state = params.get("DesiredState")
+        current_state = params.get("CurrentState")
+        source_prefix = params.get("SourcePrefix")
+        target_prefix = params.get("TargetPrefix")
+        next_token = params.get("NextToken")
+        limit = params.get("Limit")
         if limit is not None and limit != "":
             try:
                 limit = int(limit)
@@ -191,7 +185,7 @@ class EventBridgePipesResponse(BaseResponse):
         return ActionResult(response_dict)
 
     def start_pipe(self) -> ActionResult:
-        name = self.uri.split("?")[0].split("/")[-2]
+        name = self._get_param("Name")
         pipe = self.pipes_backend.start_pipe(name=name)
         response_dict: dict[str, Any] = {
             "Arn": pipe.arn,
@@ -204,7 +198,7 @@ class EventBridgePipesResponse(BaseResponse):
         return ActionResult(response_dict)
 
     def stop_pipe(self) -> ActionResult:
-        name = self.uri.split("?")[0].split("/")[-2]
+        name = self._get_param("Name")
         pipe = self.pipes_backend.stop_pipe(name=name)
         response_dict: dict[str, Any] = {
             "Arn": pipe.arn,
