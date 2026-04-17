@@ -11,15 +11,15 @@ from .models import SecurityHubBackend, securityhub_backends
 class SecurityHubResponse(BaseResponse):
     def __init__(self) -> None:
         super().__init__(service_name="securityhub")
+        self.automated_parameter_parsing = True
 
     @property
     def securityhub_backend(self) -> SecurityHubBackend:
         return securityhub_backends[self.current_account][self.region]
 
     def enable_security_hub(self) -> str:
-        params = json.loads(self.body) if self.body else {}
-        enable_default_standards = params.get("EnableDefaultStandards", True)
-        tags = params.get("Tags", {})
+        enable_default_standards = self._get_param("EnableDefaultStandards", True)
+        tags = self._get_param("Tags", {})
 
         self.securityhub_backend.enable_security_hub(
             enable_default_standards=enable_default_standards,
@@ -32,8 +32,7 @@ class SecurityHubResponse(BaseResponse):
         return json.dumps({})
 
     def describe_hub(self) -> str:
-        params = json.loads(self.body) if self.body else {}
-        hub_arn = params.get("HubArn")
+        hub_arn = self._get_param("HubArn")
 
         hub_info = self.securityhub_backend.describe_hub(hub_arn=hub_arn)
         return json.dumps(hub_info)
@@ -55,12 +54,7 @@ class SecurityHubResponse(BaseResponse):
         return json.dumps(response)
 
     def batch_import_findings(self) -> str:
-        raw_body = self.body
-        if isinstance(raw_body, bytes):
-            raw_body = raw_body.decode("utf-8")
-        body = json.loads(raw_body)
-
-        findings = body.get("Findings", [])
+        findings = self._get_param("Findings", [])
 
         failed_count, success_count, failed_findings = (
             self.securityhub_backend.batch_import_findings(
@@ -84,18 +78,16 @@ class SecurityHubResponse(BaseResponse):
         )
 
     def enable_organization_admin_account(self) -> str:
-        params = json.loads(self.body)
-        admin_account_id = params.get("AdminAccountId")
+        admin_account_id = self._get_param("AdminAccountId")
         self.securityhub_backend.enable_organization_admin_account(
             admin_account_id=admin_account_id,
         )
         return json.dumps({})
 
     def update_organization_configuration(self) -> str:
-        params = json.loads(self.body)
-        auto_enable = params.get("AutoEnable")
-        auto_enable_standards = params.get("AutoEnableStandards")
-        organization_configuration = params.get("OrganizationConfiguration")
+        auto_enable = self._get_param("AutoEnable")
+        auto_enable_standards = self._get_param("AutoEnableStandards")
+        organization_configuration = self._get_param("OrganizationConfiguration")
         self.securityhub_backend.update_organization_configuration(
             auto_enable=auto_enable,
             auto_enable_standards=auto_enable_standards,
@@ -113,16 +105,14 @@ class SecurityHubResponse(BaseResponse):
         return json.dumps(dict(response))
 
     def create_members(self) -> str:
-        params = json.loads(self.body) if self.body else {}
-        account_details = params.get("AccountDetails", [])
+        account_details = self._get_param("AccountDetails", [])
         unprocessed_accounts = self.securityhub_backend.create_members(
             account_details=account_details,
         )
         return json.dumps({"UnprocessedAccounts": unprocessed_accounts})
 
     def get_members(self) -> str:
-        params = json.loads(self.body) if self.body else {}
-        account_ids = params.get("AccountIds", [])
+        account_ids = self._get_param("AccountIds", [])
         members, unprocessed_accounts = self.securityhub_backend.get_members(
             account_ids=account_ids,
         )
