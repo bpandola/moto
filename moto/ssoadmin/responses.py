@@ -12,6 +12,7 @@ class SSOAdminResponse(BaseResponse):
 
     def __init__(self) -> None:
         super().__init__(service_name="sso-admin")
+        self.automated_parameter_parsing = True
 
     @property
     def ssoadmin_backend(self) -> SSOAdminBackend:
@@ -19,7 +20,7 @@ class SSOAdminResponse(BaseResponse):
         return ssoadmin_backends[self.current_account][self.region]
 
     def create_account_assignment(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         instance_arn = params.get("InstanceArn")
         target_id = params.get("TargetId")
         target_type = params.get("TargetType")
@@ -38,7 +39,7 @@ class SSOAdminResponse(BaseResponse):
         return json.dumps({"AccountAssignmentCreationStatus": summary})
 
     def delete_account_assignment(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         instance_arn = params.get("InstanceArn")
         target_id = params.get("TargetId")
         target_type = params.get("TargetType")
@@ -57,7 +58,7 @@ class SSOAdminResponse(BaseResponse):
         return json.dumps({"AccountAssignmentDeletionStatus": summary})
 
     def list_account_assignments(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         instance_arn = params.get("InstanceArn")
         account_id = params.get("AccountId")
         permission_set_arn = params.get("PermissionSetArn")
@@ -116,7 +117,7 @@ class SSOAdminResponse(BaseResponse):
         return json.dumps({"PermissionSet": permission_set})
 
     def delete_permission_set(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         instance_arn = params.get("InstanceArn")
         permission_set_arn = params.get("PermissionSetArn")
         self.ssoadmin_backend.delete_permission_set(
