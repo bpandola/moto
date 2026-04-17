@@ -12,6 +12,7 @@ class OpenSearchServiceServerlessResponse(BaseResponse):
 
     def __init__(self) -> None:
         super().__init__(service_name="opensearchserverless")
+        self.automated_parameter_parsing = True
 
     @property
     def opensearchserverless_backend(self) -> OpenSearchServiceServerlessBackend:
@@ -20,7 +21,7 @@ class OpenSearchServiceServerlessResponse(BaseResponse):
         return opensearchserverless_backends[self.current_account][self.region]
 
     def create_security_policy(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         client_token = params.get("clientToken")
         description = params.get("description")
         name = params.get("name")
@@ -38,7 +39,7 @@ class OpenSearchServiceServerlessResponse(BaseResponse):
         return json.dumps({"securityPolicyDetail": security_policy_detail.to_dict()})
 
     def get_security_policy(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         name = params.get("name")
         type = params.get("type")
         security_policy_detail = self.opensearchserverless_backend.get_security_policy(
@@ -48,7 +49,7 @@ class OpenSearchServiceServerlessResponse(BaseResponse):
         return json.dumps({"securityPolicyDetail": security_policy_detail.to_dict()})
 
     def list_security_policies(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         resource = params.get("resource")
         type = params.get("type")
         security_policy_summaries = (
@@ -66,7 +67,7 @@ class OpenSearchServiceServerlessResponse(BaseResponse):
         )
 
     def update_security_policy(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         client_token = params.get("clientToken")
         description = params.get("description")
         name = params.get("name")
@@ -86,7 +87,7 @@ class OpenSearchServiceServerlessResponse(BaseResponse):
         return json.dumps({"securityPolicyDetail": security_policy_detail.to_dict()})
 
     def create_collection(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         client_token = params.get("clientToken")
         description = params.get("description")
         name = params.get("name")
@@ -106,7 +107,7 @@ class OpenSearchServiceServerlessResponse(BaseResponse):
         )
 
     def list_collections(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         collection_filters = params.get("collectionFilters")
         collection_summaries = self.opensearchserverless_backend.list_collections(
             collection_filters=collection_filters,
@@ -116,7 +117,7 @@ class OpenSearchServiceServerlessResponse(BaseResponse):
         )
 
     def create_vpc_endpoint(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         client_token = params.get("clientToken")
         name = params.get("name")
         security_group_ids = params.get("securityGroupIds")
@@ -136,7 +137,7 @@ class OpenSearchServiceServerlessResponse(BaseResponse):
         )
 
     def delete_collection(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         client_token = params.get("clientToken")
         id = params.get("id")
         delete_collection_detail = self.opensearchserverless_backend.delete_collection(
@@ -148,7 +149,7 @@ class OpenSearchServiceServerlessResponse(BaseResponse):
         )
 
     def tag_resource(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         resource_arn = params.get("resourceArn")
         tags = params.get("tags")
         self.opensearchserverless_backend.tag_resource(
@@ -158,7 +159,7 @@ class OpenSearchServiceServerlessResponse(BaseResponse):
         return json.dumps({})
 
     def untag_resource(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         resource_arn = params.get("resourceArn")
         tag_keys = params.get("tagKeys")
         self.opensearchserverless_backend.untag_resource(
@@ -168,7 +169,7 @@ class OpenSearchServiceServerlessResponse(BaseResponse):
         return json.dumps({})
 
     def list_tags_for_resource(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         resource_arn = params.get("resourceArn")
         tags = self.opensearchserverless_backend.list_tags_for_resource(
             resource_arn=resource_arn,
@@ -176,7 +177,7 @@ class OpenSearchServiceServerlessResponse(BaseResponse):
         return json.dumps({"tags": tags})
 
     def batch_get_collection(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         ids = params.get("ids")
         names = params.get("names")
         collection_details, collection_error_details = (
