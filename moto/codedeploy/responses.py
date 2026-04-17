@@ -12,6 +12,7 @@ class CodeDeployResponse(BaseResponse):
 
     def __init__(self) -> None:
         super().__init__(service_name="codedeploy")
+        self.automated_parameter_parsing = True
         self.default_response_headers = {"Content-Type": "application/json"}
 
     @property
