@@ -12,6 +12,7 @@ class ShieldResponse(BaseResponse):
 
     def __init__(self) -> None:
         super().__init__(service_name="shield")
+        self.automated_parameter_parsing = True
 
     @property
     def shield_backend(self) -> ShieldBackend:
@@ -19,7 +20,7 @@ class ShieldResponse(BaseResponse):
         return shield_backends[self.current_account][self.partition]
 
     def create_protection(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         name = params.get("Name")
         resource_arn = params.get("ResourceArn")
         tags = params.get("Tags")
@@ -31,7 +32,7 @@ class ShieldResponse(BaseResponse):
         return json.dumps({"ProtectionId": protection_id})
 
     def describe_protection(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         protection_id = params.get("ProtectionId")
         resource_arn = params.get("ResourceArn")
         protection = self.shield_backend.describe_protection(
@@ -41,7 +42,7 @@ class ShieldResponse(BaseResponse):
         return json.dumps({"Protection": protection.to_dict()})
 
     def list_protections(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         inclusion_filters = params.get("InclusionFilters")
         protections = self.shield_backend.list_protections(
             inclusion_filters=inclusion_filters,
@@ -51,7 +52,7 @@ class ShieldResponse(BaseResponse):
         )
 
     def delete_protection(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         protection_id = params.get("ProtectionId")
         self.shield_backend.delete_protection(
             protection_id=protection_id,
@@ -59,7 +60,7 @@ class ShieldResponse(BaseResponse):
         return "{}"
 
     def list_tags_for_resource(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         resource_arn = params.get("ResourceARN")
         tags = self.shield_backend.list_tags_for_resource(
             resource_arn=resource_arn,
@@ -67,7 +68,7 @@ class ShieldResponse(BaseResponse):
         return json.dumps({"Tags": tags})
 
     def tag_resource(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         resource_arn = params.get("ResourceARN")
         tags = params.get("Tags")
         self.shield_backend.tag_resource(
@@ -77,7 +78,7 @@ class ShieldResponse(BaseResponse):
         return "{}"
 
     def untag_resource(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         resource_arn = params.get("ResourceARN")
         tag_keys = params.get("TagKeys")
         self.shield_backend.untag_resource(
