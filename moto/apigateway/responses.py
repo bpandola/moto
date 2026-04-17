@@ -1,6 +1,5 @@
 import json
 from typing import Any, Optional
-from urllib.parse import unquote
 
 from moto.core.responses import TYPE_RESPONSE, BaseResponse
 from moto.utilities.utils import merge_multiple_dicts
@@ -17,6 +16,7 @@ ENDPOINT_CONFIGURATION_TYPES = ["PRIVATE", "EDGE", "REGIONAL"]
 class APIGatewayResponse(BaseResponse):
     def __init__(self) -> None:
         super().__init__(service_name="apigateway")
+        self.automated_parameter_parsing = True
 
     def error(self, type_: str, message: str, status: int = 400) -> TYPE_RESPONSE:
         headers = self.response_headers or {}
@@ -63,7 +63,10 @@ class APIGatewayResponse(BaseResponse):
     def create_rest_api(self) -> TYPE_RESPONSE:
         api_doc = deserialize_body(self.body)
         if api_doc:
-            fail_on_warnings = self._get_bool_param("failonwarnings") or False
+            # failonwarnings is a querystring param on ImportRestApi, but this
+            # handler is matched as CreateRestApi, so read it from querystring directly.
+            fw = self.querystring.get("failonwarnings", [None])[0]
+            fail_on_warnings = str(fw).lower() == "true" if fw else False
             rest_api = self.backend.import_rest_api(api_doc, fail_on_warnings)
 
             return 200, {}, json.dumps(rest_api.to_dict())
@@ -115,12 +118,12 @@ class APIGatewayResponse(BaseResponse):
         return None
 
     def delete_rest_api(self) -> TYPE_RESPONSE:
-        function_id = self.path.replace("/restapis/", "", 1).split("/")[0]
+        function_id = self._get_param("restApiId")
         rest_api = self.backend.delete_rest_api(function_id)
         return 200, {}, json.dumps(rest_api.to_dict())
 
     def get_rest_api(self) -> TYPE_RESPONSE:
-        function_id = self.path.replace("/restapis/", "", 1).split("/")[0]
+        function_id = self._get_param("restApiId")
         rest_api = self.backend.get_rest_api(function_id)
         return 200, {}, json.dumps(rest_api.to_dict())
 
@@ -134,9 +137,9 @@ class APIGatewayResponse(BaseResponse):
         return 200, {}, "{}"
 
     def put_rest_api(self) -> TYPE_RESPONSE:
-        function_id = self.path.replace("/restapis/", "", 1).split("/")[0]
+        function_id = self._get_param("restApiId")
         mode = self._get_param("mode", "merge")
-        fail_on_warnings = self._get_bool_param("failonwarnings") or False
+        fail_on_warnings = self._get_bool_param("failOnWarnings") or False
 
         api_doc = deserialize_body(self.body)
         rest_api = self.backend.put_rest_api(
@@ -145,7 +148,7 @@ class APIGatewayResponse(BaseResponse):
         return 200, {}, json.dumps(rest_api.to_dict())
 
     def update_rest_api(self) -> TYPE_RESPONSE:
-        function_id = self.path.replace("/restapis/", "", 1).split("/")[0]
+        function_id = self._get_param("restApiId")
         patch_operations = self._get_param("patchOperations")
         response = self.__validte_rest_patch_operations(patch_operations)
         if response is not None:
@@ -155,50 +158,47 @@ class APIGatewayResponse(BaseResponse):
         return 200, {}, json.dumps(rest_api.to_dict())
 
     def get_resources(self) -> str:
-        function_id = self.path.replace("/restapis/", "", 1).split("/")[0]
+        function_id = self._get_param("restApiId")
         resources = self.backend.get_resources(function_id)
         return json.dumps({"item": [resource.to_dict() for resource in resources]})
 
     def create_resource(self) -> TYPE_RESPONSE:
-        function_id = self.path.replace("/restapis/", "", 1).split("/")[0]
-        resource_id = self.path.split("/")[-1]
+        function_id = self._get_param("restApiId")
+        resource_id = self._get_param("parentId")
         path_part = self._get_param("pathPart")
         resource = self.backend.create_resource(function_id, resource_id, path_part)
         return 201, {"status": 201}, json.dumps(resource.to_dict())
 
     def delete_resource(self) -> TYPE_RESPONSE:
-        function_id = self.path.replace("/restapis/", "", 1).split("/")[0]
-        resource_id = self.path.split("/")[-1]
+        function_id = self._get_param("restApiId")
+        resource_id = self._get_param("resourceId")
         resource = self.backend.delete_resource(function_id, resource_id)
         return 202, {"status": 202}, json.dumps(resource.to_dict())
 
     def get_resource(self) -> str:
-        function_id = self.path.replace("/restapis/", "", 1).split("/")[0]
-        resource_id = self.path.split("/")[-1]
+        function_id = self._get_param("restApiId")
+        resource_id = self._get_param("resourceId")
         resource = self.backend.get_resource(function_id, resource_id)
         return json.dumps(resource.to_dict())
 
     def delete_method(self) -> TYPE_RESPONSE:
-        url_path_parts = self.path.split("/")
-        function_id = url_path_parts[2]
-        resource_id = url_path_parts[4]
-        method_type = url_path_parts[6]
+        function_id = self._get_param("restApiId")
+        resource_id = self._get_param("resourceId")
+        method_type = self._get_param("httpMethod")
         self.backend.delete_method(function_id, resource_id, method_type)
         return 204, {"status": 204}, ""
 
     def get_method(self) -> str:
-        url_path_parts = self.path.split("/")
-        function_id = url_path_parts[2]
-        resource_id = url_path_parts[4]
-        method_type = url_path_parts[6]
+        function_id = self._get_param("restApiId")
+        resource_id = self._get_param("resourceId")
+        method_type = self._get_param("httpMethod")
         method = self.backend.get_method(function_id, resource_id, method_type)
         return json.dumps(method.to_json())
 
     def put_method(self) -> TYPE_RESPONSE:
-        url_path_parts = self.path.split("/")
-        function_id = url_path_parts[2]
-        resource_id = url_path_parts[4]
-        method_type = url_path_parts[6]
+        function_id = self._get_param("restApiId")
+        resource_id = self._get_param("resourceId")
+        method_type = self._get_param("httpMethod")
         authorization_type = self._get_param("authorizationType")
         api_key_required = self._get_param("apiKeyRequired")
         request_models = self._get_param("requestModels")
@@ -223,22 +223,20 @@ class APIGatewayResponse(BaseResponse):
         return 201, {"status": 201}, json.dumps(method.to_json())
 
     def delete_method_response(self) -> TYPE_RESPONSE:
-        url_path_parts = self.path.split("/")
-        function_id = url_path_parts[2]
-        resource_id = url_path_parts[4]
-        method_type = url_path_parts[6]
-        response_code = url_path_parts[8]
+        function_id = self._get_param("restApiId")
+        resource_id = self._get_param("resourceId")
+        method_type = self._get_param("httpMethod")
+        response_code = self._get_param("statusCode")
         method_response = self.backend.delete_method_response(
             function_id, resource_id, method_type, response_code
         )
         return 204, {"status": 204}, json.dumps(method_response.to_json())  # type: ignore[union-attr]
 
     def get_method_response(self) -> str:
-        url_path_parts = self.path.split("/")
-        function_id = url_path_parts[2]
-        resource_id = url_path_parts[4]
-        method_type = url_path_parts[6]
-        response_code = url_path_parts[8]
+        function_id = self._get_param("restApiId")
+        resource_id = self._get_param("resourceId")
+        method_type = self._get_param("httpMethod")
+        response_code = self._get_param("statusCode")
 
         method_response = self.backend.get_method_response(
             function_id, resource_id, method_type, response_code
@@ -246,11 +244,10 @@ class APIGatewayResponse(BaseResponse):
         return json.dumps(method_response.to_json())  # type: ignore[union-attr]
 
     def put_method_response(self) -> TYPE_RESPONSE:
-        url_path_parts = self.path.split("/")
-        function_id = url_path_parts[2]
-        resource_id = url_path_parts[4]
-        method_type = url_path_parts[6]
-        response_code = url_path_parts[8]
+        function_id = self._get_param("restApiId")
+        resource_id = self._get_param("resourceId")
+        method_type = self._get_param("httpMethod")
+        response_code = self._get_param("statusCode")
         response_models = self._get_param("responseModels")
         response_parameters = self._get_param("responseParameters")
         method_response = self.backend.put_method_response(
@@ -264,7 +261,7 @@ class APIGatewayResponse(BaseResponse):
         return 201, {"status": 201}, json.dumps(method_response.to_json())
 
     def create_authorizer(self) -> TYPE_RESPONSE:
-        restapi_id = self.path.split("/")[2]
+        restapi_id = self._get_param("restApiId")
         name = self._get_param("name")
         authorizer_type = self._get_param("type")
 
@@ -305,28 +302,25 @@ class APIGatewayResponse(BaseResponse):
         return 201, {"status": 201}, json.dumps(authorizer_response.to_json())
 
     def delete_authorizer(self) -> TYPE_RESPONSE:
-        url_path_parts = self.path.split("/")
-        restapi_id = url_path_parts[2]
-        authorizer_id = url_path_parts[4]
+        restapi_id = self._get_param("restApiId")
+        authorizer_id = self._get_param("authorizerId")
         self.backend.delete_authorizer(restapi_id, authorizer_id)
         return 202, {"status": 202}, "{}"
 
     def get_authorizer(self) -> str:
-        url_path_parts = self.path.split("/")
-        restapi_id = url_path_parts[2]
-        authorizer_id = url_path_parts[4]
+        restapi_id = self._get_param("restApiId")
+        authorizer_id = self._get_param("authorizerId")
         authorizer_response = self.backend.get_authorizer(restapi_id, authorizer_id)
         return json.dumps(authorizer_response.to_json())
 
     def get_authorizers(self) -> str:
-        restapi_id = self.path.split("/")[2]
+        restapi_id = self._get_param("restApiId")
         authorizers = self.backend.get_authorizers(restapi_id)
         return json.dumps({"item": [a.to_json() for a in authorizers]})
 
     def update_authorizer(self) -> str:
-        url_path_parts = self.path.split("/")
-        restapi_id = url_path_parts[2]
-        authorizer_id = url_path_parts[4]
+        restapi_id = self._get_param("restApiId")
+        authorizer_id = self._get_param("authorizerId")
         patch_operations = self._get_param("patchOperations")
         authorizer_response = self.backend.update_authorizer(
             restapi_id, authorizer_id, patch_operations
@@ -334,7 +328,7 @@ class APIGatewayResponse(BaseResponse):
         return json.dumps(authorizer_response.to_json())
 
     def create_request_validator(self) -> TYPE_RESPONSE:
-        restapi_id = self.path.split("/")[2]
+        restapi_id = self._get_param("restApiId")
         name = self._get_param("name")
         body = self._get_bool_param("validateRequestBody")
         params = self._get_bool_param("validateRequestParameters")
@@ -344,28 +338,25 @@ class APIGatewayResponse(BaseResponse):
         return 201, {"status": 201}, json.dumps(validator.to_dict())
 
     def delete_request_validator(self) -> TYPE_RESPONSE:
-        url_path_parts = self.path.split("/")
-        restapi_id = url_path_parts[2]
-        validator_id = url_path_parts[4]
+        restapi_id = self._get_param("restApiId")
+        validator_id = self._get_param("requestValidatorId")
         self.backend.delete_request_validator(restapi_id, validator_id)
         return 202, {"status": 202}, ""
 
     def get_request_validator(self) -> str:
-        url_path_parts = self.path.split("/")
-        restapi_id = url_path_parts[2]
-        validator_id = url_path_parts[4]
+        restapi_id = self._get_param("restApiId")
+        validator_id = self._get_param("requestValidatorId")
         validator = self.backend.get_request_validator(restapi_id, validator_id)
         return json.dumps(validator.to_dict())
 
     def get_request_validators(self) -> str:
-        restapi_id = self.path.split("/")[2]
+        restapi_id = self._get_param("restApiId")
         validators = self.backend.get_request_validators(restapi_id)
         return json.dumps({"item": [validator.to_dict() for validator in validators]})
 
     def update_request_validator(self) -> str:
-        url_path_parts = self.path.split("/")
-        restapi_id = url_path_parts[2]
-        validator_id = url_path_parts[4]
+        restapi_id = self._get_param("restApiId")
+        validator_id = self._get_param("requestValidatorId")
         patch_ops = self._get_param("patchOperations")
         validator = self.backend.update_request_validator(
             restapi_id, validator_id, patch_ops
@@ -373,7 +364,7 @@ class APIGatewayResponse(BaseResponse):
         return json.dumps(validator.to_dict())
 
     def create_stage(self) -> TYPE_RESPONSE:
-        function_id = self.path.split("/")[2]
+        function_id = self._get_param("restApiId")
         stage_name = self._get_param("stageName")
         deployment_id = self._get_param("deploymentId")
         stage_variables = self._get_param("variables", if_none={})
@@ -397,28 +388,25 @@ class APIGatewayResponse(BaseResponse):
         return 201, {"status": 201}, json.dumps(stage_response.to_json())
 
     def delete_stage(self) -> TYPE_RESPONSE:
-        url_path_parts = self.path.split("/")
-        function_id = url_path_parts[2]
-        stage_name = url_path_parts[4]
+        function_id = self._get_param("restApiId")
+        stage_name = self._get_param("stageName")
         self.backend.delete_stage(function_id, stage_name)
         return 202, {"status": 202}, "{}"
 
     def get_stage(self) -> str:
-        url_path_parts = self.path.split("/")
-        function_id = url_path_parts[2]
-        stage_name = url_path_parts[4]
+        function_id = self._get_param("restApiId")
+        stage_name = self._get_param("stageName")
         stage_response = self.backend.get_stage(function_id, stage_name)
         return json.dumps(stage_response.to_json())
 
     def get_stages(self) -> str:
-        function_id = self.path.split("/")[2]
+        function_id = self._get_param("restApiId")
         stages = self.backend.get_stages(function_id)
         return json.dumps({"item": [s.to_json() for s in stages]})
 
     def update_stage(self) -> str:
-        url_path_parts = self.path.split("/")
-        function_id = url_path_parts[2]
-        stage_name = url_path_parts[4]
+        function_id = self._get_param("restApiId")
+        stage_name = self._get_param("stageName")
         patch_operations = self._get_param("patchOperations")
         stage_response = self.backend.update_stage(
             function_id, stage_name, patch_operations
@@ -426,9 +414,10 @@ class APIGatewayResponse(BaseResponse):
         return json.dumps(stage_response.to_json())
 
     def tag_resource(self) -> str:
-        url_path_parts = unquote(self.path.split("/tags/")[1]).split("/")
-        function_id = url_path_parts[-3]
-        stage_name = url_path_parts[-1]
+        resource_arn = self._get_param("resourceArn")
+        arn_parts = resource_arn.split("/")
+        function_id = arn_parts[-3]
+        stage_name = arn_parts[-1]
         tags = self._get_param("tags")
         if tags:
             stage = self.backend.get_stage(function_id, stage_name)
@@ -436,19 +425,20 @@ class APIGatewayResponse(BaseResponse):
         return json.dumps({"item": tags})
 
     def untag_resource(self) -> str:
-        url_path_parts = unquote(self.path.split("/tags/")[1]).split("/")
-        function_id = url_path_parts[-3]
-        stage_name = url_path_parts[-1]
+        resource_arn = self._get_param("resourceArn")
+        arn_parts = resource_arn.split("/")
+        function_id = arn_parts[-3]
+        stage_name = arn_parts[-1]
         stage = self.backend.get_stage(function_id, stage_name)
+        tag_keys = self._get_param("tagKeys") or []
         for tag in (stage.tags or {}).copy():
-            if tag in (self.querystring.get("tagKeys") or {}):
+            if tag in tag_keys:
                 stage.tags.pop(tag, None)  # type: ignore[union-attr]
         return json.dumps({"item": ""})
 
     def get_export(self) -> TYPE_RESPONSE:
-        url_path_parts = self.path.split("/")
-        rest_api_id = url_path_parts[-5]
-        export_type = url_path_parts[-1]
+        rest_api_id = self._get_param("restApiId")
+        export_type = self._get_param("exportType")
 
         body = self.backend.export_api(rest_api_id, export_type)
 
@@ -461,20 +451,18 @@ class APIGatewayResponse(BaseResponse):
         return 200, headers, json.dumps(body).encode("utf-8")
 
     def delete_integration(self) -> TYPE_RESPONSE:
-        url_path_parts = self.path.split("/")
-        function_id = url_path_parts[2]
-        resource_id = url_path_parts[4]
-        method_type = url_path_parts[6]
+        function_id = self._get_param("restApiId")
+        resource_id = self._get_param("resourceId")
+        method_type = self._get_param("httpMethod")
         integration_response = self.backend.delete_integration(
             function_id, resource_id, method_type
         )
         return 204, {"status": 204}, json.dumps(integration_response.to_json())
 
     def get_integration(self) -> str:
-        url_path_parts = self.path.split("/")
-        function_id = url_path_parts[2]
-        resource_id = url_path_parts[4]
-        method_type = url_path_parts[6]
+        function_id = self._get_param("restApiId")
+        resource_id = self._get_param("resourceId")
+        method_type = self._get_param("httpMethod")
         integration_response = self.backend.get_integration(
             function_id, resource_id, method_type
         )
@@ -483,10 +471,9 @@ class APIGatewayResponse(BaseResponse):
         return "{}"
 
     def put_integration(self) -> TYPE_RESPONSE:
-        url_path_parts = self.path.split("/")
-        function_id = url_path_parts[2]
-        resource_id = url_path_parts[4]
-        method_type = url_path_parts[6]
+        function_id = self._get_param("restApiId")
+        resource_id = self._get_param("resourceId")
+        method_type = self._get_param("httpMethod")
         integration_type = self._get_param("type")
         uri = self._get_param("uri")
         credentials = self._get_param("credentials")
@@ -500,7 +487,7 @@ class APIGatewayResponse(BaseResponse):
         connection_type = self._get_param("connectionType")
         self.backend.get_method(function_id, resource_id, method_type)
 
-        integration_http_method = self._get_param("httpMethod")
+        integration_http_method = self._get_param("integrationHttpMethod")
 
         integration_response = self.backend.put_integration(
             function_id,
@@ -522,33 +509,30 @@ class APIGatewayResponse(BaseResponse):
         return 201, {"status": 201}, json.dumps(integration_response.to_json())
 
     def delete_integration_response(self) -> TYPE_RESPONSE:
-        url_path_parts = self.path.split("/")
-        function_id = url_path_parts[2]
-        resource_id = url_path_parts[4]
-        method_type = url_path_parts[6]
-        status_code = url_path_parts[9]
+        function_id = self._get_param("restApiId")
+        resource_id = self._get_param("resourceId")
+        method_type = self._get_param("httpMethod")
+        status_code = self._get_param("statusCode")
         integration_response = self.backend.delete_integration_response(
             function_id, resource_id, method_type, status_code
         )
         return 204, {"status": 204}, json.dumps(integration_response.to_json())
 
     def get_integration_response(self) -> str:
-        url_path_parts = self.path.split("/")
-        function_id = url_path_parts[2]
-        resource_id = url_path_parts[4]
-        method_type = url_path_parts[6]
-        status_code = url_path_parts[9]
+        function_id = self._get_param("restApiId")
+        resource_id = self._get_param("resourceId")
+        method_type = self._get_param("httpMethod")
+        status_code = self._get_param("statusCode")
         integration_response = self.backend.get_integration_response(
             function_id, resource_id, method_type, status_code
         )
         return json.dumps(integration_response.to_json())
 
     def put_integration_response(self) -> TYPE_RESPONSE:
-        url_path_parts = self.path.split("/")
-        function_id = url_path_parts[2]
-        resource_id = url_path_parts[4]
-        method_type = url_path_parts[6]
-        status_code = url_path_parts[9]
+        function_id = self._get_param("restApiId")
+        resource_id = self._get_param("resourceId")
+        method_type = self._get_param("httpMethod")
+        status_code = self._get_param("statusCode")
         if not self.body:
             raise InvalidRequestInput()
 
@@ -569,7 +553,7 @@ class APIGatewayResponse(BaseResponse):
         return 201, {"status": 201}, json.dumps(integration_response.to_json())
 
     def create_deployment(self) -> TYPE_RESPONSE:
-        function_id = self.path.replace("/restapis/", "", 1).split("/")[0]
+        function_id = self._get_param("restApiId")
         name = self._get_param("stageName")
         description = self._get_param("description")
         stage_variables = self._get_param("variables", if_none={})
@@ -579,35 +563,33 @@ class APIGatewayResponse(BaseResponse):
         return 201, {"status": 201}, json.dumps(deployment.to_json())
 
     def delete_deployment(self) -> TYPE_RESPONSE:
-        url_path_parts = self.path.split("/")
-        function_id = url_path_parts[2]
-        deployment_id = url_path_parts[4]
+        function_id = self._get_param("restApiId")
+        deployment_id = self._get_param("deploymentId")
         deployment = self.backend.delete_deployment(function_id, deployment_id)
         return 202, {"status": 202}, json.dumps(deployment.to_json())
 
     def get_deployment(self) -> str:
-        url_path_parts = self.path.split("/")
-        function_id = url_path_parts[2]
-        deployment_id = url_path_parts[4]
+        function_id = self._get_param("restApiId")
+        deployment_id = self._get_param("deploymentId")
         deployment = self.backend.get_deployment(function_id, deployment_id)
         return json.dumps(deployment.to_json())
 
     def get_deployments(self) -> str:
-        function_id = self.path.replace("/restapis/", "", 1).split("/")[0]
+        function_id = self._get_param("restApiId")
         deployments = self.backend.get_deployments(function_id)
         return json.dumps({"item": [d.to_json() for d in deployments]})
 
     def create_api_key(self) -> TYPE_RESPONSE:
-        apikey_response = self.backend.create_api_key(json.loads(self.body))
+        apikey_response = self.backend.create_api_key(self._get_params())
         return 201, {"status": 201}, json.dumps(apikey_response.to_json())
 
     def delete_api_key(self) -> TYPE_RESPONSE:
-        apikey = self.path.split("/")[2]
+        apikey = self._get_param("apiKey")
         self.backend.delete_api_key(apikey)
         return 202, {"status": 202}, "{}"
 
     def get_api_key(self) -> str:
-        apikey = self.path.split("/")[2]
+        apikey = self._get_param("apiKey")
         include_value = self._get_bool_param("includeValue") or False
         apikey_resp = self.backend.get_api_key(apikey).to_json()
         if not include_value:
@@ -616,7 +598,7 @@ class APIGatewayResponse(BaseResponse):
 
     def get_api_keys(self) -> str:
         include_values = self._get_bool_param("includeValues") or False
-        name = self._get_param("name")
+        name = self._get_param("nameQuery")
         apikeys_response = self.backend.get_api_keys(name=name)
         resp = [a.to_json() for a in apikeys_response]
         if not include_values:
@@ -625,33 +607,33 @@ class APIGatewayResponse(BaseResponse):
         return json.dumps({"item": resp})
 
     def update_api_key(self) -> str:
-        apikey = self.path.split("/")[2]
+        apikey = self._get_param("apiKey")
         patch_operations = self._get_param("patchOperations")
         apikey_resp = self.backend.update_api_key(apikey, patch_operations).to_json()
         return json.dumps(apikey_resp)
 
     def create_usage_plan(self) -> TYPE_RESPONSE:
-        usage_plan_response = self.backend.create_usage_plan(json.loads(self.body))
+        usage_plan_response = self.backend.create_usage_plan(self._get_params())
         return 201, {"status": 201}, json.dumps(usage_plan_response.to_json())
 
     def delete_usage_plan(self) -> TYPE_RESPONSE:
-        usage_plan = self.path.split("/")[2]
+        usage_plan = self._get_param("usagePlanId")
         self.backend.delete_usage_plan(usage_plan)
         return 202, {"status": 202}, "{}"
 
     def get_usage_plan(self) -> str:
-        usage_plan = self.path.split("/")[2]
+        usage_plan = self._get_param("usagePlanId")
 
         usage_plan_response = self.backend.get_usage_plan(usage_plan)
         return json.dumps(usage_plan_response.to_json())
 
     def get_usage_plans(self) -> str:
-        api_key_id = self.querystring.get("keyId", [None])[0]
+        api_key_id = self._get_param("keyId")
         usage_plans_response = self.backend.get_usage_plans(api_key_id=api_key_id)
         return json.dumps({"item": [u.to_json() for u in usage_plans_response]})
 
     def update_usage_plan(self) -> str:
-        usage_plan = self.path.split("/")[2]
+        usage_plan = self._get_param("usagePlanId")
         patch_operations = self._get_param("patchOperations")
         usage_plan_response = self.backend.update_usage_plan(
             usage_plan, patch_operations
@@ -659,29 +641,27 @@ class APIGatewayResponse(BaseResponse):
         return json.dumps(usage_plan_response.to_json())
 
     def create_usage_plan_key(self) -> TYPE_RESPONSE:
-        usage_plan_id = self.path.split("/")[2]
+        usage_plan_id = self._get_param("usagePlanId")
         usage_plan = self.backend.create_usage_plan_key(
-            usage_plan_id, json.loads(self.body)
+            usage_plan_id, self._get_params()
         )
         return 201, {"status": 201}, json.dumps(usage_plan.to_json())
 
     def delete_usage_plan_key(self) -> TYPE_RESPONSE:
-        url_path_parts = self.path.split("/")
-        usage_plan_id = url_path_parts[2]
-        key_id = url_path_parts[4]
+        usage_plan_id = self._get_param("usagePlanId")
+        key_id = self._get_param("keyId")
         self.backend.delete_usage_plan_key(usage_plan_id, key_id)
         return 202, {"status": 202}, "{}"
 
     def get_usage_plan_key(self) -> str:
-        url_path_parts = self.path.split("/")
-        usage_plan_id = url_path_parts[2]
-        key_id = url_path_parts[4]
+        usage_plan_id = self._get_param("usagePlanId")
+        key_id = self._get_param("keyId")
         usage_plan = self.backend.get_usage_plan_key(usage_plan_id, key_id)
         return json.dumps(usage_plan.to_json())
 
     def get_usage_plan_keys(self) -> str:
-        usage_plan_id = self.path.split("/")[2]
-        name = self._get_param("name")
+        usage_plan_id = self._get_param("usagePlanId")
+        name = self._get_param("nameQuery")
         usage_plans = self.backend.get_usage_plan_keys(usage_plan_id, name=name)
         return json.dumps({"item": [u.to_json() for u in usage_plans]})
 
@@ -713,12 +693,12 @@ class APIGatewayResponse(BaseResponse):
         return 201, {"status": 201}, json.dumps(domain_name_resp.to_json())
 
     def delete_domain_name(self) -> TYPE_RESPONSE:
-        domain_name = self.path.split("/")[2]
+        domain_name = self._get_param("domainName")
         self.backend.delete_domain_name(domain_name)
         return 202, {"status": 202}, "{}"
 
     def get_domain_name(self) -> str:
-        domain_name = self.path.split("/")[2]
+        domain_name = self._get_param("domainName")
         domain = self.backend.get_domain_name(domain_name)
         return json.dumps(domain.to_json())
 
@@ -727,7 +707,7 @@ class APIGatewayResponse(BaseResponse):
         return json.dumps({"item": [d.to_json() for d in domain_names]})
 
     def create_model(self) -> TYPE_RESPONSE:
-        rest_api_id = self.path.replace("/restapis/", "", 1).split("/")[0]
+        rest_api_id = self._get_param("restApiId")
         name = self._get_param("name")
         description = self._get_param("description")
         schema = self._get_param("schema")
@@ -742,26 +722,24 @@ class APIGatewayResponse(BaseResponse):
         return 201, {"status": 201}, json.dumps(model.to_json())
 
     def get_models(self) -> str:
-        rest_api_id = self.path.replace("/restapis/", "", 1).split("/")[0]
+        rest_api_id = self._get_param("restApiId")
         models = self.backend.get_models(rest_api_id)
         return json.dumps({"item": [m.to_json() for m in models]})
 
     def get_model(self) -> str:
-        url_path_parts = self.path.split("/")
-        rest_api_id = url_path_parts[2]
-        model_name = url_path_parts[4]
+        rest_api_id = self._get_param("restApiId")
+        model_name = self._get_param("modelName")
         model_info = self.backend.get_model(rest_api_id, model_name)
         return json.dumps(model_info.to_json())
 
     def delete_model(self) -> TYPE_RESPONSE:
-        url_path_parts = self.path.split("/")
-        rest_api_id = url_path_parts[2]
-        model_name = url_path_parts[4]
+        rest_api_id = self._get_param("restApiId")
+        model_name = self._get_param("modelName")
         self.backend.delete_model(rest_api_id, model_name)
         return 202, {}, "{}"
 
     def create_base_path_mapping(self) -> TYPE_RESPONSE:
-        domain_name = self.path.split("/")[2]
+        domain_name = self._get_param("domainName")
         base_path = self._get_param("basePath")
         rest_api_id = self._get_param("restApiId")
         stage = self._get_param("stage")
@@ -772,28 +750,25 @@ class APIGatewayResponse(BaseResponse):
         return 201, {"status": 201}, json.dumps(base_path_mapping.to_json())
 
     def delete_base_path_mapping(self) -> TYPE_RESPONSE:
-        url_path_parts = self.path.split("/")
-        domain_name = url_path_parts[2]
-        base_path = unquote(url_path_parts[4])
+        domain_name = self._get_param("domainName")
+        base_path = self._get_param("basePath")
         self.backend.delete_base_path_mapping(domain_name, base_path)
         return 202, {"status": 202}, ""
 
     def get_base_path_mapping(self) -> str:
-        url_path_parts = self.path.split("/")
-        domain_name = url_path_parts[2]
-        base_path = unquote(url_path_parts[4])
+        domain_name = self._get_param("domainName")
+        base_path = self._get_param("basePath")
         base_path_mapping = self.backend.get_base_path_mapping(domain_name, base_path)
         return json.dumps(base_path_mapping.to_json())
 
     def get_base_path_mappings(self) -> str:
-        domain_name = self.path.split("/")[2]
+        domain_name = self._get_param("domainName")
         base_path_mappings = self.backend.get_base_path_mappings(domain_name)
         return json.dumps({"item": [m.to_json() for m in base_path_mappings]})
 
     def update_base_path_mapping(self) -> str:
-        url_path_parts = self.path.split("/")
-        domain_name = url_path_parts[2]
-        base_path = unquote(url_path_parts[4])
+        domain_name = self._get_param("domainName")
+        base_path = self._get_param("basePath")
         patch_ops = self._get_param("patchOperations")
         base_path_mapping = self.backend.update_base_path_mapping(
             domain_name, base_path, patch_ops
@@ -811,12 +786,12 @@ class APIGatewayResponse(BaseResponse):
         return 202, {"status": 202}, json.dumps(vpc_link.to_json())
 
     def delete_vpc_link(self) -> TYPE_RESPONSE:
-        vpc_link_id = self.path.split("/")[-1]
+        vpc_link_id = self._get_param("vpcLinkId")
         self.backend.delete_vpc_link(vpc_link_id=vpc_link_id)
         return 202, {"status": 202}, "{}"
 
     def get_vpc_link(self) -> str:
-        vpc_link_id = self.path.split("/")[-1]
+        vpc_link_id = self._get_param("vpcLinkId")
         vpc_link = self.backend.get_vpc_link(vpc_link_id=vpc_link_id)
         return json.dumps(vpc_link.to_json())
 
@@ -825,12 +800,11 @@ class APIGatewayResponse(BaseResponse):
         return json.dumps({"item": [v.to_json() for v in vpc_links]})
 
     def put_gateway_response(self) -> TYPE_RESPONSE:
-        rest_api_id = self.path.split("/")[-3]
-        response_type = self.path.split("/")[-1]
-        params = json.loads(self.body)
-        status_code = params.get("statusCode")
-        response_parameters = params.get("responseParameters")
-        response_templates = params.get("responseTemplates")
+        rest_api_id = self._get_param("restApiId")
+        response_type = self._get_param("responseType")
+        status_code = self._get_param("statusCode")
+        response_parameters = self._get_param("responseParameters")
+        response_templates = self._get_param("responseTemplates")
         response = self.backend.put_gateway_response(
             rest_api_id=rest_api_id,
             response_type=response_type,
@@ -841,21 +815,21 @@ class APIGatewayResponse(BaseResponse):
         return 201, {}, json.dumps(response.to_json())
 
     def get_gateway_response(self) -> TYPE_RESPONSE:
-        rest_api_id = self.path.split("/")[-3]
-        response_type = self.path.split("/")[-1]
+        rest_api_id = self._get_param("restApiId")
+        response_type = self._get_param("responseType")
         response = self.backend.get_gateway_response(
             rest_api_id=rest_api_id, response_type=response_type
         )
         return 200, {}, json.dumps(response.to_json())
 
     def get_gateway_responses(self) -> TYPE_RESPONSE:
-        rest_api_id = self.path.split("/")[-2]
+        rest_api_id = self._get_param("restApiId")
         responses = self.backend.get_gateway_responses(rest_api_id=rest_api_id)
         return 200, {}, json.dumps({"item": [gw.to_json() for gw in responses]})
 
     def delete_gateway_response(self) -> TYPE_RESPONSE:
-        rest_api_id = self.path.split("/")[-3]
-        response_type = self.path.split("/")[-1]
+        rest_api_id = self._get_param("restApiId")
+        response_type = self._get_param("responseType")
         self.backend.delete_gateway_response(
             rest_api_id=rest_api_id, response_type=response_type
         )
