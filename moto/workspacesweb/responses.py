@@ -2,7 +2,6 @@
 
 import json
 from typing import Any
-from urllib.parse import unquote
 
 from moto.core.responses import TYPE_RESPONSE, BaseResponse
 
@@ -14,6 +13,7 @@ class WorkSpacesWebResponse(BaseResponse):
 
     def __init__(self) -> None:
         super().__init__(service_name="workspaces-web")
+        self.automated_parameter_parsing = True
 
     @property
     def workspacesweb_backend(self) -> WorkSpacesWebBackend:
@@ -96,9 +96,7 @@ class WorkSpacesWebResponse(BaseResponse):
         return json.dumps({"networkSettingsArn": network_settings_arn})
 
     def get_network_settings(self) -> TYPE_RESPONSE:
-        network_settings_arn = unquote(
-            self.parsed_url.path.split("/networkSettings/")[-1]
-        )
+        network_settings_arn = self._get_param("networkSettingsArn")
         network_settings = self.workspacesweb_backend.get_network_settings(
             network_settings_arn=network_settings_arn,
         )
@@ -138,47 +136,39 @@ class WorkSpacesWebResponse(BaseResponse):
         return json.dumps({"portals": portals})
 
     def get_browser_settings(self) -> TYPE_RESPONSE:
-        browser_settings_arn = unquote(
-            self.parsed_url.path.split("/browserSettings/")[-1]
-        )
+        browser_settings_arn = self._get_param("browserSettingsArn")
         browser_settings = self.workspacesweb_backend.get_browser_settings(
             browser_settings_arn=browser_settings_arn,
         )
         return 200, {}, json.dumps({"browserSettings": browser_settings})
 
     def delete_browser_settings(self) -> TYPE_RESPONSE:
-        browser_settings_arn = unquote(
-            self.parsed_url.path.split("/browserSettings/")[-1]
-        )
+        browser_settings_arn = self._get_param("browserSettingsArn")
         self.workspacesweb_backend.delete_browser_settings(
             browser_settings_arn=browser_settings_arn
         )
         return 200, {}, "{}"
 
     def delete_network_settings(self) -> TYPE_RESPONSE:
-        network_settings_arn = unquote(
-            self.parsed_url.path.split("/networkSettings/")[-1]
-        )
+        network_settings_arn = self._get_param("networkSettingsArn")
         self.workspacesweb_backend.delete_network_settings(
             network_settings_arn=network_settings_arn,
         )
         return 200, {}, "{}"
 
     def get_portal(self) -> TYPE_RESPONSE:
-        portal_arn = unquote(self.parsed_url.path.split("/portals/")[-1])
+        portal_arn = self._get_param("portalArn")
         portal = self.workspacesweb_backend.get_portal(portal_arn=portal_arn)
         return 200, {}, json.dumps({"portal": portal})
 
     def delete_portal(self) -> TYPE_RESPONSE:
-        portal_arn = unquote(self.parsed_url.path.split("/portals/")[-1])
+        portal_arn = self._get_param("portalArn")
         self.workspacesweb_backend.delete_portal(portal_arn=portal_arn)
         return 200, {}, "{}"
 
     def associate_browser_settings(self) -> str:
-        browser_settings_arn = unquote(self._get_param("browserSettingsArn"))
-        portal_arn = unquote(
-            self.parsed_url.path.split("/portals/")[-1].split("/browserSettings")[0]
-        )
+        browser_settings_arn = self._get_param("browserSettingsArn")
+        portal_arn = self._get_param("portalArn")
         browser_settings_arn, portal_arn = (
             self.workspacesweb_backend.associate_browser_settings(
                 browser_settings_arn=browser_settings_arn,
@@ -190,10 +180,8 @@ class WorkSpacesWebResponse(BaseResponse):
         )
 
     def associate_network_settings(self) -> str:
-        network_settings_arn = unquote(self._get_param("networkSettingsArn"))
-        portal_arn = unquote(
-            self.parsed_url.path.split("/portals/")[-1].split("/networkSettings")[0]
-        )
+        network_settings_arn = self._get_param("networkSettingsArn")
+        portal_arn = self._get_param("portalArn")
         network_settings_arn, portal_arn = (
             self.workspacesweb_backend.associate_network_settings(
                 network_settings_arn=network_settings_arn,
@@ -240,25 +228,23 @@ class WorkSpacesWebResponse(BaseResponse):
         return json.dumps({"userSettingsArn": user_settings_arn})
 
     def get_user_settings(self) -> TYPE_RESPONSE:
-        user_settings_arn = unquote(self.parsed_url.path.split("/userSettings/")[-1])
+        user_settings_arn = self._get_param("userSettingsArn")
         user_settings = self.workspacesweb_backend.get_user_settings(
             user_settings_arn=user_settings_arn,
         )
         return 200, {}, json.dumps({"userSettings": user_settings})
 
     def delete_user_settings(self) -> TYPE_RESPONSE:
-        user_settings_arn = unquote(self.parsed_url.path.split("/userSettings/")[-1])
+        user_settings_arn = self._get_param("userSettingsArn")
         self.workspacesweb_backend.delete_user_settings(
             user_settings_arn=user_settings_arn,
         )
         return 200, {}, "{}"
 
     def create_user_access_logging_settings(self) -> str:
-        params = self._get_params()
-        params = json.loads(list(params.keys())[0])
-        client_token = params.get("clientToken")
-        kinesis_stream_arn = params.get("kinesisStreamArn")
-        tags = params.get("tags")
+        client_token = self._get_param("clientToken")
+        kinesis_stream_arn = self._get_param("kinesisStreamArn")
+        tags = self._get_param("tags")
         user_access_logging_settings_arn = (
             self.workspacesweb_backend.create_user_access_logging_settings(
                 client_token=client_token,
@@ -271,8 +257,8 @@ class WorkSpacesWebResponse(BaseResponse):
         )
 
     def get_user_access_logging_settings(self) -> TYPE_RESPONSE:
-        user_access_logging_settings_arn = unquote(
-            self.parsed_url.path.split("/userAccessLoggingSettings/")[-1]
+        user_access_logging_settings_arn = self._get_param(
+            "userAccessLoggingSettingsArn"
         )
         user_access_logging_settings = (
             self.workspacesweb_backend.get_user_access_logging_settings(
@@ -286,8 +272,8 @@ class WorkSpacesWebResponse(BaseResponse):
         )
 
     def delete_user_access_logging_settings(self) -> TYPE_RESPONSE:
-        user_access_logging_settings_arn = unquote(
-            self.parsed_url.path.split("/userAccessLoggingSettings/")[-1]
+        user_access_logging_settings_arn = self._get_param(
+            "userAccessLoggingSettingsArn"
         )
         self.workspacesweb_backend.delete_user_access_logging_settings(
             user_access_logging_settings_arn=user_access_logging_settings_arn,
@@ -295,10 +281,8 @@ class WorkSpacesWebResponse(BaseResponse):
         return 200, {}, "{}"
 
     def associate_user_settings(self) -> str:
-        user_settings_arn = unquote(self._get_param("userSettingsArn"))
-        portal_arn = unquote(
-            self.parsed_url.path.split("/portals/")[-1].split("/userSettings")[0]
-        )
+        user_settings_arn = self._get_param("userSettingsArn")
+        portal_arn = self._get_param("portalArn")
         user_settings_arn, portal_arn = (
             self.workspacesweb_backend.associate_user_settings(
                 user_settings_arn=user_settings_arn,
@@ -310,14 +294,10 @@ class WorkSpacesWebResponse(BaseResponse):
         )
 
     def associate_user_access_logging_settings(self) -> str:
-        user_access_logging_settings_arn = unquote(
-            self._get_param("userAccessLoggingSettingsArn")
+        user_access_logging_settings_arn = self._get_param(
+            "userAccessLoggingSettingsArn"
         )
-        portal_arn = unquote(
-            self.parsed_url.path.split("/portals/")[-1].split(
-                "/userAccessLoggingSettings"
-            )[0]
-        )
+        portal_arn = self._get_param("portalArn")
         user_access_logging_settings_arn, portal_arn = (
             self.workspacesweb_backend.associate_user_access_logging_settings(
                 user_access_logging_settings_arn=user_access_logging_settings_arn,
@@ -343,7 +323,7 @@ class WorkSpacesWebResponse(BaseResponse):
 
     def tag_resource(self) -> str:
         client_token = self._get_param("clientToken")
-        resource_arn = unquote(self._get_param("resourceArn"))
+        resource_arn = self._get_param("resourceArn")
         tags = self._get_param("tags")
         self.workspacesweb_backend.tag_resource(
             client_token=client_token,
@@ -353,8 +333,8 @@ class WorkSpacesWebResponse(BaseResponse):
         return json.dumps({})
 
     def untag_resource(self) -> str:
-        tagKeys = self.__dict__["data"]["tagKeys"]
-        resource_arn = unquote(self._get_param("resourceArn"))
+        tagKeys = self._get_param("tagKeys")
+        resource_arn = self._get_param("resourceArn")
         self.workspacesweb_backend.untag_resource(
             resource_arn=resource_arn,
             tag_keys=tagKeys,
@@ -362,7 +342,7 @@ class WorkSpacesWebResponse(BaseResponse):
         return json.dumps({})
 
     def list_tags_for_resource(self) -> str:
-        resource_arn = unquote(self.parsed_url.path.split("/tags/")[-1])
+        resource_arn = self._get_param("resourceArn")
         tags = self.workspacesweb_backend.list_tags_for_resource(
             resource_arn=resource_arn,
         )
