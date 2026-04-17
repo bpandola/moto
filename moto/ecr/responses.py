@@ -11,6 +11,7 @@ from .models import ECRBackend, ecr_backends
 class ECRResponse(BaseResponse):
     def __init__(self) -> None:
         super().__init__(service_name="ecr")
+        self.automated_parameter_parsing = True
 
     @property
     def ecr_backend(self) -> ECRBackend:
