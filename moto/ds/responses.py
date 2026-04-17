@@ -13,6 +13,7 @@ class DirectoryServiceResponse(BaseResponse):
 
     def __init__(self) -> None:
         super().__init__(service_name="ds")
+        self.automated_parameter_parsing = True
 
     @property
     def ds_backend(self) -> DirectoryServiceBackend:
