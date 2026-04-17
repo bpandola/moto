@@ -8,6 +8,7 @@ from .models import DataPipelineBackend, datapipeline_backends
 class DataPipelineResponse(BaseResponse):
     def __init__(self) -> None:
         super().__init__(service_name="datapipeline")
+        self.automated_parameter_parsing = True
 
     @property
     def datapipeline_backend(self) -> DataPipelineBackend:
