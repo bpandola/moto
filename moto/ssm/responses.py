@@ -9,6 +9,7 @@ from .models import SimpleSystemManagerBackend, ssm_backends
 class SimpleSystemManagerResponse(BaseResponse):
     def __init__(self) -> None:
         super().__init__(service_name="ssm")
+        self.automated_parameter_parsing = True
 
     @property
     def ssm_backend(self) -> SimpleSystemManagerBackend:
