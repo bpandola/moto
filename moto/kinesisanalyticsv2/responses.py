@@ -12,6 +12,7 @@ class KinesisAnalyticsV2Response(BaseResponse):
 
     def __init__(self) -> None:
         super().__init__(service_name="kinesisanalyticsv2")
+        self.automated_parameter_parsing = True
 
     @property
     def kinesisanalyticsv2_backend(self) -> KinesisAnalyticsV2Backend:
@@ -40,17 +41,15 @@ class KinesisAnalyticsV2Response(BaseResponse):
         return json.dumps({"ApplicationDetail": application_detail})
 
     def list_tags_for_resource(self) -> str:
-        params = json.loads(self.body)
-        resource_arn = params.get("ResourceARN")
+        resource_arn = self._get_param("ResourceARN")
         tags = self.kinesisanalyticsv2_backend.list_tags_for_resource(
             resource_arn=resource_arn,
         )
         return json.dumps({"Tags": tags})
 
     def tag_resource(self) -> str:
-        params = json.loads(self.body)
-        resource_arn = params.get("ResourceARN")
-        tags = params.get("Tags")
+        resource_arn = self._get_param("ResourceARN")
+        tags = self._get_param("Tags")
         self.kinesisanalyticsv2_backend.tag_resource(
             resource_arn=resource_arn, tags=tags
         )
