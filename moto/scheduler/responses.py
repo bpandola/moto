@@ -1,7 +1,9 @@
 """Handles incoming scheduler requests, invokes methods, returns responses."""
 
+import calendar
+import datetime
 import json
-from urllib.parse import unquote
+from typing import Any, Optional
 
 from moto.core.responses import BaseResponse
 
@@ -13,22 +15,30 @@ class EventBridgeSchedulerResponse(BaseResponse):
 
     def __init__(self) -> None:
         super().__init__(service_name="scheduler")
+        self.automated_parameter_parsing = True
 
     @property
     def scheduler_backend(self) -> EventBridgeSchedulerBackend:
         """Return backend instance specific for this region."""
         return scheduler_backends[self.current_account][self.region]
 
+    @staticmethod
+    def _to_timestamp(value: Optional[Any]) -> Optional[Any]:
+        """Convert a datetime to a Unix timestamp if needed."""
+        if isinstance(value, datetime.datetime):
+            return calendar.timegm(value.utctimetuple())
+        return value
+
     def create_schedule(self) -> str:
         description = self._get_param("Description")
-        end_date = self._get_param("EndDate")
+        end_date = self._to_timestamp(self._get_param("EndDate"))
         flexible_time_window = self._get_param("FlexibleTimeWindow")
         group_name = self._get_param("GroupName")
         kms_key_arn = self._get_param("KmsKeyArn")
-        name = self.uri.split("/")[-1]
+        name = self._get_param("Name")
         schedule_expression = self._get_param("ScheduleExpression")
         schedule_expression_timezone = self._get_param("ScheduleExpressionTimezone")
-        start_date = self._get_param("StartDate")
+        start_date = self._to_timestamp(self._get_param("StartDate"))
         state = self._get_param("State")
         target = self._get_param("Target")
         action_after_completion = self._get_param("ActionAfterCompletion")
@@ -49,28 +59,27 @@ class EventBridgeSchedulerResponse(BaseResponse):
         return json.dumps({"ScheduleArn": schedule.arn})
 
     def get_schedule(self) -> str:
-        group_name = self._get_param("groupName")
-        full_url = self.uri.split("?")[0]
-        name = full_url.split("/")[-1]
+        group_name = self._get_param("GroupName")
+        name = self._get_param("Name")
         schedule = self.scheduler_backend.get_schedule(group_name, name)
         return json.dumps(schedule.to_dict())
 
     def delete_schedule(self) -> str:
-        group_name = self._get_param("groupName")
-        name = self.uri.split("?")[0].split("/")[-1]
+        group_name = self._get_param("GroupName")
+        name = self._get_param("Name")
         self.scheduler_backend.delete_schedule(group_name, name)
         return "{}"
 
     def update_schedule(self) -> str:
         group_name = self._get_param("GroupName")
-        name = self.uri.split("?")[0].split("/")[-1]
+        name = self._get_param("Name")
         description = self._get_param("Description")
-        end_date = self._get_param("EndDate")
+        end_date = self._to_timestamp(self._get_param("EndDate"))
         flexible_time_window = self._get_param("FlexibleTimeWindow")
         kms_key_arn = self._get_param("KmsKeyArn")
         schedule_expression = self._get_param("ScheduleExpression")
         schedule_expression_timezone = self._get_param("ScheduleExpressionTimezone")
-        start_date = self._get_param("StartDate")
+        start_date = self._to_timestamp(self._get_param("StartDate"))
         state = self._get_param("State")
         target = self._get_param("Target")
         schedule = self.scheduler_backend.update_schedule(
@@ -89,7 +98,7 @@ class EventBridgeSchedulerResponse(BaseResponse):
         return json.dumps({"ScheduleArn": schedule.arn})
 
     def list_schedules(self) -> str:
-        group_names = self.querystring.get("ScheduleGroup")
+        group_names = self._get_param("GroupName")
         state = self._get_param("State")
         name_prefix = self._get_param("NamePrefix")
         next_token = self._get_param("NextToken")
@@ -117,12 +126,12 @@ class EventBridgeSchedulerResponse(BaseResponse):
         return json.dumps({"ScheduleGroupArn": schedule_group.arn})
 
     def get_schedule_group(self) -> str:
-        group_name = self.uri.split("?")[0].split("/")[-1]
+        group_name = self._get_param("Name")
         group = self.scheduler_backend.get_schedule_group(group_name)
         return json.dumps(group.to_dict())
 
     def delete_schedule_group(self) -> str:
-        group_name = self.uri.split("?")[0].split("/")[-1]
+        group_name = self._get_param("Name")
         self.scheduler_backend.delete_schedule_group(group_name)
         return "{}"
 
@@ -140,18 +149,18 @@ class EventBridgeSchedulerResponse(BaseResponse):
         return json.dumps(result)
 
     def list_tags_for_resource(self) -> str:
-        resource_arn = unquote(self.uri.split("/tags/")[-1])
+        resource_arn = self._get_param("ResourceArn")
         tags = self.scheduler_backend.list_tags_for_resource(resource_arn)
         return json.dumps(tags)
 
     def tag_resource(self) -> str:
-        resource_arn = unquote(self.uri.split("/tags/")[-1])
-        tags = json.loads(self.body)["Tags"]
+        resource_arn = self._get_param("ResourceArn")
+        tags = self._get_param("Tags")
         self.scheduler_backend.tag_resource(resource_arn, tags)
         return "{}"
 
     def untag_resource(self) -> str:
-        resource_arn = unquote(self.uri.split("?")[0].split("/tags/")[-1])
-        tag_keys = self.querystring.get("TagKeys")
+        resource_arn = self._get_param("ResourceArn")
+        tag_keys = self._get_param("TagKeys")
         self.scheduler_backend.untag_resource(resource_arn, tag_keys)  # type: ignore
         return "{}"
