@@ -12,6 +12,7 @@ class TextractResponse(BaseResponse):
 
     def __init__(self) -> None:
         super().__init__(service_name="textract")
+        self.automated_parameter_parsing = True
 
     @property
     def textract_backend(self) -> TextractBackend:
@@ -19,7 +20,7 @@ class TextractResponse(BaseResponse):
         return textract_backends[self.current_account][self.region]
 
     def get_document_text_detection(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         job_id = params.get("JobId")
         job = self.textract_backend.get_document_text_detection(job_id=job_id).to_dict()
         return json.dumps(job)
@@ -29,7 +30,7 @@ class TextractResponse(BaseResponse):
         return json.dumps(result)
 
     def start_document_text_detection(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         document_location = params.get("DocumentLocation")
         notification_channel = params.get("NotificationChannel")
         job_id = self.textract_backend.start_document_text_detection(
@@ -39,7 +40,7 @@ class TextractResponse(BaseResponse):
         return json.dumps({"JobId": job_id})
 
     def start_document_analysis(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         document_location = params.get("DocumentLocation")
         feature_types = params.get("FeatureTypes")
         job_id = self.textract_backend.start_document_analysis(
@@ -48,7 +49,7 @@ class TextractResponse(BaseResponse):
         return json.dumps({"JobId": job_id})
 
     def get_document_analysis(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         job_id = params.get("JobId")
         max_results = params.get("MaxResults")
         next_token = params.get("NextToken")
