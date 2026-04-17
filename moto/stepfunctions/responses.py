@@ -22,6 +22,7 @@ def get_backend(account: str, region: str) -> StepFunctionBackend:
 class StepFunctionResponse(BaseResponse):
     def __init__(self) -> None:
         super().__init__(service_name="stepfunctions")
+        self.automated_parameter_parsing = True
 
     @property
     def stepfunction_backend(self) -> StepFunctionBackend:
