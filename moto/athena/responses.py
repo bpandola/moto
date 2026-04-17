@@ -9,6 +9,7 @@ from .models import AthenaBackend, athena_backends
 class AthenaResponse(BaseResponse):
     def __init__(self) -> None:
         super().__init__(service_name="athena")
+        self.automated_parameter_parsing = True
 
     @property
     def athena_backend(self) -> AthenaBackend:
