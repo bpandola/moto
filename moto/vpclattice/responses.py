@@ -1,5 +1,4 @@
 import json
-from urllib.parse import unquote
 
 from moto.core.responses import BaseResponse
 
@@ -9,6 +8,7 @@ from .models import VPCLatticeBackend, vpclattice_backends
 class VPCLatticeResponse(BaseResponse):
     def __init__(self) -> None:
         super().__init__(service_name="vpc-lattice")
+        self.automated_parameter_parsing = True
 
     @property
     def backend(self) -> VPCLatticeBackend:
@@ -25,9 +25,17 @@ class VPCLatticeResponse(BaseResponse):
         )
         return json.dumps(service.to_dict())
 
+    @staticmethod
+    def _extract_id(identifier: str) -> str:
+        """Extract the short ID from an ARN or return the identifier as-is."""
+        if identifier and identifier.startswith("arn:"):
+            return identifier.rsplit("/", 1)[-1]
+        return identifier
+
     def get_service(self) -> str:
-        path = unquote(self.path)
-        service = self.backend.get_service(service_identifier=path.split("/")[-1])
+        service = self.backend.get_service(
+            service_identifier=self._extract_id(self._get_param("serviceIdentifier"))
+        )
         return json.dumps(service.to_dict())
 
     def list_services(self) -> str:
@@ -53,9 +61,10 @@ class VPCLatticeResponse(BaseResponse):
         return json.dumps(sn.to_dict())
 
     def get_service_network(self) -> str:
-        path = unquote(self.path)
         service_network = self.backend.get_service_network(
-            service_network_identifier=path.split("/")[-1]
+            service_network_identifier=self._extract_id(
+                self._get_param("serviceNetworkIdentifier")
+            )
         )
         return json.dumps(service_network.to_dict())
 
@@ -97,18 +106,18 @@ class VPCLatticeResponse(BaseResponse):
         return json.dumps(rule.to_dict())
 
     def list_tags_for_resource(self) -> str:
-        resource_arn = unquote(self._get_param("resourceArn"))
+        resource_arn = self._get_param("resourceArn")
         tags = self.backend.list_tags_for_resource(resource_arn)
         return json.dumps({"tags": tags})
 
     def tag_resource(self) -> str:
-        resource_arn = unquote(self._get_param("resourceArn"))
+        resource_arn = self._get_param("resourceArn")
         tags = self._get_param("tags")
         self.backend.tag_resource(resource_arn, tags)
         return json.dumps({})
 
     def untag_resource(self) -> str:
-        resource_arn = unquote(self._get_param("resourceArn"))
+        resource_arn = self._get_param("resourceArn")
         tag_keys = self._get_param("tagKeys")
         self.backend.untag_resource(resource_arn=resource_arn, tag_keys=tag_keys)
         return json.dumps({})
@@ -125,10 +134,10 @@ class VPCLatticeResponse(BaseResponse):
         return json.dumps(sub.to_dict())
 
     def get_access_log_subscription(self) -> str:
-        path = unquote(self.path)
-
         sub = self.backend.get_access_log_subscription(
-            accessLogSubscriptionIdentifier=path.split("/")[-1]
+            accessLogSubscriptionIdentifier=self._extract_id(
+                self._get_param("accessLogSubscriptionIdentifier")
+            )
         )
 
         return json.dumps(sub.to_dict())
@@ -143,26 +152,26 @@ class VPCLatticeResponse(BaseResponse):
         return json.dumps({"items": [s.to_dict() for s in subs], "nextToken": ""})
 
     def update_access_log_subscription(self) -> str:
-        path = unquote(self.path)
-
         sub = self.backend.update_access_log_subscription(
-            accessLogSubscriptionIdentifier=path.split("/")[-1],
+            accessLogSubscriptionIdentifier=self._extract_id(
+                self._get_param("accessLogSubscriptionIdentifier")
+            ),
             destinationArn=self._get_param("destinationArn"),
         )
 
         return json.dumps(sub.to_dict())
 
     def delete_access_log_subscription(self) -> str:
-        path = unquote(self.path)
-
         self.backend.delete_access_log_subscription(
-            accessLogSubscriptionIdentifier=path.split("/")[-1]
+            accessLogSubscriptionIdentifier=self._extract_id(
+                self._get_param("accessLogSubscriptionIdentifier")
+            )
         )
 
         return json.dumps({})
 
     def put_auth_policy(self) -> str:
-        resourceId = unquote(self._get_param("resourceIdentifier"))
+        resourceId = self._get_param("resourceIdentifier")
         policy = self._get_param("policy")
 
         auth_policy = self.backend.put_auth_policy(
@@ -177,7 +186,7 @@ class VPCLatticeResponse(BaseResponse):
         return json.dumps(response)
 
     def get_auth_policy(self) -> str:
-        resourceId = unquote(self._get_param("resourceIdentifier"))
+        resourceId = self._get_param("resourceIdentifier")
         auth_policy = self.backend.get_auth_policy(resourceIdentifier=resourceId)
 
         response = {
@@ -189,14 +198,14 @@ class VPCLatticeResponse(BaseResponse):
         return json.dumps(response)
 
     def delete_auth_policy(self) -> str:
-        resourceId = unquote(self._get_param("resourceIdentifier"))
+        resourceId = self._get_param("resourceIdentifier")
 
         self.backend.delete_auth_policy(resourceIdentifier=resourceId)
 
         return "{}"
 
     def put_resource_policy(self) -> str:
-        resource_arn = unquote(self._get_param("resourceArn"))
+        resource_arn = self._get_param("resourceArn")
         policy = self._get_param("policy")
         self.backend.put_resource_policy(
             resourceArn=resource_arn,
@@ -206,14 +215,14 @@ class VPCLatticeResponse(BaseResponse):
         return "{}"
 
     def get_resource_policy(self) -> str:
-        resource_arn = unquote(self._get_param("resourceArn"))
+        resource_arn = self._get_param("resourceArn")
 
         resource_policy = self.backend.get_resource_policy(resourceArn=resource_arn)
 
         return json.dumps({"policy": resource_policy})
 
     def delete_resource_policy(self) -> str:
-        resource_arn = unquote(self._get_param("resourceArn"))
+        resource_arn = self._get_param("resourceArn")
 
         self.backend.delete_resource_policy(resourceArn=resource_arn)
 
@@ -221,12 +230,7 @@ class VPCLatticeResponse(BaseResponse):
 
     def list_service_network_vpc_associations(self) -> str:
         service_network_identifier = self._get_param("serviceNetworkIdentifier")
-        if service_network_identifier:
-            service_network_identifier = unquote(service_network_identifier)
-
         vpc_identifier = self._get_param("vpcIdentifier")
-        if vpc_identifier:
-            vpc_identifier = unquote(vpc_identifier)
 
         max_results = self._get_int_param("maxResults")
         next_token = self._get_param("nextToken")
