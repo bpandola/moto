@@ -1,5 +1,3 @@
-from urllib.parse import unquote
-
 from moto.core.responses import ActionResult, BaseResponse, EmptyResult
 
 from .models import EKSBackend, eks_backends
@@ -11,6 +9,7 @@ DEFAULT_NEXT_TOKEN = ""
 class EKSResponse(BaseResponse):
     def __init__(self) -> None:
         super().__init__(service_name="eks")
+        self.automated_parameter_parsing = True
 
     @property
     def eks_backend(self) -> EKSBackend:
@@ -45,7 +44,7 @@ class EKSResponse(BaseResponse):
 
     def create_fargate_profile(self) -> ActionResult:
         fargate_profile_name = self._get_param("fargateProfileName")
-        cluster_name = self._get_param("name")
+        cluster_name = self._get_param("clusterName")
         pod_execution_role_arn = self._get_param("podExecutionRoleArn")
         subnets = self._get_param("subnets")
         selectors = self._get_param("selectors")
@@ -65,7 +64,7 @@ class EKSResponse(BaseResponse):
         return ActionResult({"fargateProfile": fargate_profile})
 
     def create_nodegroup(self) -> ActionResult:
-        cluster_name = self._get_param("name")
+        cluster_name = self._get_param("clusterName")
         nodegroup_name = self._get_param("nodegroupName")
         scaling_config = self._get_param("scalingConfig")
         disk_size = self._get_int_param("diskSize")
@@ -132,7 +131,7 @@ class EKSResponse(BaseResponse):
         return ActionResult({"cluster": cluster})
 
     def describe_fargate_profile(self) -> ActionResult:
-        cluster_name = self._get_param("name")
+        cluster_name = self._get_param("clusterName")
         fargate_profile_name = self._get_param("fargateProfileName")
 
         fargate_profile = self.eks_backend.describe_fargate_profile(
@@ -141,7 +140,7 @@ class EKSResponse(BaseResponse):
         return ActionResult({"fargateProfile": fargate_profile})
 
     def describe_nodegroup(self) -> ActionResult:
-        cluster_name = self._get_param("name")
+        cluster_name = self._get_param("clusterName")
         nodegroup_name = self._get_param("nodegroupName")
 
         nodegroup = self.eks_backend.describe_nodegroup(
@@ -151,7 +150,7 @@ class EKSResponse(BaseResponse):
         return ActionResult({"nodegroup": nodegroup})
 
     def update_nodegroup_config(self) -> ActionResult:
-        cluster_name = self._get_param("name")
+        cluster_name = self._get_param("clusterName")
         nodegroup_name = self._get_param("nodegroupName")
         labels = self._get_param("labels")
         taints = self._get_param("taints")
@@ -184,7 +183,7 @@ class EKSResponse(BaseResponse):
         return ActionResult({"clusters": clusters, "nextToken": next_token})
 
     def list_fargate_profiles(self) -> ActionResult:
-        cluster_name = self._get_param("name")
+        cluster_name = self._get_param("clusterName")
         max_results = self._get_int_param("maxResults", DEFAULT_MAX_RESULTS)
         next_token = self._get_param("nextToken", DEFAULT_NEXT_TOKEN)
 
@@ -197,7 +196,7 @@ class EKSResponse(BaseResponse):
         )
 
     def list_nodegroups(self) -> ActionResult:
-        cluster_name = self._get_param("name")
+        cluster_name = self._get_param("clusterName")
         max_results = self._get_int_param("maxResults", DEFAULT_MAX_RESULTS)
         next_token = self._get_param("nextToken", DEFAULT_NEXT_TOKEN)
 
@@ -215,7 +214,7 @@ class EKSResponse(BaseResponse):
         return ActionResult({"cluster": cluster})
 
     def delete_fargate_profile(self) -> ActionResult:
-        cluster_name = self._get_param("name")
+        cluster_name = self._get_param("clusterName")
         fargate_profile_name = self._get_param("fargateProfileName")
 
         fargate_profile = self.eks_backend.delete_fargate_profile(
@@ -225,7 +224,7 @@ class EKSResponse(BaseResponse):
         return ActionResult({"fargateProfile": fargate_profile})
 
     def delete_nodegroup(self) -> ActionResult:
-        cluster_name = self._get_param("name")
+        cluster_name = self._get_param("clusterName")
         nodegroup_name = self._get_param("nodegroupName")
 
         nodegroup = self.eks_backend.delete_nodegroup(
@@ -236,23 +235,18 @@ class EKSResponse(BaseResponse):
 
     def tag_resource(self) -> ActionResult:
         self.eks_backend.tag_resource(
-            self._extract_arn_from_path(), self._get_param("tags")
+            self._get_param("resourceArn"), self._get_param("tags")
         )
 
         return EmptyResult()
 
     def untag_resource(self) -> ActionResult:
         self.eks_backend.untag_resource(
-            self._extract_arn_from_path(), self._get_param("tagKeys")
+            self._get_param("resourceArn"), self._get_param("tagKeys")
         )
 
         return EmptyResult()
 
     def list_tags_for_resource(self) -> ActionResult:
-        tags = self.eks_backend.list_tags_for_resource(self._extract_arn_from_path())
+        tags = self.eks_backend.list_tags_for_resource(self._get_param("resourceArn"))
         return ActionResult({"tags": tags})
-
-    def _extract_arn_from_path(self) -> str:
-        # /tags/arn_that_may_contain_a_slash
-        path = unquote(self.path)
-        return "/".join(path.split("/")[2:])
