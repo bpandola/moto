@@ -1,12 +1,44 @@
 """Handles incoming mq requests, invokes methods, returns responses."""
 
 import copy
-import json
+import re
+from typing import Any
 from urllib.parse import unquote
 
 from moto.core.responses import ActionResult, BaseResponse, EmptyResult
 
 from .models import MQBackend, mq_backends
+
+# Map URL regex group names (from both urls.py and uri_to_regexp) to
+# botocore URI serialization names
+_URI_PARAM_MAP = {
+    "broker_id": "broker-id",
+    "user_name": "username",
+    "username": "username",
+    "config_id": "configuration-id",
+    "configuration_id": "configuration-id",
+    "revision_id": "configuration-revision",
+    "configuration_revision": "configuration-revision",
+    "resource_arn": "resource-arn",
+}
+
+
+class _RemappedMatch:
+    """Wrapper around re.Match that remaps groupdict keys."""
+
+    def __init__(self, match: re.Match[str], mapping: dict[str, str]) -> None:
+        self._match = match
+        self._mapping = mapping
+
+    def groupdict(self) -> dict[str, Any]:
+        groups = self._match.groupdict()
+        return {self._mapping.get(k, k): v for k, v in groups.items()}
+
+    def group(self, *args: Any) -> Any:
+        return self._match.group(*args)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._match, name)
 
 
 class MQResponse(BaseResponse):
@@ -14,6 +46,27 @@ class MQResponse(BaseResponse):
 
     def __init__(self) -> None:
         super().__init__(service_name="mq")
+        self.automated_parameter_parsing = True
+
+    def parse_parameters(self, request: Any) -> None:
+        # Remap URL group names to botocore serialization names before parsing.
+        # We need to wrap uri_match right before the parser uses it, because
+        # super().parse_parameters() calls _get_action() which resets uri_match.
+        original_parse = super().parse_parameters
+
+        original_get_action = self._get_action_from_method_and_request_uri
+
+        def patched_get_action(method: str, request_uri: str) -> str:
+            result = original_get_action(method, request_uri)
+            if self.uri_match and not isinstance(self.uri_match, _RemappedMatch):
+                self.uri_match = _RemappedMatch(self.uri_match, _URI_PARAM_MAP)  # type: ignore[assignment]
+            return result
+
+        self._get_action_from_method_and_request_uri = patched_get_action  # type: ignore[assignment]
+        try:
+            original_parse(request)
+        finally:
+            self._get_action_from_method_and_request_uri = original_get_action  # type: ignore[assignment]
 
     @property
     def mq_backend(self) -> MQBackend:
@@ -21,25 +74,31 @@ class MQResponse(BaseResponse):
         return mq_backends[self.current_account][self.region]
 
     def create_broker(self) -> ActionResult:
-        params = json.loads(self.body)
-        authentication_strategy = params.get("authenticationStrategy")
-        auto_minor_version_upgrade = params.get("autoMinorVersionUpgrade")
-        broker_name = params.get("brokerName")
-        configuration = params.get("configuration")
-        deployment_mode = params.get("deploymentMode")
-        encryption_options = params.get("encryptionOptions")
-        engine_type = params.get("engineType")
-        engine_version = params.get("engineVersion")
-        host_instance_type = params.get("hostInstanceType")
-        ldap_server_metadata = params.get("ldapServerMetadata")
-        logs = params.get("logs", {})
-        maintenance_window_start_time = params.get("maintenanceWindowStartTime")
-        publicly_accessible = params.get("publiclyAccessible")
-        security_groups = params.get("securityGroups")
-        storage_type = params.get("storageType")
-        subnet_ids = params.get("subnetIds", [])
-        tags = params.get("tags")
-        users = params.get("users", [])
+        authentication_strategy = self._get_param("AuthenticationStrategy")
+        auto_minor_version_upgrade = self._get_param("AutoMinorVersionUpgrade")
+        broker_name = self._get_param("BrokerName")
+        configuration = self._get_param("Configuration")
+        deployment_mode = self._get_param("DeploymentMode")
+        encryption_options = self._get_param("EncryptionOptions")
+        engine_type = self._get_param("EngineType")
+        engine_version = self._get_param("EngineVersion")
+        host_instance_type = self._get_param("HostInstanceType")
+        ldap_server_metadata = self._get_param("LdapServerMetadata")
+        logs = self._get_param("Logs", {})
+        maintenance_window_start_time = self._get_param("MaintenanceWindowStartTime")
+        publicly_accessible = self._get_param("PubliclyAccessible")
+        security_groups = self._get_param("SecurityGroups")
+        storage_type = self._get_param("StorageType")
+        subnet_ids = self._get_param("SubnetIds", [])
+        tags = self._get_param("Tags")
+        users = [
+            {
+                "username": u.get("Username"),
+                "groups": u.get("Groups", []),
+                "consoleAccess": u.get("ConsoleAccess", False),
+            }
+            for u in self._get_param("Users", [])
+        ]
         broker_arn, broker_id = self.mq_backend.create_broker(
             authentication_strategy=authentication_strategy,
             auto_minor_version_upgrade=auto_minor_version_upgrade,
@@ -64,17 +123,16 @@ class MQResponse(BaseResponse):
         return ActionResult(resp)
 
     def update_broker(self) -> ActionResult:
-        params = json.loads(self.body)
         broker_id = self.path.split("/")[-1]
-        authentication_strategy = params.get("authenticationStrategy")
-        auto_minor_version_upgrade = params.get("autoMinorVersionUpgrade")
-        configuration = params.get("configuration")
-        engine_version = params.get("engineVersion")
-        host_instance_type = params.get("hostInstanceType")
-        ldap_server_metadata = params.get("ldapServerMetadata")
-        logs = params.get("logs")
-        maintenance_window_start_time = params.get("maintenanceWindowStartTime")
-        security_groups = params.get("securityGroups")
+        authentication_strategy = self._get_param("AuthenticationStrategy")
+        auto_minor_version_upgrade = self._get_param("AutoMinorVersionUpgrade")
+        configuration = self._get_param("Configuration")
+        engine_version = self._get_param("EngineVersion")
+        host_instance_type = self._get_param("HostInstanceType")
+        ldap_server_metadata = self._get_param("LdapServerMetadata")
+        logs = self._get_param("Logs")
+        maintenance_window_start_time = self._get_param("MaintenanceWindowStartTime")
+        security_groups = self._get_param("SecurityGroups")
         self.mq_backend.update_broker(
             authentication_strategy=authentication_strategy,
             auto_minor_version_upgrade=auto_minor_version_upgrade,
@@ -106,20 +164,18 @@ class MQResponse(BaseResponse):
         return ActionResult({"BrokerSummaries": brokers})
 
     def create_user(self) -> ActionResult:
-        params = json.loads(self.body)
         broker_id = self.path.split("/")[-3]
         username = self.path.split("/")[-1]
-        console_access = params.get("consoleAccess", False)
-        groups = params.get("groups", [])
+        console_access = self._get_param("ConsoleAccess", False)
+        groups = self._get_param("Groups", [])
         self.mq_backend.create_user(broker_id, username, console_access, groups)
         return EmptyResult()
 
     def update_user(self) -> ActionResult:
-        params = json.loads(self.body)
         broker_id = self.path.split("/")[-3]
         username = self.path.split("/")[-1]
-        console_access = params.get("consoleAccess", False)
-        groups = params.get("groups", [])
+        console_access = self._get_param("ConsoleAccess", False)
+        groups = self._get_param("Groups", [])
         self.mq_backend.update_user(
             broker_id=broker_id,
             console_access=console_access,
@@ -150,11 +206,10 @@ class MQResponse(BaseResponse):
         return ActionResult(resp)
 
     def create_configuration(self) -> ActionResult:
-        params = json.loads(self.body)
-        name = params.get("name")
-        engine_type = params.get("engineType")
-        engine_version = params.get("engineVersion")
-        tags = params.get("tags", {})
+        name = self._get_param("Name")
+        engine_type = self._get_param("EngineType")
+        engine_version = self._get_param("EngineVersion")
+        tags = self._get_param("Tags", {})
 
         config = self.mq_backend.create_configuration(
             name, engine_type, engine_version, tags
@@ -175,9 +230,8 @@ class MQResponse(BaseResponse):
 
     def update_configuration(self) -> ActionResult:
         config_id = self.path.split("/")[-1]
-        params = json.loads(self.body)
-        data = params.get("data")
-        description = params.get("description")
+        data = self._get_param("Data")
+        description = self._get_param("Description")
         config = self.mq_backend.update_configuration(config_id, data, description)
         return ActionResult(config)
 
@@ -191,13 +245,13 @@ class MQResponse(BaseResponse):
 
     def create_tags(self) -> ActionResult:
         resource_arn = unquote(self.path.split("/")[-1])
-        tags = json.loads(self.body).get("tags", {})
+        tags = self._get_param("Tags", {})
         self.mq_backend.create_tags(resource_arn, tags)
         return EmptyResult()
 
     def delete_tags(self) -> ActionResult:
         resource_arn = unquote(self.path.split("/")[-1])
-        tag_keys = self._get_param("tagKeys")
+        tag_keys = self._get_param("TagKeys")
         self.mq_backend.delete_tags(resource_arn, tag_keys)
         return EmptyResult()
 
