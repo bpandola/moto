@@ -13,6 +13,7 @@ GENERIC_RESPONSE_TYPE = Union[str, tuple[str, dict[str, int]]]
 class AWSCertificateManagerResponse(BaseResponse):
     def __init__(self) -> None:
         super().__init__(service_name="acm")
+        self.automated_parameter_parsing = True
 
     @property
     def acm_backend(self) -> AWSCertificateManagerBackend:
@@ -98,27 +99,20 @@ class AWSCertificateManagerResponse(BaseResponse):
         current_arn = self._get_param("CertificateArn")  # Optional
         tags = self._get_param("Tags")  # Optional
 
-        # Simple parameter decoding. Rather do it here as its a data transport decision not part of the
-        # actual data
-        try:
-            certificate = base64.standard_b64decode(certificate)
-        except Exception:
+        # With automated_parameter_parsing, blob parameters are already
+        # base64-decoded by the request parser, so we just validate them.
+        if not isinstance(certificate, bytes):
             raise AWSValidationException(
                 "The certificate is not PEM-encoded or is not valid."
             )
-        try:
-            private_key = base64.standard_b64decode(private_key)
-        except Exception:
+        if not isinstance(private_key, bytes):
             raise AWSValidationException(
                 "The private key is not PEM-encoded or is not valid."
             )
-        if chain is not None:
-            try:
-                chain = base64.standard_b64decode(chain)
-            except Exception:
-                raise AWSValidationException(
-                    "The certificate chain is not PEM-encoded or is not valid."
-                )
+        if chain is not None and not isinstance(chain, bytes):
+            raise AWSValidationException(
+                "The certificate chain is not PEM-encoded or is not valid."
+            )
 
         arn = self.acm_backend.import_certificate(
             certificate, private_key, chain=chain, arn=current_arn, tags=tags
@@ -241,6 +235,11 @@ class AWSCertificateManagerResponse(BaseResponse):
                 {"status": 400},
             )
 
+        # The backend expects a base64-encoded passphrase, but automated
+        # parameter parsing already decodes blob types from base64.
+        # Re-encode so the backend can decode it again.
+        if isinstance(passphrase, bytes):
+            passphrase = base64.standard_b64encode(passphrase).decode("utf-8")
         (
             certificate,
             certificate_chain,
