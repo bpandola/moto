@@ -14,6 +14,7 @@ class mediapackagev2Response(BaseResponse):
 
     def __init__(self) -> None:
         super().__init__(service_name="mediapackagev2")
+        self.automated_parameter_parsing = True
 
     @property
     def mediapackagev2_backend(self) -> MediaPackagev2Backend:
@@ -43,8 +44,8 @@ class mediapackagev2Response(BaseResponse):
         return ActionResult(result=group)
 
     def list_channel_groups(self) -> ActionResult:
-        max_results = self._get_int_param("maxResults")
-        next_token = self._get_param("nextToken")
+        max_results = self._get_int_param("MaxResults")
+        next_token = self._get_param("NextToken")
 
         groups, next_token = self.mediapackagev2_backend.list_channel_groups(
             max_results=max_results,
