@@ -1,7 +1,6 @@
 """Handles incoming bedrockagent requests, invokes methods, returns responses."""
 
 import json
-from urllib.parse import unquote
 
 from moto.core.responses import BaseResponse
 
@@ -13,6 +12,7 @@ class AgentsforBedrockResponse(BaseResponse):
 
     def __init__(self) -> None:
         super().__init__(service_name="bedrock-agent")
+        self.automated_parameter_parsing = True
 
     @property
     def bedrockagent_backend(self) -> AgentsforBedrockBackend:
@@ -20,7 +20,7 @@ class AgentsforBedrockResponse(BaseResponse):
         return bedrockagent_backends[self.current_account][self.region]
 
     def create_agent(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         agent_name = params.get("agentName")
         client_token = params.get("clientToken")
         instruction = params.get("instruction")
@@ -46,12 +46,12 @@ class AgentsforBedrockResponse(BaseResponse):
         return json.dumps({"agent": dict(agent.to_dict())})
 
     def get_agent(self) -> str:
-        agent_id = self.path.split("/")[-2]
+        agent_id = self._get_param("agentId")
         agent = self.bedrockagent_backend.get_agent(agent_id=agent_id)
         return json.dumps({"agent": dict(agent.to_dict())})
 
     def list_agents(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         max_results = params.get("maxResults")
         next_token = params.get("nextToken")
         max_results = int(max_results) if max_results else None
@@ -67,16 +67,15 @@ class AgentsforBedrockResponse(BaseResponse):
         )
 
     def delete_agent(self) -> str:
-        params = self._get_params()
-        skip_resource_in_use_check = params.get("skipResourceInUseCheck")
-        agent_id = self.path.split("/")[-2]
+        skip_resource_in_use_check = self._get_param("skipResourceInUseCheck")
+        agent_id = self._get_param("agentId")
         agent_id, agent_status = self.bedrockagent_backend.delete_agent(
             agent_id=agent_id, skip_resource_in_use_check=skip_resource_in_use_check
         )
         return json.dumps({"agentId": agent_id, "agentStatus": agent_status})
 
     def create_knowledge_base(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         client_token = params.get("clientToken")
         name = params.get("name")
         description = params.get("description")
@@ -96,7 +95,7 @@ class AgentsforBedrockResponse(BaseResponse):
         return json.dumps({"knowledgeBase": dict(knowledge_base.to_dict())})
 
     def list_knowledge_bases(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         max_results = params.get("maxResults")
         next_token = params.get("nextToken")
         max_results = int(max_results) if max_results else None
@@ -112,7 +111,7 @@ class AgentsforBedrockResponse(BaseResponse):
         )
 
     def delete_knowledge_base(self) -> str:
-        knowledge_base_id = self.path.split("/")[-1]
+        knowledge_base_id = self._get_param("knowledgeBaseId")
         (
             knowledge_base_id,
             knowledge_base_status,
@@ -124,29 +123,29 @@ class AgentsforBedrockResponse(BaseResponse):
         )
 
     def get_knowledge_base(self) -> str:
-        knowledge_base_id = self.path.split("/")[-1]
+        knowledge_base_id = self._get_param("knowledgeBaseId")
         knowledge_base = self.bedrockagent_backend.get_knowledge_base(
             knowledge_base_id=knowledge_base_id
         )
         return json.dumps({"knowledgeBase": knowledge_base.to_dict()})
 
     def tag_resource(self) -> str:
-        params = json.loads(self.body)
-        resource_arn = unquote(self.path.split("/tags/")[-1])
+        params = self._get_params()
+        resource_arn = self._get_param("resourceArn")
         tags = params.get("tags")
         self.bedrockagent_backend.tag_resource(resource_arn=resource_arn, tags=tags)
         return json.dumps({})
 
     def untag_resource(self) -> str:
-        resource_arn = unquote(self.path.split("/tags/")[-1])
-        tag_keys = self.querystring.get("tagKeys", [])
+        resource_arn = self._get_param("resourceArn")
+        tag_keys = self._get_param("tagKeys") or []
         self.bedrockagent_backend.untag_resource(
             resource_arn=resource_arn, tag_keys=tag_keys
         )
         return json.dumps({})
 
     def list_tags_for_resource(self) -> str:
-        resource_arn = unquote(self.path.split("/tags/")[-1])
+        resource_arn = self._get_param("resourceArn")
         tags = self.bedrockagent_backend.list_tags_for_resource(
             resource_arn=resource_arn
         )
