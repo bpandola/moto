@@ -6,6 +6,7 @@ from .models import KinesisVideoBackend, kinesisvideo_backends
 class KinesisVideoResponse(BaseResponse):
     def __init__(self) -> None:
         super().__init__(service_name="kinesisvideo")
+        self.automated_parameter_parsing = True
 
     @property
     def kinesisvideo_backend(self) -> KinesisVideoBackend:
