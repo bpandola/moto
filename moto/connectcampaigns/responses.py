@@ -13,6 +13,7 @@ class ConnectCampaignServiceResponse(BaseResponse):
 
     def __init__(self) -> None:
         super().__init__(service_name="connectcampaigns")
+        self.automated_parameter_parsing = True
 
     @property
     def connectcampaigns_backend(self) -> ConnectCampaignServiceBackend:
@@ -20,12 +21,11 @@ class ConnectCampaignServiceResponse(BaseResponse):
         return connectcampaigns_backends[self.current_account][self.region]
 
     def create_campaign(self) -> str:
-        params = json.loads(self.body)
-        name = params.get("name")
-        connect_instance_id = params.get("connectInstanceId")
-        dialer_config = params.get("dialerConfig")
-        outbound_call_config = params.get("outboundCallConfig")
-        tags = params.get("tags", {})
+        name = self._get_param("name")
+        connect_instance_id = self._get_param("connectInstanceId")
+        dialer_config = self._get_param("dialerConfig")
+        outbound_call_config = self._get_param("outboundCallConfig")
+        tags = self._get_param("tags", {})
 
         id, arn, tags = self.connectcampaigns_backend.create_campaign(
             name=name,
@@ -40,7 +40,7 @@ class ConnectCampaignServiceResponse(BaseResponse):
         return json.dumps(response)
 
     def delete_campaign(self) -> str:
-        id = self.path.split("/")[-1]
+        id = self._get_param("id")
 
         self.connectcampaigns_backend.delete_campaign(
             id=id,
@@ -49,7 +49,7 @@ class ConnectCampaignServiceResponse(BaseResponse):
         return "{}"
 
     def describe_campaign(self) -> str:
-        id = self.path.split("/")[-1]
+        id = self._get_param("id")
 
         campaign_details = self.connectcampaigns_backend.describe_campaign(
             id=id,
@@ -60,7 +60,7 @@ class ConnectCampaignServiceResponse(BaseResponse):
         return json.dumps(response)
 
     def get_connect_instance_config(self) -> str:
-        connect_instance_id = self.path.split("/")[-2]
+        connect_instance_id = self._get_param("connectInstanceId")
 
         connect_instance_config = (
             self.connectcampaigns_backend.get_connect_instance_config(
@@ -73,10 +73,8 @@ class ConnectCampaignServiceResponse(BaseResponse):
         return json.dumps(response)
 
     def start_instance_onboarding_job(self) -> str:
-        connect_instance_id = self.path.split("/")[-2]
-
-        params = json.loads(self.body) if self.body else {}
-        encryption_config = params.get("encryptionConfig", {})
+        connect_instance_id = self._get_param("connectInstanceId")
+        encryption_config = self._get_param("encryptionConfig", {})
 
         job_status = self.connectcampaigns_backend.start_instance_onboarding_job(
             connect_instance_id=connect_instance_id,
@@ -88,7 +86,7 @@ class ConnectCampaignServiceResponse(BaseResponse):
         return json.dumps(response)
 
     def start_campaign(self) -> str:
-        id = self.path.split("/")[2]
+        id = self._get_param("id")
 
         self.connectcampaigns_backend.start_campaign(
             id=id,
@@ -97,7 +95,7 @@ class ConnectCampaignServiceResponse(BaseResponse):
         return "{}"
 
     def stop_campaign(self) -> str:
-        id = self.path.split("/")[2]
+        id = self._get_param("id")
 
         self.connectcampaigns_backend.stop_campaign(
             id=id,
@@ -106,7 +104,7 @@ class ConnectCampaignServiceResponse(BaseResponse):
         return "{}"
 
     def pause_campaign(self) -> str:
-        id = self.path.split("/")[2]
+        id = self._get_param("id")
 
         self.connectcampaigns_backend.pause_campaign(
             id=id,
@@ -115,7 +113,7 @@ class ConnectCampaignServiceResponse(BaseResponse):
         return "{}"
 
     def resume_campaign(self) -> str:
-        id = self.path.split("/")[2]
+        id = self._get_param("id")
 
         self.connectcampaigns_backend.resume_campaign(
             id=id,
@@ -124,7 +122,7 @@ class ConnectCampaignServiceResponse(BaseResponse):
         return "{}"
 
     def get_campaign_state(self) -> str:
-        id = self.path.split("/")[2]
+        id = self._get_param("id")
 
         campaign_state = self.connectcampaigns_backend.get_campaign_state(
             id=id,
