@@ -18,6 +18,7 @@ from .models import (
 class ApplicationAutoScalingResponse(BaseResponse):
     def __init__(self) -> None:
         super().__init__(service_name="application-autoscaling")
+        self.automated_parameter_parsing = True
 
     @property
     def applicationautoscaling_backend(self) -> ApplicationAutoscalingBackend:
@@ -137,7 +138,7 @@ class ApplicationAutoScalingResponse(BaseResponse):
             raise AWSValidationException(message)
 
     def delete_scheduled_action(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         service_namespace = params.get("ServiceNamespace")
         scheduled_action_name = params.get("ScheduledActionName")
         resource_id = params.get("ResourceId")
@@ -151,7 +152,7 @@ class ApplicationAutoScalingResponse(BaseResponse):
         return json.dumps({})
 
     def put_scheduled_action(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         service_namespace = params.get("ServiceNamespace")
         schedule = params.get("Schedule")
         timezone = params.get("Timezone")
@@ -175,7 +176,7 @@ class ApplicationAutoScalingResponse(BaseResponse):
         return json.dumps({})
 
     def describe_scheduled_actions(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         scheduled_action_names = params.get("ScheduledActionNames")
         service_namespace = params.get("ServiceNamespace")
         resource_id = params.get("ResourceId")
