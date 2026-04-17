@@ -1,5 +1,4 @@
 import json
-import urllib
 
 from moto.core.responses import BaseResponse
 
@@ -9,6 +8,7 @@ from .models import PanoramaBackend, panorama_backends
 class PanoramaResponse(BaseResponse):
     def __init__(self) -> None:
         super().__init__(service_name="panorama")
+        self.automated_parameter_parsing = True
 
     @property
     def panorama_backend(self) -> PanoramaBackend:
@@ -28,7 +28,7 @@ class PanoramaResponse(BaseResponse):
         return json.dumps(device.response_provision)
 
     def describe_device(self) -> str:
-        device_id = urllib.parse.unquote(self._get_param("DeviceId"))
+        device_id = self._get_param("DeviceId")
         device = self.panorama_backend.describe_device(device_id=device_id)
         return json.dumps(device.response_object())
 
@@ -59,7 +59,7 @@ class PanoramaResponse(BaseResponse):
         )
 
     def update_device_metadata(self) -> str:
-        device_id = urllib.parse.unquote(self._get_param("DeviceId"))
+        device_id = self._get_param("DeviceId")
         description = self._get_param("Description")
         device = self.panorama_backend.update_device_metadata(
             device_id=device_id, description=description
@@ -67,7 +67,7 @@ class PanoramaResponse(BaseResponse):
         return json.dumps(device.response_updated)
 
     def delete_device(self) -> str:
-        device_id = urllib.parse.unquote(self._get_param("DeviceId"))
+        device_id = self._get_param("DeviceId")
         device = self.panorama_backend.delete_device(device_id=device_id)
         return json.dumps(device.response_deleted)
 
@@ -96,9 +96,9 @@ class PanoramaResponse(BaseResponse):
         return json.dumps(node.response_described())
 
     def list_nodes(self) -> str:
-        category = self._get_param("category")
-        max_results = self._get_int_param("maxResults")
-        next_token = self._get_param("nextToken")
+        category = self._get_param("Category")
+        max_results = self._get_int_param("MaxResults")
+        next_token = self._get_param("NextToken")
         list_nodes, next_token = self.panorama_backend.list_nodes(
             category=category, max_results=max_results, next_token=next_token
         )
@@ -143,10 +143,10 @@ class PanoramaResponse(BaseResponse):
         return self.describe_application_instance()
 
     def list_application_instances(self) -> str:
-        device_id = self._get_param("deviceId")
-        max_results = self._get_int_param("maxResults")
-        status_filter = self._get_param("statusFilter")
-        next_token = self._get_param("nextToken")
+        device_id = self._get_param("DeviceId")
+        max_results = self._get_int_param("MaxResults")
+        status_filter = self._get_param("StatusFilter")
+        next_token = self._get_param("NextToken")
         list_application_instances, next_token = (
             self.panorama_backend.list_application_instances(
                 device_id=device_id,
