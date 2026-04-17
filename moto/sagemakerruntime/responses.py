@@ -13,6 +13,7 @@ class SageMakerRuntimeResponse(BaseResponse):
 
     def __init__(self) -> None:
         super().__init__(service_name="sagemaker-runtime")
+        self.automated_parameter_parsing = True
 
     @property
     def sagemakerruntime_backend(self) -> SageMakerRuntimeBackend:
@@ -46,7 +47,7 @@ class SageMakerRuntimeResponse(BaseResponse):
         return 200, headers, body
 
     def invoke_endpoint_async(self) -> TYPE_RESPONSE:
-        endpoint_name = self.path.split("/")[2]
+        endpoint_name = self._get_param("EndpointName")
         input_location = self.headers.get("X-Amzn-SageMaker-InputLocation")
         inference_id = self.headers.get("X-Amzn-SageMaker-Inference-Id")
         output_location, failure_location = (
