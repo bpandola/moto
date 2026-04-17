@@ -9,6 +9,7 @@ from .models import RedshiftDataAPIServiceBackend, redshiftdata_backends
 class RedshiftDataAPIServiceResponse(BaseResponse):
     def __init__(self) -> None:
         super().__init__(service_name="redshift-data")
+        self.automated_parameter_parsing = True
 
     @property
     def redshiftdata_backend(self) -> RedshiftDataAPIServiceBackend:
