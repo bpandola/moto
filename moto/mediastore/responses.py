@@ -8,6 +8,7 @@ from .models import MediaStoreBackend, mediastore_backends
 class MediaStoreResponse(BaseResponse):
     def __init__(self) -> None:
         super().__init__(service_name="mediastore")
+        self.automated_parameter_parsing = True
 
     @property
     def mediastore_backend(self) -> MediaStoreBackend:
