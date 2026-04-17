@@ -54,7 +54,11 @@ log = logging.getLogger(__name__)
 
 ResponseShape = TypeVar("ResponseShape", bound="BaseResponse")
 
-boto3_service_name = {"awslambda": "lambda"}
+boto3_service_name = {
+    "awslambda": "lambda",
+    "ec2-instanceconnect": "ec2-instance-connect",
+    "route53-domains": "route53domains",
+}
 
 
 def _decode_dict(d: dict[Any, Any]) -> dict[str, Any]:
