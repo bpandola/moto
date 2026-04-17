@@ -14,9 +14,17 @@ class EBSResponse(BaseResponse):
 
     def __init__(self) -> None:
         super().__init__(service_name="ebs")
+        self.automated_parameter_parsing = True
 
     def setup_class(self, request: Any, full_url: str, headers: Any) -> None:  # type: ignore
-        super().setup_class(request, full_url, headers, use_raw_body=True)
+        # Temporarily disable automated parsing for PutSnapshotBlock,
+        # whose body is raw binary data that cannot be decoded as UTF-8.
+        if "/blocks/" in full_url and request.method == "PUT":
+            self.automated_parameter_parsing = False
+            super().setup_class(request, full_url, headers, use_raw_body=True)
+            self.automated_parameter_parsing = True
+        else:
+            super().setup_class(request, full_url, headers, use_raw_body=True)
 
     @property
     def ebs_backend(self) -> EBSBackend:
@@ -24,7 +32,7 @@ class EBSResponse(BaseResponse):
         return ebs_backends[self.current_account][self.region]
 
     def start_snapshot(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         volume_size = params.get("VolumeSize")
         tags = params.get("Tags")
         description = params.get("Description")
@@ -36,7 +44,7 @@ class EBSResponse(BaseResponse):
         return json.dumps(snapshot.to_json())
 
     def complete_snapshot(self) -> TYPE_RESPONSE:
-        snapshot_id = self.parsed_url.path.split("/")[-1]
+        snapshot_id = self._get_param("SnapshotId")
         status = self.ebs_backend.complete_snapshot(snapshot_id=snapshot_id)
         return 202, {"status": 202}, json.dumps(status)
 
@@ -64,8 +72,8 @@ class EBSResponse(BaseResponse):
         return 201, resp_headers, "{}"
 
     def get_snapshot_block(self) -> TYPE_RESPONSE:
-        snapshot_id = self.path.split("/")[-3]
-        block_index = self.path.split("/")[-1]
+        snapshot_id = self._get_param("SnapshotId")
+        block_index = str(self._get_param("BlockIndex"))
         block = self.ebs_backend.get_snapshot_block(
             snapshot_id=snapshot_id,
             block_index=block_index,
@@ -78,8 +86,8 @@ class EBSResponse(BaseResponse):
         return 200, headers, block.block_data
 
     def list_changed_blocks(self) -> str:
-        first_snapshot_id = self._get_params().get("firstSnapshotId")
-        second_snapshot_id = self.path.split("/")[-2]
+        first_snapshot_id = self._get_param("FirstSnapshotId")
+        second_snapshot_id = self._get_param("SecondSnapshotId")
         changed_blocks, snapshot = self.ebs_backend.list_changed_blocks(
             first_snapshot_id=first_snapshot_id,  # type: ignore[arg-type]
             second_snapshot_id=second_snapshot_id,
@@ -97,7 +105,7 @@ class EBSResponse(BaseResponse):
         )
 
     def list_snapshot_blocks(self) -> str:
-        snapshot_id = self.path.split("/")[-2]
+        snapshot_id = self._get_param("SnapshotId")
         snapshot = self.ebs_backend.list_snapshot_blocks(
             snapshot_id=snapshot_id,
         )
