@@ -10,13 +10,14 @@ from .models import DAXBackend, dax_backends
 class DAXResponse(BaseResponse):
     def __init__(self) -> None:
         super().__init__(service_name="dax")
+        self.automated_parameter_parsing = True
 
     @property
     def dax_backend(self) -> DAXBackend:
         return dax_backends[self.current_account][self.region]
 
     def create_cluster(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         cluster_name = params.get("ClusterName")
         node_type = params.get("NodeType")
         description = params.get("Description")
@@ -42,12 +43,12 @@ class DAXResponse(BaseResponse):
         return json.dumps({"Cluster": cluster.to_json()})
 
     def delete_cluster(self) -> str:
-        cluster_name = json.loads(self.body).get("ClusterName")
+        cluster_name = self._get_params().get("ClusterName")
         cluster = self.dax_backend.delete_cluster(cluster_name)
         return json.dumps({"Cluster": cluster.to_json()})
 
     def describe_clusters(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         cluster_names = params.get("ClusterNames", [])
         max_results = params.get("MaxResults")
         next_token = params.get("NextToken")
@@ -89,13 +90,13 @@ class DAXResponse(BaseResponse):
             raise InvalidParameterValueException(msg)
 
     def list_tags(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         resource_name = params.get("ResourceName")
         tags = self.dax_backend.list_tags(resource_name=resource_name)
         return json.dumps(tags)
 
     def increase_replication_factor(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         cluster_name = params.get("ClusterName")
         new_replication_factor = params.get("NewReplicationFactor")
         cluster = self.dax_backend.increase_replication_factor(
@@ -104,7 +105,7 @@ class DAXResponse(BaseResponse):
         return json.dumps({"Cluster": cluster.to_json()})
 
     def decrease_replication_factor(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         cluster_name = params.get("ClusterName")
         new_replication_factor = params.get("NewReplicationFactor")
         node_ids_to_remove = params.get("NodeIdsToRemove")
@@ -116,7 +117,7 @@ class DAXResponse(BaseResponse):
         return json.dumps({"Cluster": cluster.to_json()})
 
     def tag_resource(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         resource_name = params.get("ResourceName")
         tags = params.get("Tags")
         self.dax_backend.tag_resource(
@@ -126,7 +127,7 @@ class DAXResponse(BaseResponse):
         return "{}"
 
     def untag_resource(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         resource_name = params.get("ResourceName")
         tag_keys = params.get("TagKeys")
         self.dax_backend.untag_resource(
