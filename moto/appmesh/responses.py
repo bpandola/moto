@@ -17,6 +17,7 @@ class AppMeshResponse(BaseResponse):
 
     def __init__(self) -> None:
         super().__init__(service_name="appmesh")
+        self.automated_parameter_parsing = True
 
     @property
     def appmesh_backend(self) -> AppMeshBackend:
@@ -24,7 +25,7 @@ class AppMeshResponse(BaseResponse):
         return appmesh_backends[self.current_account][self.region]
 
     def create_mesh(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         client_token = params.get("clientToken")
         mesh_name = params.get("meshName")
         spec = params.get("spec") or {}
@@ -41,7 +42,7 @@ class AppMeshResponse(BaseResponse):
         return json.dumps(mesh.to_dict())
 
     def update_mesh(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         client_token = params.get("clientToken")
         mesh_name = self._get_param("meshName")
         spec = params.get("spec") or {}
@@ -92,7 +93,7 @@ class AppMeshResponse(BaseResponse):
         return json.dumps({"nextToken": next_token, "tags": tags})
 
     def tag_resource(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         resource_arn = self._get_param("resourceArn")
         tags = params.get("tags")
         self.appmesh_backend.tag_resource(
@@ -113,7 +114,7 @@ class AppMeshResponse(BaseResponse):
         return json.dumps(virtual_router.to_dict())
 
     def create_virtual_router(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         client_token = params.get("clientToken")
         mesh_name = self._get_param("meshName")
         mesh_owner = self._get_param("meshOwner")
@@ -131,7 +132,7 @@ class AppMeshResponse(BaseResponse):
         return json.dumps(virtual_router.to_dict())
 
     def update_virtual_router(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         client_token = params.get("clientToken")
         mesh_name = self._get_param("meshName")
         mesh_owner = self._get_param("meshOwner")
@@ -171,7 +172,7 @@ class AppMeshResponse(BaseResponse):
         return json.dumps({"nextToken": next_token, "virtualRouters": virtual_routers})
 
     def create_route(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         client_token = params.get("clientToken")
         mesh_name = self._get_param("meshName")
         mesh_owner = self._get_param("meshOwner")
@@ -204,7 +205,7 @@ class AppMeshResponse(BaseResponse):
         return json.dumps(route.to_dict())
 
     def update_route(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         client_token = params.get("clientToken")
         mesh_name = self._get_param("meshName")
         mesh_owner = self._get_param("meshOwner")
@@ -266,7 +267,7 @@ class AppMeshResponse(BaseResponse):
         return json.dumps(virtual_node.to_dict())
 
     def create_virtual_node(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         client_token = params.get("clientToken")
         mesh_name = self._get_param("meshName")
         mesh_owner = self._get_param("meshOwner")
@@ -284,7 +285,7 @@ class AppMeshResponse(BaseResponse):
         return json.dumps(virtual_node.to_dict())
 
     def update_virtual_node(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         client_token = params.get("clientToken")
         mesh_name = self._get_param("meshName")
         mesh_owner = self._get_param("meshOwner")
