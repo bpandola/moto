@@ -1,5 +1,4 @@
-import json
-from typing import Any, Optional, Union
+from typing import Optional, Union
 
 from moto.core.responses import ActionResult, BaseResponse, EmptyResult
 
@@ -18,29 +17,27 @@ from .utils import Action, Predicate, validate_crawl_filters
 class GlueResponse(BaseResponse):
     def __init__(self) -> None:
         super().__init__(service_name="glue")
+        self.automated_parameter_parsing = True
 
     @property
     def glue_backend(self) -> GlueBackend:
         return glue_backends[self.current_account][self.region]
 
-    @property
-    def parameters(self) -> dict[str, Any]:  # type: ignore[misc]
-        return json.loads(self.body)
-
     def create_database(self) -> ActionResult:
-        database_input = self.parameters.get("DatabaseInput")
+        database_input = self._get_param("DatabaseInput")
         database_name = database_input.get("Name")  # type: ignore
-        if "CatalogId" in self.parameters:
-            database_input["CatalogId"] = self.parameters.get("CatalogId")  # type: ignore
+        catalog_id = self._get_param("CatalogId")
+        if catalog_id is not None:
+            database_input["CatalogId"] = catalog_id  # type: ignore
         self.glue_backend.create_database(
             database_name,
             database_input,  # type: ignore[arg-type]
-            self.parameters.get("Tags"),
+            self._get_param("Tags"),
         )
         return EmptyResult()
 
     def get_database(self) -> ActionResult:
-        database_name = self.parameters.get("Name")
+        database_name = self._get_param("Name")
         database = self.glue_backend.get_database(database_name)  # type: ignore[arg-type]
         return ActionResult({"Database": database.as_dict()})
 
@@ -51,23 +48,24 @@ class GlueResponse(BaseResponse):
         )
 
     def update_database(self) -> ActionResult:
-        database_input = self.parameters.get("DatabaseInput")
-        database_name = self.parameters.get("Name")
-        if "CatalogId" in self.parameters:
-            database_input["CatalogId"] = self.parameters.get("CatalogId")  # type: ignore
+        database_input = self._get_param("DatabaseInput")
+        database_name = self._get_param("Name")
+        catalog_id = self._get_param("CatalogId")
+        if catalog_id is not None:
+            database_input["CatalogId"] = catalog_id  # type: ignore
         self.glue_backend.update_database(database_name, database_input)  # type: ignore[arg-type]
         return EmptyResult()
 
     def delete_database(self) -> EmptyResult:
-        name = self.parameters.get("Name")
+        name = self._get_param("Name")
         self.glue_backend.delete_database(name)  # type: ignore[arg-type]
         return EmptyResult()
 
     def create_table(self) -> ActionResult:
-        database_name = self.parameters.get("DatabaseName")
-        table_input = self.parameters.get("TableInput")
+        database_name = self._get_param("DatabaseName")
+        table_input = self._get_param("TableInput")
         table_name = table_input.get("Name")  # type: ignore
-        open_table_format_input = self.parameters.get("OpenTableFormatInput")
+        open_table_format_input = self._get_param("OpenTableFormatInput")
         self.glue_backend.create_table(
             database_name,  # type: ignore[arg-type]
             table_name,
@@ -77,22 +75,22 @@ class GlueResponse(BaseResponse):
         return EmptyResult()
 
     def get_table(self) -> ActionResult:
-        database_name = self.parameters.get("DatabaseName")
-        table_name = self.parameters.get("Name")
+        database_name = self._get_param("DatabaseName")
+        table_name = self._get_param("Name")
         table = self.glue_backend.get_table(database_name, table_name)  # type: ignore[arg-type]
 
         return ActionResult({"Table": table.as_dict()})
 
     def update_table(self) -> ActionResult:
-        database_name = self.parameters.get("DatabaseName")
-        table_input = self.parameters.get("TableInput")
+        database_name = self._get_param("DatabaseName")
+        table_input = self._get_param("TableInput")
         table_name = table_input.get("Name")  # type: ignore
         self.glue_backend.update_table(database_name, table_name, table_input)  # type: ignore[arg-type]
         return EmptyResult()
 
     def get_table_versions(self) -> ActionResult:
-        database_name = self.parameters.get("DatabaseName")
-        table_name = self.parameters.get("TableName")
+        database_name = self._get_param("DatabaseName")
+        table_name = self._get_param("TableName")
         versions = self.glue_backend.get_table_versions(database_name, table_name)  # type: ignore[arg-type]
         return ActionResult(
             {
@@ -104,36 +102,36 @@ class GlueResponse(BaseResponse):
         )
 
     def get_table_version(self) -> ActionResult:
-        database_name = self.parameters.get("DatabaseName")
-        table_name = self.parameters.get("TableName")
-        ver_id = self.parameters.get("VersionId")
+        database_name = self._get_param("DatabaseName")
+        table_name = self._get_param("TableName")
+        ver_id = self._get_param("VersionId")
         return ActionResult(
             self.glue_backend.get_table_version(database_name, table_name, ver_id)  # type: ignore[arg-type]
         )
 
     def delete_table_version(self) -> ActionResult:
-        database_name = self.parameters.get("DatabaseName")
-        table_name = self.parameters.get("TableName")
-        version_id = self.parameters.get("VersionId")
+        database_name = self._get_param("DatabaseName")
+        table_name = self._get_param("TableName")
+        version_id = self._get_param("VersionId")
         self.glue_backend.delete_table_version(database_name, table_name, version_id)  # type: ignore[arg-type]
         return EmptyResult()
 
     def get_tables(self) -> ActionResult:
-        database_name = self.parameters.get("DatabaseName")
-        expression = self.parameters.get("Expression")
+        database_name = self._get_param("DatabaseName")
+        expression = self._get_param("Expression")
         tables = self.glue_backend.get_tables(database_name, expression)  # type: ignore[arg-type]
         return ActionResult({"TableList": [table.as_dict() for table in tables]})
 
     def delete_table(self) -> ActionResult:
-        database_name = self.parameters.get("DatabaseName")
-        table_name = self.parameters.get("Name")
+        database_name = self._get_param("DatabaseName")
+        table_name = self._get_param("Name")
         self.glue_backend.delete_table(database_name, table_name)  # type: ignore[arg-type]
         return EmptyResult()
 
     def batch_delete_table(self) -> ActionResult:
-        database_name = self.parameters.get("DatabaseName")
+        database_name = self._get_param("DatabaseName")
 
-        tables = self.parameters.get("TablesToDelete")
+        tables = self._get_param("TablesToDelete")
         errors = self.glue_backend.batch_delete_table(database_name, tables)  # type: ignore[arg-type]
 
         out = {}
@@ -143,9 +141,9 @@ class GlueResponse(BaseResponse):
         return ActionResult(out)
 
     def get_partitions(self) -> ActionResult:
-        database_name = self.parameters.get("DatabaseName")
-        table_name = self.parameters.get("TableName")
-        expression = self.parameters.get("Expression")
+        database_name = self._get_param("DatabaseName")
+        table_name = self._get_param("TableName")
+        expression = self._get_param("Expression")
         partitions = self.glue_backend.get_partitions(
             database_name,  # type: ignore[arg-type]
             table_name,  # type: ignore[arg-type]
@@ -155,18 +153,18 @@ class GlueResponse(BaseResponse):
         return ActionResult({"Partitions": [p.as_dict() for p in partitions]})
 
     def get_partition(self) -> ActionResult:
-        database_name = self.parameters.get("DatabaseName")
-        table_name = self.parameters.get("TableName")
-        values = self.parameters.get("PartitionValues")
+        database_name = self._get_param("DatabaseName")
+        table_name = self._get_param("TableName")
+        values = self._get_param("PartitionValues")
 
         p = self.glue_backend.get_partition(database_name, table_name, values)  # type: ignore[arg-type]
 
         return ActionResult({"Partition": p.as_dict()})
 
     def batch_get_partition(self) -> ActionResult:
-        database_name = self.parameters.get("DatabaseName")
-        table_name = self.parameters.get("TableName")
-        partitions_to_get = self.parameters.get("PartitionsToGet")
+        database_name = self._get_param("DatabaseName")
+        table_name = self._get_param("TableName")
+        partitions_to_get = self._get_param("PartitionsToGet")
 
         partitions = self.glue_backend.batch_get_partition(
             database_name,  # type: ignore[arg-type]
@@ -177,17 +175,17 @@ class GlueResponse(BaseResponse):
         return ActionResult({"Partitions": partitions})
 
     def create_partition(self) -> ActionResult:
-        database_name = self.parameters.get("DatabaseName")
-        table_name = self.parameters.get("TableName")
-        part_input = self.parameters.get("PartitionInput")
+        database_name = self._get_param("DatabaseName")
+        table_name = self._get_param("TableName")
+        part_input = self._get_param("PartitionInput")
 
         self.glue_backend.create_partition(database_name, table_name, part_input)  # type: ignore[arg-type]
         return EmptyResult()
 
     def batch_create_partition(self) -> ActionResult:
-        database_name = self.parameters.get("DatabaseName")
-        table_name = self.parameters.get("TableName")
-        partition_input = self.parameters.get("PartitionInputList")
+        database_name = self._get_param("DatabaseName")
+        table_name = self._get_param("TableName")
+        partition_input = self._get_param("PartitionInputList")
         errors_output = self.glue_backend.batch_create_partition(
             database_name,  # type: ignore[arg-type]
             table_name,  # type: ignore[arg-type]
@@ -201,10 +199,10 @@ class GlueResponse(BaseResponse):
         return ActionResult(out)
 
     def update_partition(self) -> ActionResult:
-        database_name = self.parameters.get("DatabaseName")
-        table_name = self.parameters.get("TableName")
-        part_input = self.parameters.get("PartitionInput")
-        part_to_update = self.parameters.get("PartitionValueList")
+        database_name = self._get_param("DatabaseName")
+        table_name = self._get_param("TableName")
+        part_input = self._get_param("PartitionInput")
+        part_to_update = self._get_param("PartitionValueList")
 
         self.glue_backend.update_partition(
             database_name,  # type: ignore[arg-type]
@@ -215,9 +213,9 @@ class GlueResponse(BaseResponse):
         return EmptyResult()
 
     def batch_update_partition(self) -> ActionResult:
-        database_name = self.parameters.get("DatabaseName")
-        table_name = self.parameters.get("TableName")
-        entries = self.parameters.get("Entries")
+        database_name = self._get_param("DatabaseName")
+        table_name = self._get_param("TableName")
+        entries = self._get_param("Entries")
 
         errors_output = self.glue_backend.batch_update_partition(
             database_name,  # type: ignore[arg-type]
@@ -232,17 +230,17 @@ class GlueResponse(BaseResponse):
         return ActionResult(out)
 
     def delete_partition(self) -> ActionResult:
-        database_name = self.parameters.get("DatabaseName")
-        table_name = self.parameters.get("TableName")
-        part_to_delete = self.parameters.get("PartitionValues")
+        database_name = self._get_param("DatabaseName")
+        table_name = self._get_param("TableName")
+        part_to_delete = self._get_param("PartitionValues")
 
         self.glue_backend.delete_partition(database_name, table_name, part_to_delete)  # type: ignore[arg-type]
         return EmptyResult()
 
     def batch_delete_partition(self) -> ActionResult:
-        database_name = self.parameters.get("DatabaseName")
-        table_name = self.parameters.get("TableName")
-        parts = self.parameters.get("PartitionsToDelete")
+        database_name = self._get_param("DatabaseName")
+        table_name = self._get_param("TableName")
+        parts = self._get_param("PartitionsToDelete")
 
         errors_output = self.glue_backend.batch_delete_partition(
             database_name,  # type: ignore[arg-type]
@@ -258,27 +256,27 @@ class GlueResponse(BaseResponse):
 
     def create_crawler(self) -> ActionResult:
         self.glue_backend.create_crawler(
-            name=self.parameters.get("Name"),  # type: ignore[arg-type]
-            role=self.parameters.get("Role"),  # type: ignore[arg-type]
-            database_name=self.parameters.get("DatabaseName"),  # type: ignore[arg-type]
-            description=self.parameters.get("Description"),  # type: ignore[arg-type]
-            targets=self.parameters.get("Targets"),  # type: ignore[arg-type]
-            schedule=self.parameters.get("Schedule"),  # type: ignore[arg-type]
-            classifiers=self.parameters.get("Classifiers"),  # type: ignore[arg-type]
-            table_prefix=self.parameters.get("TablePrefix"),  # type: ignore[arg-type]
-            schema_change_policy=self.parameters.get("SchemaChangePolicy"),  # type: ignore[arg-type]
-            recrawl_policy=self.parameters.get("RecrawlPolicy"),  # type: ignore[arg-type]
-            lineage_configuration=self.parameters.get("LineageConfiguration"),  # type: ignore[arg-type]
-            configuration=self.parameters.get("Configuration"),  # type: ignore[arg-type]
-            crawler_security_configuration=self.parameters.get(  # type: ignore[arg-type]
+            name=self._get_param("Name"),  # type: ignore[arg-type]
+            role=self._get_param("Role"),  # type: ignore[arg-type]
+            database_name=self._get_param("DatabaseName"),  # type: ignore[arg-type]
+            description=self._get_param("Description"),  # type: ignore[arg-type]
+            targets=self._get_param("Targets"),  # type: ignore[arg-type]
+            schedule=self._get_param("Schedule"),  # type: ignore[arg-type]
+            classifiers=self._get_param("Classifiers"),  # type: ignore[arg-type]
+            table_prefix=self._get_param("TablePrefix"),  # type: ignore[arg-type]
+            schema_change_policy=self._get_param("SchemaChangePolicy"),  # type: ignore[arg-type]
+            recrawl_policy=self._get_param("RecrawlPolicy"),  # type: ignore[arg-type]
+            lineage_configuration=self._get_param("LineageConfiguration"),  # type: ignore[arg-type]
+            configuration=self._get_param("Configuration"),  # type: ignore[arg-type]
+            crawler_security_configuration=self._get_param(  # type: ignore[arg-type]
                 "CrawlerSecurityConfiguration"
             ),
-            tags=self.parameters.get("Tags"),  # type: ignore[arg-type]
+            tags=self._get_param("Tags"),  # type: ignore[arg-type]
         )
         return EmptyResult()
 
     def get_crawler(self) -> ActionResult:
-        name = self.parameters.get("Name")
+        name = self._get_param("Name")
         crawler = self.glue_backend.get_crawler(name)  # type: ignore[arg-type]
         return ActionResult({"Crawler": crawler.as_dict()})
 
@@ -313,23 +311,23 @@ class GlueResponse(BaseResponse):
         ]
 
     def start_crawler(self) -> ActionResult:
-        name = self.parameters.get("Name")
+        name = self._get_param("Name")
         self.glue_backend.start_crawler(name)  # type: ignore[arg-type]
         return EmptyResult()
 
     def stop_crawler(self) -> ActionResult:
-        name = self.parameters.get("Name")
+        name = self._get_param("Name")
         self.glue_backend.stop_crawler(name)  # type: ignore[arg-type]
         return EmptyResult()
 
     def delete_crawler(self) -> ActionResult:
-        name = self.parameters.get("Name")
+        name = self._get_param("Name")
         self.glue_backend.delete_crawler(name)  # type: ignore[arg-type]
         return EmptyResult()
 
     def list_crawls(self) -> ActionResult:
-        crawler_name = self.parameters.get("CrawlerName")
-        filters = validate_crawl_filters(self.parameters.get("Filters", []))
+        crawler_name = self._get_param("CrawlerName")
+        filters = validate_crawl_filters(self._get_param("Filters", []))
         crawls = self.glue_backend.list_crawls(crawler_name, filters)[0]
         return ActionResult({"Crawls": [crawl.as_dict() for crawl in crawls]})
 
@@ -383,7 +381,7 @@ class GlueResponse(BaseResponse):
         return ActionResult({"Name": name})
 
     def get_job(self) -> ActionResult:
-        name = self.parameters.get("JobName")
+        name = self._get_param("JobName")
         job = self.glue_backend.get_job(name)  # type: ignore[arg-type]
         return ActionResult({"Job": job.as_dict()})
 
@@ -432,8 +430,8 @@ class GlueResponse(BaseResponse):
         return ActionResult({"JobRunId": job_run_id})
 
     def get_job_run(self) -> ActionResult:
-        name = self.parameters.get("JobName")
-        run_id = self.parameters.get("RunId")
+        name = self._get_param("JobName")
+        run_id = self._get_param("RunId")
         job_run = self.glue_backend.get_job_run(name, run_id)  # type: ignore[arg-type]
         return ActionResult({"JobRun": job_run.as_dict()})
 
@@ -469,24 +467,24 @@ class GlueResponse(BaseResponse):
         )
 
     def delete_job(self) -> ActionResult:
-        name = self.parameters.get("JobName")
+        name = self._get_param("JobName")
         self.glue_backend.delete_job(name)  # type: ignore[arg-type]
         return ActionResult({"JobName": name})
 
     def get_tags(self) -> ActionResult:
-        resource_arn = self.parameters.get("ResourceArn")
+        resource_arn = self._get_param("ResourceArn")
         tags = self.glue_backend.get_tags(resource_arn)  # type: ignore[arg-type]
         return ActionResult({"Tags": tags})
 
     def tag_resource(self) -> ActionResult:
-        resource_arn = self.parameters.get("ResourceArn")
-        tags = self.parameters.get("TagsToAdd", {})
+        resource_arn = self._get_param("ResourceArn")
+        tags = self._get_param("TagsToAdd", {})
         self.glue_backend.tag_resource(resource_arn, tags)  # type: ignore[arg-type]
         return EmptyResult()
 
     def untag_resource(self) -> ActionResult:
         resource_arn = self._get_param("ResourceArn")
-        tag_keys = self.parameters.get("TagsToRemove")
+        tag_keys = self._get_param("TagsToRemove")
         self.glue_backend.untag_resource(resource_arn, tag_keys)  # type: ignore[arg-type]
         return EmptyResult()
 
@@ -611,26 +609,26 @@ class GlueResponse(BaseResponse):
 
     def create_session(self) -> ActionResult:
         self.glue_backend.create_session(
-            session_id=self.parameters.get("Id"),  # type: ignore[arg-type]
-            description=self.parameters.get("Description"),  # type: ignore[arg-type]
-            role=self.parameters.get("Role"),  # type: ignore[arg-type]
-            command=self.parameters.get("Command"),  # type: ignore[arg-type]
-            timeout=self.parameters.get("Timeout"),  # type: ignore[arg-type]
-            idle_timeout=self.parameters.get("IdleTimeout"),  # type: ignore[arg-type]
-            default_arguments=self.parameters.get("DefaultArguments"),  # type: ignore[arg-type]
-            connections=self.parameters.get("Connections"),  # type: ignore[arg-type]
-            max_capacity=self.parameters.get("MaxCapacity"),  # type: ignore[arg-type]
-            number_of_workers=self.parameters.get("NumberOfWorkers"),  # type: ignore[arg-type]
-            worker_type=self.parameters.get("WorkerType"),  # type: ignore[arg-type]
-            security_configuration=self.parameters.get("SecurityConfiguration"),  # type: ignore[arg-type]
-            glue_version=self.parameters.get("GlueVersion"),  # type: ignore[arg-type]
-            tags=self.parameters.get("Tags"),  # type: ignore[arg-type]
-            request_origin=self.parameters.get("RequestOrigin"),  # type: ignore[arg-type]
+            session_id=self._get_param("Id"),  # type: ignore[arg-type]
+            description=self._get_param("Description"),  # type: ignore[arg-type]
+            role=self._get_param("Role"),  # type: ignore[arg-type]
+            command=self._get_param("Command"),  # type: ignore[arg-type]
+            timeout=self._get_param("Timeout"),  # type: ignore[arg-type]
+            idle_timeout=self._get_param("IdleTimeout"),  # type: ignore[arg-type]
+            default_arguments=self._get_param("DefaultArguments"),  # type: ignore[arg-type]
+            connections=self._get_param("Connections"),  # type: ignore[arg-type]
+            max_capacity=self._get_param("MaxCapacity"),  # type: ignore[arg-type]
+            number_of_workers=self._get_param("NumberOfWorkers"),  # type: ignore[arg-type]
+            worker_type=self._get_param("WorkerType"),  # type: ignore[arg-type]
+            security_configuration=self._get_param("SecurityConfiguration"),  # type: ignore[arg-type]
+            glue_version=self._get_param("GlueVersion"),  # type: ignore[arg-type]
+            tags=self._get_param("Tags"),  # type: ignore[arg-type]
+            request_origin=self._get_param("RequestOrigin"),  # type: ignore[arg-type]
         )
         return EmptyResult()
 
     def get_session(self) -> ActionResult:
-        session_id = self.parameters.get("Id")
+        session_id = self._get_param("Id")
         session = self.glue_backend.get_session(session_id)  # type: ignore[arg-type]
         return ActionResult({"Session": session.as_dict()})
 
@@ -666,12 +664,12 @@ class GlueResponse(BaseResponse):
         ]
 
     def stop_session(self) -> ActionResult:
-        session_id = self.parameters.get("Id")
+        session_id = self._get_param("Id")
         self.glue_backend.stop_session(session_id)  # type: ignore[arg-type]
         return ActionResult({"Id": session_id})
 
     def delete_session(self) -> ActionResult:
-        session_id = self.parameters.get("Id")
+        session_id = self._get_param("Id")
         self.glue_backend.delete_session(session_id)  # type: ignore[arg-type]
         return ActionResult({"Id": session_id})
 
@@ -742,7 +740,7 @@ class GlueResponse(BaseResponse):
         return ActionResult({"Name": name})
 
     def get_trigger(self) -> ActionResult:
-        name = self.parameters.get("Name")
+        name = self._get_param("Name")
         trigger = self.glue_backend.get_trigger(name)  # type: ignore[arg-type]
         return ActionResult({"Trigger": trigger.as_dict()})
 
@@ -794,17 +792,17 @@ class GlueResponse(BaseResponse):
         )
 
     def start_trigger(self) -> ActionResult:
-        name = self.parameters.get("Name")
+        name = self._get_param("Name")
         self.glue_backend.start_trigger(name)  # type: ignore[arg-type]
         return ActionResult({"Name": name})
 
     def stop_trigger(self) -> ActionResult:
-        name = self.parameters.get("Name")
+        name = self._get_param("Name")
         self.glue_backend.stop_trigger(name)  # type: ignore[arg-type]
         return ActionResult({"Name": name})
 
     def delete_trigger(self) -> ActionResult:
-        name = self.parameters.get("Name")
+        name = self._get_param("Name")
         self.glue_backend.delete_trigger(name)  # type: ignore[arg-type]
         return ActionResult({"Name": name})
 
@@ -915,7 +913,7 @@ class GlueResponse(BaseResponse):
         )
 
     def put_data_catalog_encryption_settings(self) -> ActionResult:
-        params = self.parameters
+        params = self._get_params()
         catalog_id = params.get("CatalogId", None)
         data_catalog_encryption_settings = params.get(
             "DataCatalogEncryptionSettings", {}
@@ -929,7 +927,7 @@ class GlueResponse(BaseResponse):
         return EmptyResult()
 
     def get_data_catalog_encryption_settings(self) -> ActionResult:
-        params = self.parameters
+        params = self._get_params()
         catalog_id = params.get("CatalogId", None)
 
         response = self.glue_backend.get_data_catalog_encryption_settings(
@@ -939,7 +937,7 @@ class GlueResponse(BaseResponse):
         return ActionResult(response)
 
     def put_resource_policy(self) -> ActionResult:
-        params = json.loads(self.body)
+        params = self._get_params()
         policy_in_json = params.get("PolicyInJson")
         resource_arn = params.get("ResourceArn")
         policy_hash_condition = params.get("PolicyHashCondition")
@@ -957,7 +955,7 @@ class GlueResponse(BaseResponse):
         return ActionResult(policy_hash)
 
     def get_resource_policy(self) -> ActionResult:
-        params = json.loads(self.body)
+        params = self._get_params()
         resource_arn = params.get("ResourceArn")
         response = self.glue_backend.get_resource_policy(
             resource_arn=resource_arn,
@@ -966,7 +964,7 @@ class GlueResponse(BaseResponse):
         return ActionResult(response)
 
     def delete_resource_policy(self) -> ActionResult:
-        params = json.loads(self.body)
+        params = self._get_params()
         policy_hash_condition = params.get("PolicyHashCondition")
         resource_arn = params.get("ResourceArn")
         self.glue_backend.delete_resource_policy(
