@@ -9,26 +9,27 @@ from .models import GLOBAL_REGION, WAFV2Backend, wafv2_backends
 class WAFV2Response(BaseResponse):
     def __init__(self) -> None:
         super().__init__(service_name="wafv2")
+        self.automated_parameter_parsing = True
 
     @property
     def wafv2_backend(self) -> WAFV2Backend:
         return wafv2_backends[self.current_account][self.region]
 
     def associate_web_acl(self) -> TYPE_RESPONSE:
-        body = json.loads(self.body)
+        body = self._get_params()
         web_acl_arn = body["WebACLArn"]
         resource_arn = body["ResourceArn"]
         self.wafv2_backend.associate_web_acl(web_acl_arn, resource_arn)
         return 200, {}, "{}"
 
     def disassociate_web_acl(self) -> TYPE_RESPONSE:
-        body = json.loads(self.body)
+        body = self._get_params()
         resource_arn = body["ResourceArn"]
         self.wafv2_backend.disassociate_web_acl(resource_arn)
         return 200, {}, "{}"
 
     def get_web_acl_for_resource(self) -> TYPE_RESPONSE:
-        body = json.loads(self.body)
+        body = self._get_params()
         resource_arn = body["ResourceArn"]
         web_acl = self.wafv2_backend.get_web_acl_for_resource(resource_arn)
         response = {"WebACL": web_acl.to_dict() if web_acl else None}
@@ -42,7 +43,7 @@ class WAFV2Response(BaseResponse):
         if scope == "CLOUDFRONT":
             self.region = GLOBAL_REGION
         name = self._get_param("Name")
-        body = json.loads(self.body)
+        body = self._get_params()
         description = body.get("Description")
         tags = body.get("Tags", [])
         rules = body.get("Rules", [])
@@ -146,7 +147,7 @@ class WAFV2Response(BaseResponse):
         return 200, response_headers, json.dumps(response)
 
     def tag_resource(self) -> TYPE_RESPONSE:
-        body = json.loads(self.body)
+        body = self._get_params()
         arn = body.get("ResourceARN")
 
         # select correct backend - ARN region is not indicative by itself in case of WAF for Cloudfront
@@ -158,7 +159,7 @@ class WAFV2Response(BaseResponse):
         return 200, {}, "{}"
 
     def untag_resource(self) -> TYPE_RESPONSE:
-        body = json.loads(self.body)
+        body = self._get_params()
         arn = body.get("ResourceARN")
 
         # select correct backend - ARN region is not indicative by itself in case of WAF for Cloudfront
@@ -170,7 +171,7 @@ class WAFV2Response(BaseResponse):
         return 200, {}, "{}"
 
     def update_web_acl(self) -> TYPE_RESPONSE:
-        body = json.loads(self.body)
+        body = self._get_params()
         name = body.get("Name")
         _id = body.get("Id")
         scope = body.get("Scope")
@@ -203,7 +204,7 @@ class WAFV2Response(BaseResponse):
         return 200, {}, json.dumps({"NextLockToken": new_lock_token})
 
     def create_ip_set(self) -> TYPE_RESPONSE:
-        body = json.loads(self.body)
+        body = self._get_params()
 
         name = body.get("Name")
         scope = body.get("Scope")
@@ -236,7 +237,7 @@ class WAFV2Response(BaseResponse):
         )
 
     def delete_ip_set(self) -> TYPE_RESPONSE:
-        body = json.loads(self.body)
+        body = self._get_params()
 
         name = body.get("Name")
         scope = body.get("Scope")
@@ -287,7 +288,7 @@ class WAFV2Response(BaseResponse):
         return 200, {}, json.dumps({"IPSet": dict_ip, "LockToken": lock_token})
 
     def update_ip_set(self) -> TYPE_RESPONSE:
-        body = json.loads(self.body)
+        body = self._get_params()
 
         name = body.get("Name")
         scope = body.get("Scope")
@@ -306,7 +307,7 @@ class WAFV2Response(BaseResponse):
         return 200, {}, json.dumps({"NextLockToken": updated_ip_set.lock_token})
 
     def put_logging_configuration(self) -> TYPE_RESPONSE:
-        body = json.loads(self.body)
+        body = self._get_params()
         logging_configuration_parameter = body["LoggingConfiguration"]
         resource_arn = logging_configuration_parameter["ResourceArn"]
         log_destination_configs = logging_configuration_parameter[
@@ -339,7 +340,7 @@ class WAFV2Response(BaseResponse):
         )
 
     def get_logging_configuration(self) -> TYPE_RESPONSE:
-        body = json.loads(self.body)
+        body = self._get_params()
         resource_arn = body["ResourceArn"]
         logging_configuration = self.wafv2_backend.get_logging_configuration(
             resource_arn
@@ -359,7 +360,7 @@ class WAFV2Response(BaseResponse):
         )
 
     def list_logging_configurations(self) -> str:
-        body = json.loads(self.body)
+        body = self._get_params()
         scope = body.get("Scope")
         limit = self._get_int_param("Limit")
         next_marker = self._get_param("NextMarker")
@@ -376,7 +377,7 @@ class WAFV2Response(BaseResponse):
         )
 
     def delete_logging_configuration(self) -> TYPE_RESPONSE:
-        body = json.loads(self.body)
+        body = self._get_params()
         resource_arn = body["ResourceArn"]
         self.wafv2_backend.delete_logging_configuration(resource_arn)
         return 200, {}, "{}"
@@ -462,7 +463,7 @@ class WAFV2Response(BaseResponse):
         return 200, {}, json.dumps({"RuleGroup": group_dict, "LockToken": lock_token})
 
     def create_regex_pattern_set(self) -> TYPE_RESPONSE:
-        body = json.loads(self.body)
+        body = self._get_params()
         name = body.get("Name")
         scope = body.get("Scope")
         description = body.get("Description", "")
@@ -484,7 +485,7 @@ class WAFV2Response(BaseResponse):
         return 200, response_headers, json.dumps(response)
 
     def get_regex_pattern_set(self) -> TYPE_RESPONSE:
-        body = json.loads(self.body)
+        body = self._get_params()
         name = body.get("Name")
         scope = body.get("Scope")
         _id = body.get("Id")
@@ -507,7 +508,7 @@ class WAFV2Response(BaseResponse):
         return 200, response_headers, json.dumps(response)
 
     def update_regex_pattern_set(self) -> TYPE_RESPONSE:
-        body = json.loads(self.body)
+        body = self._get_params()
         name = body.get("Name")
         scope = body.get("Scope")
         _id = body.get("Id")
@@ -531,7 +532,7 @@ class WAFV2Response(BaseResponse):
         return 200, response_headers, json.dumps(response)
 
     def delete_regex_pattern_set(self) -> TYPE_RESPONSE:
-        body = json.loads(self.body)
+        body = self._get_params()
         name = body.get("Name")
         scope = body.get("Scope")
         _id = body.get("Id")
@@ -549,7 +550,7 @@ class WAFV2Response(BaseResponse):
         return 200, {}, "{}"
 
     def list_regex_pattern_sets(self) -> TYPE_RESPONSE:
-        body = json.loads(self.body)
+        body = self._get_params()
         scope = body.get("Scope")
         limit = self._get_int_param("Limit")
         next_marker = self._get_param("NextMarker")
