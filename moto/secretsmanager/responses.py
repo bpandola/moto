@@ -1,3 +1,4 @@
+import base64
 import json
 from typing import Any
 
@@ -31,6 +32,7 @@ def _validate_filters(filters: list[dict[str, Any]]) -> None:
 class SecretsManagerResponse(BaseResponse):
     def __init__(self) -> None:
         super().__init__(service_name="secretsmanager")
+        self.automated_parameter_parsing = True
 
     @property
     def backend(self) -> SecretsManagerBackend:
@@ -65,10 +67,17 @@ class SecretsManagerResponse(BaseResponse):
             {"SecretValues": secret_values, "Errors": errors, "NextToken": next_token}
         )
 
+    @staticmethod
+    def _encode_binary(value: Any) -> Any:
+        """Convert bytes to base64 string for model layer compatibility."""
+        if isinstance(value, bytes):
+            return base64.b64encode(value).decode("utf-8")
+        return value
+
     def create_secret(self) -> str:
         name = self._get_param("Name")
         secret_string = self._get_param("SecretString")
-        secret_binary = self._get_param("SecretBinary")
+        secret_binary = self._encode_binary(self._get_param("SecretBinary"))
         description = self._get_param("Description", if_none="")
         tags = self._get_param("Tags", if_none=[])
         kms_key_id = self._get_param("KmsKeyId")
@@ -91,7 +100,7 @@ class SecretsManagerResponse(BaseResponse):
     def update_secret(self) -> str:
         secret_id = self._get_param("SecretId")
         secret_string = self._get_param("SecretString")
-        secret_binary = self._get_param("SecretBinary")
+        secret_binary = self._encode_binary(self._get_param("SecretBinary"))
         description = self._get_param("Description")
         client_request_token = self._get_param("ClientRequestToken")
         kms_key_id = self._get_param("KmsKeyId", if_none=None)
@@ -148,7 +157,7 @@ class SecretsManagerResponse(BaseResponse):
     def put_secret_value(self) -> str:
         secret_id = self._get_param("SecretId", if_none="")
         secret_string = self._get_param("SecretString")
-        secret_binary = self._get_param("SecretBinary")
+        secret_binary = self._encode_binary(self._get_param("SecretBinary"))
         client_request_token = self._get_param("ClientRequestToken")
         if not secret_binary and not secret_string:
             raise InvalidRequestException(
