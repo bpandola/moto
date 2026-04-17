@@ -41,6 +41,7 @@ def validate_param(
 class LogsResponse(BaseResponse):
     def __init__(self) -> None:
         super().__init__(service_name="logs")
+        self.automated_parameter_parsing = True
 
     @property
     def logs_backend(self) -> LogsBackend:
