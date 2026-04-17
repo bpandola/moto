@@ -9,6 +9,7 @@ from moto.route53domains.validators import Route53Domain, Route53DomainsOperatio
 class Route53DomainsResponse(BaseResponse):
     def __init__(self) -> None:
         super().__init__(service_name="route53-domains")
+        self.automated_parameter_parsing = True
 
     @property
     def route53domains_backend(self) -> Route53DomainsBackend:
@@ -87,7 +88,10 @@ class Route53DomainsResponse(BaseResponse):
         }
 
     def list_operations(self) -> str:
-        submitted_since_timestamp = self._get_int_param("SubmittedSince")
+        submitted_since = self._get_param("SubmittedSince")
+        submitted_since_timestamp = (
+            int(submitted_since.timestamp()) if submitted_since else None
+        )
         max_items = self._get_int_param("MaxItems")
         statuses = self._get_param("Status")
         marker = self._get_param("Marker")
