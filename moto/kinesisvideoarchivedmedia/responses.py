@@ -8,6 +8,7 @@ from .models import KinesisVideoArchivedMediaBackend, kinesisvideoarchivedmedia_
 class KinesisVideoArchivedMediaResponse(BaseResponse):
     def __init__(self) -> None:
         super().__init__(service_name="kinesis-video-archived-media")
+        self.automated_parameter_parsing = True
 
     @property
     def kinesisvideoarchivedmedia_backend(self) -> KinesisVideoArchivedMediaBackend:
