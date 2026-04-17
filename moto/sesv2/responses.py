@@ -1,6 +1,5 @@
 """Handles incoming sesv2 requests, invokes methods, returns responses."""
 
-import base64
 import json
 
 from moto.core.responses import BaseResponse
@@ -13,6 +12,7 @@ class SESV2Response(BaseResponse):
 
     def __init__(self) -> None:
         super().__init__(service_name="sesv2")
+        self.automated_parameter_parsing = True
 
     @property
     def sesv2_backend(self) -> SESV2Backend:
@@ -22,7 +22,7 @@ class SESV2Response(BaseResponse):
     def send_email(self) -> str:
         """Piggy back on functionality from v1 mostly"""
 
-        params = json.loads(self.body)
+        params = self._get_params()
         from_email_address = params.get("FromEmailAddress")
         destination = params.get("Destination", {})
         content = params.get("Content")
@@ -37,7 +37,9 @@ class SESV2Response(BaseResponse):
             message = self.sesv2_backend.send_raw_email(
                 source=from_email_address,
                 destinations=all_destinations,
-                raw_data=base64.b64decode(content["Raw"]["Data"]).decode("utf-8"),
+                raw_data=content["Raw"]["Data"].decode("utf-8")
+                if isinstance(content["Raw"]["Data"], bytes)
+                else content["Raw"]["Data"],
             )
         elif "Simple" in content:
             content_body = content["Simple"]["Body"]
@@ -57,7 +59,7 @@ class SESV2Response(BaseResponse):
         return json.dumps({"MessageId": message.id})
 
     def create_contact_list(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         self.sesv2_backend.create_contact_list(params)
         return json.dumps({})
 
@@ -77,7 +79,7 @@ class SESV2Response(BaseResponse):
 
     def create_contact(self) -> str:
         contact_list_name = self._get_param("ContactListName")
-        params = json.loads(self.body)
+        params = self._get_params()
         self.sesv2_backend.create_contact(contact_list_name, params)
         return json.dumps({})
 
