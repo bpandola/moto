@@ -10,6 +10,7 @@ class MacieResponse(BaseResponse):
 
     def __init__(self) -> None:
         super().__init__(service_name="macie2")
+        self.automated_parameter_parsing = True
 
     @property
     def macie_backend(self) -> MacieBackend:
@@ -54,12 +55,12 @@ class MacieResponse(BaseResponse):
         return json.dumps(response)
 
     def delete_member(self) -> str:
-        member_account_id = self.path.split("/")[-1]
+        member_account_id = self._get_param("id")
         self.macie_backend.delete_member(member_account_id)
         return "{}"
 
     def disassociate_member(self) -> str:
-        member_account_id = self.path.split("/")[-1]
+        member_account_id = self._get_param("id")
         self.macie_backend.disassociate_member(member_account_id)
         return "{}"
 
