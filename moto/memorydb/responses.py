@@ -1,7 +1,5 @@
 """Handles incoming memorydb requests, invokes methods, returns responses."""
 
-import json
-
 from moto.core.responses import ActionResult, BaseResponse
 
 from .models import MemoryDBBackend, memorydb_backends
@@ -12,6 +10,7 @@ class MemoryDBResponse(BaseResponse):
 
     def __init__(self) -> None:
         super().__init__(service_name="memorydb")
+        self.automated_parameter_parsing = True
 
     @property
     def memorydb_backend(self) -> MemoryDBBackend:
@@ -19,7 +18,7 @@ class MemoryDBResponse(BaseResponse):
         return memorydb_backends[self.current_account][self.region]
 
     def create_cluster(self) -> ActionResult:
-        params = json.loads(self.body)
+        params = self._get_params()
         cluster_name = params.get("ClusterName")
         node_type = params.get("NodeType")
         parameter_group_name = params.get("ParameterGroupName")
@@ -69,7 +68,7 @@ class MemoryDBResponse(BaseResponse):
         return ActionResult({"Cluster": cluster.to_dict()})
 
     def create_subnet_group(self) -> ActionResult:
-        params = json.loads(self.body)
+        params = self._get_params()
         subnet_group_name = params.get("SubnetGroupName")
         description = params.get("Description")
         subnet_ids = params.get("SubnetIds")
@@ -83,7 +82,7 @@ class MemoryDBResponse(BaseResponse):
         return ActionResult({"SubnetGroup": subnet_group.to_dict()})
 
     def create_snapshot(self) -> ActionResult:
-        params = json.loads(self.body)
+        params = self._get_params()
         cluster_name = params.get("ClusterName")
         snapshot_name = params.get("SnapshotName")
         kms_key_id = params.get("KmsKeyId")
@@ -97,7 +96,7 @@ class MemoryDBResponse(BaseResponse):
         return ActionResult({"Snapshot": snapshot.to_dict()})
 
     def describe_clusters(self) -> ActionResult:
-        params = json.loads(self.body)
+        params = self._get_params()
         cluster_name = params.get("ClusterName")
         show_shard_details = params.get("ShowShardDetails")
         clusters = self.memorydb_backend.describe_clusters(
@@ -113,7 +112,7 @@ class MemoryDBResponse(BaseResponse):
         )
 
     def describe_snapshots(self) -> ActionResult:
-        params = json.loads(self.body)
+        params = self._get_params()
         cluster_name = params.get("ClusterName")
         snapshot_name = params.get("SnapshotName")
         source = params.get("Source")
@@ -133,7 +132,7 @@ class MemoryDBResponse(BaseResponse):
         )
 
     def describe_subnet_groups(self) -> ActionResult:
-        params = json.loads(self.body)
+        params = self._get_params()
         subnet_group_name = params.get("SubnetGroupName")
         subnet_groups = self.memorydb_backend.describe_subnet_groups(
             subnet_group_name=subnet_group_name,
@@ -141,7 +140,7 @@ class MemoryDBResponse(BaseResponse):
         return ActionResult({"SubnetGroups": [sg.to_dict() for sg in subnet_groups]})
 
     def list_tags(self) -> ActionResult:
-        params = json.loads(self.body)
+        params = self._get_params()
         resource_arn = params.get("ResourceArn")
         tag_list = self.memorydb_backend.list_tags(
             resource_arn=resource_arn,
@@ -149,7 +148,7 @@ class MemoryDBResponse(BaseResponse):
         return ActionResult({"TagList": tag_list})
 
     def tag_resource(self) -> ActionResult:
-        params = json.loads(self.body)
+        params = self._get_params()
         resource_arn = params.get("ResourceArn")
         tags = params.get("Tags")
         tag_list = self.memorydb_backend.tag_resource(
@@ -159,7 +158,7 @@ class MemoryDBResponse(BaseResponse):
         return ActionResult({"TagList": tag_list})
 
     def untag_resource(self) -> ActionResult:
-        params = json.loads(self.body)
+        params = self._get_params()
         resource_arn = params.get("ResourceArn")
         tag_keys = params.get("TagKeys")
         tag_list = self.memorydb_backend.untag_resource(
@@ -169,7 +168,7 @@ class MemoryDBResponse(BaseResponse):
         return ActionResult({"TagList": tag_list})
 
     def update_cluster(self) -> ActionResult:
-        params = json.loads(self.body)
+        params = self._get_params()
         cluster_name = params.get("ClusterName")
         description = params.get("Description")
         security_group_ids = params.get("SecurityGroupIds")
@@ -203,7 +202,7 @@ class MemoryDBResponse(BaseResponse):
         return ActionResult({"Cluster": cluster.to_dict()})
 
     def delete_cluster(self) -> ActionResult:
-        params = json.loads(self.body)
+        params = self._get_params()
         cluster_name = params.get("ClusterName")
         final_snapshot_name = params.get("FinalSnapshotName")
         cluster = self.memorydb_backend.delete_cluster(
@@ -213,7 +212,7 @@ class MemoryDBResponse(BaseResponse):
         return ActionResult({"Cluster": cluster.to_dict()})
 
     def delete_snapshot(self) -> ActionResult:
-        params = json.loads(self.body)
+        params = self._get_params()
         snapshot_name = params.get("SnapshotName")
         snapshot = self.memorydb_backend.delete_snapshot(
             snapshot_name=snapshot_name,
@@ -221,7 +220,7 @@ class MemoryDBResponse(BaseResponse):
         return ActionResult({"Snapshot": snapshot.to_dict()})
 
     def delete_subnet_group(self) -> ActionResult:
-        params = json.loads(self.body)
+        params = self._get_params()
         subnet_group_name = params.get("SubnetGroupName")
         subnet_group = self.memorydb_backend.delete_subnet_group(
             subnet_group_name=subnet_group_name,
