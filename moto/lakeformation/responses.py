@@ -22,6 +22,7 @@ class LakeFormationResponse(BaseResponse):
 
     def __init__(self) -> None:
         super().__init__(service_name="lakeformation")
+        self.automated_parameter_parsing = True
 
     @property
     def lakeformation_backend(self) -> LakeFormationBackend:
