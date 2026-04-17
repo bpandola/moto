@@ -16,13 +16,14 @@ class TimestreamInfluxDBResponse(BaseResponse):
 
     def __init__(self) -> None:
         super().__init__(service_name="timestream-influxdb")
+        self.automated_parameter_parsing = True
 
     @property
     def timestreaminfluxdb_backend(self) -> TimestreamInfluxDBBackend:
         return timestreaminfluxdb_backends[self.current_account][self.region]
 
     def create_db_instance(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         name = params.get("name")
         username = params.get("username")
         password = params.get("password")
@@ -63,13 +64,13 @@ class TimestreamInfluxDBResponse(BaseResponse):
         return json.dumps(created_instance.to_dict())
 
     def delete_db_instance(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         id = params.get("identifier")
         deleted_instance = self.timestreaminfluxdb_backend.delete_db_instance(id=id)
         return json.dumps(deleted_instance.to_dict())
 
     def get_db_instance(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         id = params.get("identifier")
         instance = self.timestreaminfluxdb_backend.get_db_instance(id=id)
         return json.dumps(instance.to_dict())
@@ -83,14 +84,14 @@ class TimestreamInfluxDBResponse(BaseResponse):
         return json.dumps({"items": instances})
 
     def tag_resource(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         arn = params.get("resourceArn")
         tags = params.get("tags")
         self.timestreaminfluxdb_backend.tag_resource(resource_arn=arn, tags=tags)
         return "{}"
 
     def untag_resource(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         arn = params.get("resourceArn")
         tag_keys = params.get("tagKeys")
         self.timestreaminfluxdb_backend.untag_resource(
@@ -99,13 +100,13 @@ class TimestreamInfluxDBResponse(BaseResponse):
         return "{}"
 
     def list_tags_for_resource(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         arn = params.get("resourceArn")
         tags = self.timestreaminfluxdb_backend.list_tags_for_resource(resource_arn=arn)
         return json.dumps({"tags": tags})
 
     def create_db_parameter_group(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         name = params.get("name")
         description = params.get("description")
         parameters = params.get("parameters")
@@ -121,7 +122,7 @@ class TimestreamInfluxDBResponse(BaseResponse):
         return json.dumps(param_group.to_dict())
 
     def get_db_parameter_group(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         identifier = params.get("identifier")
 
         param_group = self.timestreaminfluxdb_backend.get_db_parameter_group(
@@ -131,7 +132,7 @@ class TimestreamInfluxDBResponse(BaseResponse):
         return json.dumps(param_group.to_dict())
 
     def list_db_parameter_groups(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         next_token = params.get("nextToken")
         max_results = params.get("maxResults")
 
@@ -144,7 +145,7 @@ class TimestreamInfluxDBResponse(BaseResponse):
         return json.dumps(response)
 
     def list_db_clusters(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         next_token = params.get("nextToken")
         max_results = params.get("maxResults")
 
@@ -157,7 +158,7 @@ class TimestreamInfluxDBResponse(BaseResponse):
         return json.dumps(response)
 
     def get_db_cluster(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         db_cluster_id = params.get("dbClusterId")
 
         cluster = self.timestreaminfluxdb_backend.get_db_cluster(
@@ -167,7 +168,7 @@ class TimestreamInfluxDBResponse(BaseResponse):
         return json.dumps(cluster.to_dict())
 
     def create_db_cluster(self) -> str:
-        params = json.loads(self.body)
+        params = self._get_params()
         name = params.get("name")
         username = params.get("username")
         password = params.get("password")
