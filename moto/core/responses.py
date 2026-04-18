@@ -306,7 +306,12 @@ class BaseResponse(ActionAuthenticatorMixin):
             self.uri_params = uri_params
         except Exception:
             self.service_router = None  # type: ignore[assignment]
-            self.action = ""
+            # HACK for things like CloudFormationResponse.cfnresponse()
+            self.action = (
+                querystring.get("Action")[0]  # type: ignore[index]
+                if "Action" in querystring
+                else ""
+            )
             self.uri_params = {}
         if self.automated_parameter_parsing:
             self.parse_parameters(request)
