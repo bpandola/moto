@@ -5,8 +5,8 @@ import json
 import logging
 import os
 import re
-from collections import OrderedDict, defaultdict
-from collections.abc import Callable, Mapping
+from collections import OrderedDict
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import (
     Any,
@@ -15,9 +15,8 @@ from typing import (
     Union,
     cast,
 )
-from urllib.parse import parse_qs, parse_qsl, unquote, urlparse
+from urllib.parse import parse_qs, parse_qsl, urlparse
 
-import boto3
 from botocore.model import OperationNotFoundError
 from werkzeug.exceptions import HTTPException
 from werkzeug.http import http_date
@@ -29,6 +28,7 @@ from moto.core.exceptions import ServiceException
 from moto.core.model import OperationModel, ServiceModel
 from moto.core.parse import PROTOCOL_PARSERS, XFormedDict
 from moto.core.request import determine_request_protocol, normalize_request
+from moto.core.routing import ServiceOperationRouter
 from moto.core.serialize import (
     ResponseSerializer,
     XFormedAttributePicker,
@@ -82,39 +82,10 @@ def _decode_dict(d: dict[Any, Any]) -> dict[str, Any]:
 
 
 @functools.cache
-def _get_method_urls(service_name: str, region: str) -> dict[str, dict[str, str]]:
-    method_urls: dict[str, dict[str, str]] = defaultdict(dict)
-    service_name = boto3_service_name.get(service_name) or service_name  # type: ignore
-    conn = boto3.client(service_name, region_name=region)
-    op_names = conn._service_model.operation_names
-    for op_name in op_names:
-        op_model = conn._service_model.operation_model(op_name)
-        _method = op_model.http["method"]
-        request_uri = op_model.http["requestUri"]
-        if service_name == "route53" and request_uri.endswith("/rrset/"):
-            # Terraform 5.50 made a request to /rrset/
-            # Terraform 5.51+ makes a request to /rrset - so we have to intercept both variants
-            request_uri += "?"
-        if service_name == "lambda":
-            # Several operations have inconsistent trailing slashes across Botocore versions.
-            affected_operations = [
-                "CreateEventSourceMapping",
-                "CreateFunction",
-                "InvokeAsync",
-                "ListEventSourceMappings",
-                "ListFunctions",
-            ]
-            if op_name in affected_operations:
-                request_uri += "?" if request_uri.endswith("/") else "/?"
-        if service_name == "opensearch" and request_uri.endswith("/tags/"):
-            # AWS GO SDK behaves differently from other SDK's, does not send a trailing slash
-            request_uri += "?"
-        if service_name == "backup" and request_uri.endswith("/"):
-            request_uri += "?"
-        uri_regexp = BaseResponse.uri_to_regexp(request_uri)
-        method_urls[_method][uri_regexp] = op_model.name
-
-    return method_urls
+def get_service_router(service_name: str) -> ServiceOperationRouter:
+    service_model = get_service_model(service_name)
+    service_router = ServiceOperationRouter(service_model)
+    return service_router
 
 
 @dataclass
@@ -317,7 +288,6 @@ class BaseResponse(ActionAuthenticatorMixin):
         self.method = request.method
         self.region = self.get_region_from_url(request, full_url)
         self.partition = get_partition(self.region)
-        self.uri_match: Optional[re.Match[str]] = None
 
         self.headers = request.headers
         if "host" not in self.headers:
@@ -329,6 +299,15 @@ class BaseResponse(ActionAuthenticatorMixin):
             self.response_headers["date"] = http_date(utcnow())
 
         self.normalized_request = normalize_request(request)
+        try:
+            self.service_router = get_service_router(self.boto3_service_name)
+            operation, uri_params = self.service_router.match(self.normalized_request)
+            self.action = operation.name
+            self.uri_params = uri_params
+        except Exception:
+            self.service_router = None  # type: ignore[assignment]
+            self.action = ""
+            self.uri_params = {}
         if self.automated_parameter_parsing:
             self.parse_parameters(request)
 
@@ -431,54 +410,8 @@ class BaseResponse(ActionAuthenticatorMixin):
         regexp = "/".join([_convert(elem) for elem in elems])
         return f"^{regexp}$"
 
-    def _get_action_from_method_and_request_uri(
-        self, method: str, request_uri: str
-    ) -> str:
-        """Used for AWS restJson1 and restXml API protocols"""
-        methods_url = _get_method_urls(self.service_name, self.region)
-        regexp_and_names = methods_url[method]
-        # Sort patterns by length (descending) so more specific patterns match before more general ones.
-        #
-        # This fixes problems with service definitions that contain uris like:
-        # - /mrap/instances/{name+} (GetMultiRegionAccessPoint)
-        # - /mrap/instances/{name+}/policy (GetMultiRegionAccessPointPolicy)
-        #
-        # Both urls match the regex for the first url, but we want to ensure we match the more specific pattern.
-        sorted_patterns = sorted(
-            regexp_and_names.items(), key=lambda x: len(x[0]), reverse=True
-        )
-        for regexp, name in sorted_patterns:
-            match = re.match(regexp, request_uri)
-            self.uri_match = match
-            if match:
-                return name
-        return None  # type: ignore[return-value]
-
-    def _get_action_and_args(self) -> tuple[OperationModel, Mapping[str, Any]]:
-        from moto.core.routing import ServiceOperationRouter
-
-        model = get_service_model(
-            boto3_service_name.get(self.service_name, self.service_name)  # type: ignore[arg-type]
-        )
-        router = ServiceOperationRouter(model)
-        op, args = router.match(self.normalized_request)
-        return op, args
-
     def _get_action(self) -> str:
-        # action = self.querystring.get("Action")
-        # if action and isinstance(action, list):
-        #     action = action[0]
-        # if action:
-        #     return action
-        # # Some services use a header for the action
-        # # Headers are case-insensitive. Probably a better way to do this.
-        # match = self.headers.get("x-amz-target") or self.headers.get("X-Amz-Target")
-        # if match:
-        #     return match.split(".")[-1]
-        # get action from method and uri
-        op, _ = self._get_action_and_args()
-        return op.name
-        return self._get_action_from_method_and_request_uri(self.method, self.raw_path)
+        return self.action
 
     def parse_parameters(self, request: Any) -> None:
         from botocore.awsrequest import AWSPreparedRequest
@@ -500,12 +433,10 @@ class BaseResponse(ActionAuthenticatorMixin):
                 "headers": normalized_request.headers,
                 "body": normalized_request.data,
                 "url_path": normalized_request.path,
-                "url_params": self.uri_match.groupdict() if self.uri_match else {},
+                "url_params": self.uri_params,
             }
         )
         self.params = cast(Any, parsed)
-        _, args = self._get_action_and_args()
-        self.params.update(args)
 
     def determine_response_protocol(self, service_model: ServiceModel) -> str:
         content_type = self.headers.get("Content-Type", "")
@@ -623,17 +554,8 @@ class BaseResponse(ActionAuthenticatorMixin):
             except (ValueError, KeyError):
                 pass
         # try to get path parameter
-        _, args = self._get_action_and_args()
-        if param_name in args:
-            return args[param_name]
-        return if_none
-        if self.uri_match:
-            try:
-                val = self.uri_match.group(param_name)
-                return unquote(val)
-            except IndexError:
-                # do nothing if param is not found
-                pass
+        if param_name in self.uri_params:
+            return self.uri_params[param_name]
         return if_none
 
     def _get_int_param(
