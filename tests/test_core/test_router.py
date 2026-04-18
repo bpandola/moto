@@ -1,7 +1,5 @@
-from werkzeug.routing import Map, MapAdapter
-
 from moto.core.request import Request
-from moto.core.routing import GreedyPathConverter, ServiceOperationRouter
+from moto.core.routing import ServiceOperationRouter
 from moto.core.utils import get_service_model
 
 
@@ -88,24 +86,12 @@ def test_s3_control_full_url() -> None:
 def test_op_args() -> None:
     model = get_service_model("route53")
     router = ServiceOperationRouter(model)
-    # Get the one rule we want...
-    rules = router._map["rest-xml"]._rules_by_endpoint[
-        model.operation_model("ActivateKeySigningKey")
-    ]
-    rules = [rule.empty() for rule in rules]
-    rule_map = Map(
-        rules=rules,
-        strict_slashes=False,
-        merge_slashes=False,
-        converters={"path": GreedyPathConverter},
-    )
-    matcher: MapAdapter = rule_map.bind(
-        "route53.us-east-1.amazon.com",
-    )
-    op, args = matcher.match(
-        "/2013-04-01/keysigningkey/HostedZoneId/Name/activate",
+    req = Request.from_values(
         method="POST",
+        base_url="https://route53.us-east-1.amazon.com",
+        path="/2013-04-01/keysigningkey/HostedZoneId/Name/activate",
     )
+    op, args = router.match(req)
+    assert op.name == "ActivateKeySigningKey"
     assert args["HostedZoneId"] == "HostedZoneId"
     assert args["Name"] == "Name"
-    assert op.name == "ActivateKeySigningKey"
