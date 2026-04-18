@@ -400,9 +400,18 @@ def _create_service_map(service: ServiceModel) -> dict[str, Map]:
                     # if there is only a single operation for a (path, method) combination,
                     # the default Werkzeug rule can be used directly (this is the case for most rules)
                     op = ops[0]
+                    subdomain = None
+                    if op.operation.endpoint:
+                        subdomain = op.operation.endpoint.get("hostPrefix")  # type: ignore[attr-defined]
+                        subdomain = (
+                            f"<{subdomain[1:-2]}>" if subdomain is not None else None
+                        )
                     rules.append(
                         StrictMethodRule(
-                            string=rule_string, methods=[method], endpoint=op.operation
+                            string=rule_string,
+                            methods=[method],
+                            endpoint=op.operation,
+                            subdomain=subdomain,
                         )
                     )  # type: ignore
                     if op.path.startswith("/{Bucket}"):
@@ -426,20 +435,20 @@ def _create_service_map(service: ServiceModel) -> dict[str, Map]:
                             string=rule_string, method=method, operations=ops
                         )
                     )
-                    for op in ops:
-                        if op.path.startswith("/{Bucket}"):
-                            new_path = op.path.replace("/{Bucket}", "", 1)
-                            if new_path == "":
-                                new_path = "/"
-                            rule_string = to_werkzeug_rule_string(new_path)
-                            rules.append(
-                                StrictMethodRule(
-                                    string=rule_string,
-                                    methods=[method],
-                                    endpoint=op.operation,
-                                    subdomain="<Bucket>",
-                                )
+                    s3_ops = [op for op in ops if op.path.startswith("/{Bucket}")]
+                    if s3_ops:
+                        new_path = s3_ops[0].path.replace("/{Bucket}", "", 1)
+                        if new_path == "":
+                            new_path = "/"
+                        rule_string = to_werkzeug_rule_string(new_path)
+                        rules.append(
+                            _RequestMatchingRule(
+                                string=rule_string,
+                                method=method,
+                                operations=s3_ops,
+                                subdomain="<Bucket>",
                             )
+                        )
 
             elif protocol in ("query", "ec2"):
                 candidate_list = []

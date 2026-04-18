@@ -43,6 +43,36 @@ def test_s3_router() -> None:
     assert args["Bucket"] == "my-bucket-name"
 
 
+def test_s3_full_url() -> None:
+    model = get_service_model("s3")
+    router = ServiceOperationRouter(model)
+    req = Request.from_values(
+        method="GET",
+        base_url="https://b7525d4a-4973-4207-9f07-a73b4ec3ff65.s3.amazonaws.com",
+        path="/",
+        query_string="tagging",
+    )
+    op, args = router.match(req)
+
+    assert op.name == "GetBucketTagging"
+    assert args["Bucket"] == "b7525d4a-4973-4207-9f07-a73b4ec3ff65"
+    "https://123456789012.s3-control.us-east-1.amazonaws.com/v20180820/tags/arn%3Aaws%3As3%3A%3A%3Abd054ad3-6778-4f25-91a5-c7c84db350e2"
+
+
+def test_s3_control_full_url() -> None:
+    model = get_service_model("s3control")
+    router = ServiceOperationRouter(model)
+    req = Request.from_values(
+        method="GET",
+        base_url="https://123456789012.s3-control.us-east-1.amazonaws.com",
+        path="/v20180820/tags/arn%3Aaws%3As3%3A%3A%3Abd054ad3-6778-4f25-91a5-c7c84db350e2",
+    )
+    op, args = router.match(req)
+
+    assert op.name == "ListTagsForResource"
+    assert args["AccountId"] == "123456789012"
+
+
 def test_op_args() -> None:
     model = get_service_model("route53")
     router = ServiceOperationRouter(model)
