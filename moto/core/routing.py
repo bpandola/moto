@@ -9,6 +9,10 @@
 #
 # If we need to pass args to a Rule subclass, see here for how to work with rule.empty()
 # https://github.com/pallets/werkzeug/blob/11c9fe9272e281b90abe89dc59f86e44ee453bab/src/werkzeug/routing/rules.py#L528
+#
+# Moto has MOTO_S3_CUSTOM_ENDPOINTS and S3_IGNORE_SUBDOMAIN_BUCKETNAME
+# Both of which are going to cause routing problems
+# Maybe we keep uses url_bases in urls.py but just get rid of all the url_paths?
 
 from __future__ import annotations
 
@@ -420,10 +424,10 @@ def _create_service_map(service: ServiceModel) -> dict[str, Map]:
                             new_path = "/"
                         rule_string = to_werkzeug_rule_string(new_path)
                         rules.append(
-                            StrictMethodRule(
+                            _RequestMatchingRule(
                                 string=rule_string,
-                                methods=[method],
-                                endpoint=op.operation,
+                                method=method,
+                                operations=ops,
                                 subdomain="<Bucket>",
                             )
                         )
@@ -510,7 +514,7 @@ def _create_service_map(service: ServiceModel) -> dict[str, Map]:
             merge_slashes=False,
             # get service-specific converters
             converters={"path": GreedyPathConverter},
-            default_subdomain="s3" if service.service_name == "s3" else "",
+            default_subdomain="default",  # "s3" if service.service_name == "s3" else "",
         )
     return protocol_to_rules
 
@@ -561,7 +565,7 @@ class ServiceOperationRouter:
         matcher: MapAdapter = protocol_map.bind(
             request.host,
             subdomain=request.host.split(".", 1)[0]
-            if request.host.find("s3") > 1
+            if request.host.find("s3") > 1 or request.server[0].endswith(".localhost")  # type: ignore[index]
             else None,
         )
 

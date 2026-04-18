@@ -43,6 +43,18 @@ def test_s3_router() -> None:
     assert args["Bucket"] == "my-bucket-name"
 
 
+def test_s3_localhost_router() -> None:
+    model = get_service_model("s3")
+    router = ServiceOperationRouter(model)
+    req = Request.from_values(
+        method="GET", base_url="https://foobaz.localhost:5000", path="/"
+    )
+    op, args = router.match(req)
+
+    assert op.name == "ListObjects"
+    assert args["Bucket"] == "foobaz"
+
+
 def test_s3_full_url() -> None:
     model = get_service_model("s3")
     router = ServiceOperationRouter(model)
