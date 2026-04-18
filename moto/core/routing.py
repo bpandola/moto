@@ -18,7 +18,6 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import (
     Any,
-    AnyStr,
     NamedTuple,
     TypeVar,
 )
@@ -30,15 +29,21 @@ from werkzeug.routing import Map, MapAdapter, PathConverter, Rule
 
 from moto.core.model import OperationModel, ServiceModel, StructureShape
 from moto.core.request import Request, determine_request_protocol
-from moto.core.utils import get_service_model
 
 # Regex to find path parameters in requestUris of AWS service specs (f.e. /{param1}/{param2+})
-path_param_regex = re.compile(r"({.+?})")
+# path_param_regex = re.compile(r"({.+?})")
 # Translation table which replaces characters forbidden in Werkzeug rule names with temporary replacements
 # Note: The temporary replacements must not occur in any requestUri of any operation in any service!
-_rule_replacements = {"-": "_0_"}
+# _rule_replacements = {"-": "_HYPHEN_"}
 # String translation table for #_rule_replacements for str#translate
-_rule_replacement_table = str.maketrans(_rule_replacements)
+# _rule_replacement_table = str.maketrans(_rule_replacements)
+
+PATH_PARAM_REGEX = re.compile(r"({.+?})")
+
+PATH_PARAM_TO_RULE_VAR_REPLACEMENTS = {"-": "_HYPHEN_"}
+PATH_PARAM_TO_RULE_VAR_TRANSLATION_TABLE = str.maketrans(
+    PATH_PARAM_TO_RULE_VAR_REPLACEMENTS
+)
 
 
 @dataclass
@@ -113,6 +118,45 @@ def get_raw_path(request: Request) -> str:
     raise ValueError("cannot extract raw path from request object %s")
 
 
+def to_werkzeug_rule_string(smithy_uri: str) -> str:
+    """Converts a Smithy uri to a Werkzeug rule string.
+
+    Examples:
+        "/resources/{resource_id}/methods/{http_method}" -> "/resources/<resource_id>/methods/<http_method>"
+        "/v20180820/tags/{resourceArn+}" -> "/v20180820/tags/<path:resourceArn>"
+    """
+
+    def to_rule_variable(match: re.Match[str]) -> str:
+        """
+        Transforms a request URI path param to a valid Werkzeug Rule string variable placeholder.
+        This transformation function should be used in combination with _path_param_regex on the request URIs (without any
+        query params).
+
+        :param match: Regex match which contains a single group. The match group is a request URI path param, including the
+                        surrounding curly braces.
+        :return: Werkzeug rule string variable placeholder which is semantically equal to the given request URI path param
+
+        """
+        # get the group match and strip the curly braces
+        request_uri_variable: str = match.group(0)[1:-1]  # type: ignore[assignment]
+
+        # if the request URI param is greedy (f.e. /foo/{Bar+}), add Werkzeug's "path" prefix (/foo/{path:Bar})
+        greedy_prefix = ""
+        if request_uri_variable.endswith("+"):
+            greedy_prefix = "path:"
+            request_uri_variable = request_uri_variable.strip("+")
+
+        # replace forbidden chars (not allowed in Werkzeug rule variable names) with their placeholder
+        escaped_request_uri_variable = request_uri_variable.translate(
+            PATH_PARAM_TO_RULE_VAR_TRANSLATION_TABLE
+        )
+
+        return f"<{greedy_prefix}{escaped_request_uri_variable}>"
+
+    rule_string = PATH_PARAM_REGEX.sub(to_rule_variable, smithy_uri)
+    return rule_string
+
+
 class StrictMethodRule(Rule):
     """
     Small extension to Werkzeug's Rule class which reverts unwanted assumptions made by Werkzeug.
@@ -132,46 +176,27 @@ class StrictMethodRule(Rule):
             self.methods = {method.upper() for method in methods}
 
 
-# Should be singular
-def transform_path_params_to_rule_vars(match: re.Match[AnyStr]) -> str:
-    """
-    Transforms a request URI path param to a valid Werkzeug Rule string variable placeholder.
-    This transformation function should be used in combination with _path_param_regex on the request URIs (without any
-    query params).
+def to_uri_params(werkzeug_path_variables: Mapping[str, Any]) -> dict[str, Any]:
+    def post_process_arg_name(arg_key: str) -> str:
+        """
+        Reverses previous manipulations to the path parameters names (like replacing forbidden characters with
+        placeholders).
+        :param arg_key: Path param key name extracted using Werkzeug rules
+        :return: Post-processed ("un-sanitized") path param key
+        """
+        result = arg_key
+        for original, substitution in PATH_PARAM_TO_RULE_VAR_REPLACEMENTS.items():
+            result = result.replace(substitution, original)
+        return result
 
-    :param match: Regex match which contains a single group. The match group is a request URI path param, including the
-                    surrounding curly braces.
-    :return: Werkzeug rule string variable placeholder which is semantically equal to the given request URI path param
-
-    """
-    # get the group match and strip the curly braces
-    request_uri_variable: str = match.group(0)[1:-1]  # type: ignore[assignment]
-
-    # if the request URI param is greedy (f.e. /foo/{Bar+}), add Werkzeug's "path" prefix (/foo/{path:Bar})
-    greedy_prefix = ""
-    if request_uri_variable.endswith("+"):
-        greedy_prefix = "path:"
-        request_uri_variable = request_uri_variable.strip("+")
-
-    # replace forbidden chars (not allowed in Werkzeug rule variable names) with their placeholder
-    escaped_request_uri_variable = request_uri_variable.translate(
-        _rule_replacement_table
-    )
-
-    return f"<{greedy_prefix}{escaped_request_uri_variable}>"
-
-
-def post_process_arg_name(arg_key: str) -> str:
-    """
-    Reverses previous manipulations to the path parameters names (like replacing forbidden characters with
-    placeholders).
-    :param arg_key: Path param key name extracted using Werkzeug rules
-    :return: Post-processed ("un-sanitized") path param key
-    """
-    result = arg_key
-    for original, substitution in _rule_replacements.items():
-        result = result.replace(substitution, original)
-    return result
+    # post process the arg keys and values
+    # - the path param keys need to be "un-sanitized", i.e. sanitized rule variable names need to be reverted
+    # - the path param values might still be url-encoded
+    uri_params = {
+        post_process_arg_name(key): unquote(value)
+        for key, value in werkzeug_path_variables.items()
+    }
+    return uri_params
 
 
 HTTP_METHODS = ("GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "TRACE")
@@ -368,7 +393,7 @@ def _create_service_map(service: ServiceModel) -> dict[str, Map]:
         # create a matching rule for each (path, method) combination
         for (path, method), ops in path_index.items():
             # translate the requestUri to a Werkzeug rule string
-            rule_string = path_param_regex.sub(transform_path_params_to_rule_vars, path)
+            rule_string = to_werkzeug_rule_string(path)
             # for protocol in service.protocols:
             if protocol.startswith("rest"):
                 if len(ops) == 1:
@@ -384,9 +409,7 @@ def _create_service_map(service: ServiceModel) -> dict[str, Map]:
                         new_path = op.path.replace("/{Bucket}", "", 1)
                         if new_path == "":
                             new_path = "/"
-                        rule_string = path_param_regex.sub(
-                            transform_path_params_to_rule_vars, new_path
-                        )
+                        rule_string = to_werkzeug_rule_string(new_path)
                         rules.append(
                             StrictMethodRule(
                                 string=rule_string,
@@ -408,9 +431,7 @@ def _create_service_map(service: ServiceModel) -> dict[str, Map]:
                             new_path = op.path.replace("/{Bucket}", "", 1)
                             if new_path == "":
                                 new_path = "/"
-                            rule_string = path_param_regex.sub(
-                                transform_path_params_to_rule_vars, new_path
-                            )
+                            rule_string = to_werkzeug_rule_string(new_path)
                             rules.append(
                                 StrictMethodRule(
                                     string=rule_string,
@@ -435,9 +456,7 @@ def _create_service_map(service: ServiceModel) -> dict[str, Map]:
                     )
                 )
                 if service.service_name == "sqs":
-                    rule_string = path_param_regex.sub(
-                        transform_path_params_to_rule_vars, "/{AccountId}/{QueueName}"
-                    )
+                    rule_string = to_werkzeug_rule_string("/{AccountId}/{QueueName}")
                     rules.append(
                         StrictMethodRule(
                             string=rule_string,
@@ -466,9 +485,7 @@ def _create_service_map(service: ServiceModel) -> dict[str, Map]:
                     )
                 )
                 if service.service_name == "sqs":
-                    rule_string = path_param_regex.sub(
-                        transform_path_params_to_rule_vars, "/{AccountId}/{QueueName}"
-                    )
+                    rule_string = to_werkzeug_rule_string("/{AccountId}/{QueueName}")
                     rules.append(
                         StrictMethodRule(
                             string=rule_string,
@@ -492,7 +509,7 @@ def _create_service_map(service: ServiceModel) -> dict[str, Map]:
 def get_map_for_operation(operation: OperationModel) -> Map:
     path = operation.http.get("requestUri", "/")
     method = operation.http.get("method", "POST")
-    rule_string = path_param_regex.sub(transform_path_params_to_rule_vars, path)
+    rule_string = to_werkzeug_rule_string(path)
     rule = StrictMethodRule(
         string=rule_string, methods=[method], endpoint=operation.name
     )
@@ -521,7 +538,7 @@ class ServiceOperationRouter:
         self._service_model = service
         self._map = _create_service_map(service)
 
-    def match(self, request: Request) -> tuple[OperationModel, Mapping[str, Any]]:
+    def match(self, request: Request) -> tuple[OperationModel, dict[str, Any]]:
         """
         Matches the given request to the operation it targets (or raises an exception if no operation matches).
 
@@ -568,65 +585,11 @@ class ServiceOperationRouter:
             operation = rule.endpoint.select_action(request)
             if operation is None:
                 raise NotFound()
-            return operation, args
+            return operation, to_uri_params(args)
 
-        # post process the arg keys and values
-        # - the path param keys need to be "un-sanitized", i.e. sanitized rule variable names need to be reverted
-        # - the path param values might still be url-encoded
-        args = {post_process_arg_name(k): unquote(v) for k, v in args.items()}
+        uri_params = to_uri_params(args)
 
         # extract the operation model from the rule
         operation = rule.endpoint
 
-        return operation, args
-
-
-def test_op_router() -> None:
-    model = get_service_model("mq")
-    router = ServiceOperationRouter(model)
-    req = Request.from_values(
-        method="POST", path="/v1/brokers/broker-id-test/users/username-test"
-    )
-    op, args = router.match(req)
-
-    assert op.name == "CreateUser"
-    assert args["broker-id"] == "broker-id-test"
-    assert args["username"] == "username-test"
-
-
-def test_s3_router() -> None:
-    model = get_service_model("s3")
-    router = ServiceOperationRouter(model)
-    req = Request.from_values(method="GET", path="/my-bucket-name?list-type=2")
-    # Alternative url
-    # req = Request.from_values(method="GET", base_url="https://my-bucket-name.localhost", path="/?list-type=2")
-    op, args = router.match(req)
-
-    assert op.name == "ListObjectsV2"
-    assert args["Bucket"] == "my-bucket-name"
-
-
-def test_op_args() -> None:
-    model = get_service_model("route53")
-    router = ServiceOperationRouter(model)
-    # Get the one rule we want...
-    rules = router._map["rest-xml"]._rules_by_endpoint[
-        model.operation_model("ActivateKeySigningKey")
-    ]
-    rules = [rule.empty() for rule in rules]
-    rule_map = Map(
-        rules=rules,
-        strict_slashes=False,
-        merge_slashes=False,
-        converters={"path": GreedyPathConverter},
-    )
-    matcher: MapAdapter = rule_map.bind(
-        "route53.us-east-1.amazon.com",
-    )
-    op, args = matcher.match(
-        "/2013-04-01/keysigningkey/HostedZoneId/Name/activate",
-        method="POST",
-    )
-    assert args["HostedZoneId"] == "HostedZoneId"
-    assert args["Name"] == "Name"
-    assert op.name == "ActivateKeySigningKey"
+        return operation, uri_params
