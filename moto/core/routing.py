@@ -519,26 +519,6 @@ def _create_service_map(service: ServiceModel) -> dict[str, Map]:
     return protocol_to_rules
 
 
-def get_map_for_operation(operation: OperationModel) -> Map:
-    path = operation.http.get("requestUri", "/")
-    method = operation.http.get("method", "POST")
-    rule_string = to_werkzeug_rule_string(path)
-    rule = StrictMethodRule(
-        string=rule_string, methods=[method], endpoint=operation.name
-    )
-    rule_map = Map(
-        rules=[rule],
-        # don't be strict about trailing slashes when matching
-        strict_slashes=False,
-        # we can't really use werkzeug's merge-slashes since it uses HTTP redirects to solve it
-        merge_slashes=False,
-        # get service-specific converters
-        converters={"path": GreedyPathConverter},
-        # default_subdomain="s3" if service.service_name == "s3" else "",
-    )
-    return rule_map
-
-
 class ServiceOperationRouter:
     """
     A router implementation which abstracts the (quite complex) routing of incoming HTTP requests to a specific
