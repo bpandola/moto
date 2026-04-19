@@ -31,6 +31,7 @@ from werkzeug.datastructures import Headers, MultiDict
 from werkzeug.exceptions import MethodNotAllowed, NotFound
 from werkzeug.routing import Map, MapAdapter, PathConverter, Rule
 
+from moto import settings
 from moto.core.model import OperationModel, ServiceModel, StructureShape
 from moto.core.request import Request, determine_request_protocol
 
@@ -425,19 +426,20 @@ def _create_service_map(service: ServiceModel) -> dict[str, Map]:
                             subdomain=subdomain,
                         )
                     )  # type: ignore
-                    if op.path.startswith("/{Bucket}"):
-                        new_path = op.path.replace("/{Bucket}", "", 1)
-                        if new_path == "":
-                            new_path = "/"
-                        rule_string = to_werkzeug_rule_string(new_path)
-                        rules.append(
-                            _RequestMatchingRule(
-                                string=rule_string,
-                                method=method,
-                                operations=ops,
-                                subdomain="<Bucket>",
+                    if not settings.S3_IGNORE_SUBDOMAIN_BUCKETNAME:
+                        if op.path.startswith("/{Bucket}"):
+                            new_path = op.path.replace("/{Bucket}", "", 1)
+                            if new_path == "":
+                                new_path = "/"
+                            rule_string = to_werkzeug_rule_string(new_path)
+                            rules.append(
+                                _RequestMatchingRule(
+                                    string=rule_string,
+                                    method=method,
+                                    operations=ops,
+                                    subdomain="<Bucket>",
+                                )
                             )
-                        )
                 else:
                     # if there is an ambiguity with only the (path, method) combination,
                     # a custom rule - which can use additional request metadata - needs to be used
@@ -447,7 +449,7 @@ def _create_service_map(service: ServiceModel) -> dict[str, Map]:
                         )
                     )
                     s3_ops = [op for op in ops if op.path.startswith("/{Bucket}")]
-                    if s3_ops:
+                    if s3_ops and not settings.S3_IGNORE_SUBDOMAIN_BUCKETNAME:
                         new_path = s3_ops[0].path.replace("/{Bucket}", "", 1)
                         if new_path == "":
                             new_path = "/"
@@ -552,7 +554,8 @@ class ServiceOperationRouter:
         matcher: MapAdapter = protocol_map.bind(
             request.host,
             subdomain=request.host.split(".", 1)[0]
-            if request.host.find("s3") > 1 or request.server[0].endswith(".localhost")  # type: ignore[index]
+            if (request.host.find("s3") > 1 or request.server[0].endswith(".localhost"))  # type: ignore[index]
+            and not settings.S3_IGNORE_SUBDOMAIN_BUCKETNAME
             else None,
         )
 
