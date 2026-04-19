@@ -298,7 +298,9 @@ class BaseResponse(ActionAuthenticatorMixin):
         if not self.is_werkzeug_request:
             self.response_headers["date"] = http_date(utcnow())
 
-        self.normalized_request = normalize_request(request)
+        self.normalized_request = normalize_request(
+            request, self.allow_request_decompression
+        )
         try:
             self.service_router = get_service_router(self.boto3_service_name)
             operation, uri_params = self.service_router.match(self.normalized_request)
