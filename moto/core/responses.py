@@ -5,7 +5,7 @@ import json
 import logging
 import os
 import re
-from collections import OrderedDict
+from collections import ChainMap, OrderedDict
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import (
@@ -315,7 +315,7 @@ class BaseResponse(ActionAuthenticatorMixin):
                 else ""
             )
             self.uri_params = {}
-        if self.automated_parameter_parsing:
+        if self.action and self.automated_parameter_parsing:
             self.parse_parameters(request)
 
         # Register visit with IAM
@@ -443,7 +443,7 @@ class BaseResponse(ActionAuthenticatorMixin):
                 "url_params": self.uri_params,
             }
         )
-        self.params = cast(Any, parsed)
+        self.params = cast(Any, ChainMap(parsed, self.uri_params))
 
     def determine_response_protocol(self, service_model: ServiceModel) -> str:
         content_type = self.headers.get("Content-Type", "")
