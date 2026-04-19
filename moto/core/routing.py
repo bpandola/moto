@@ -157,6 +157,13 @@ def to_werkzeug_rule_string(smithy_uri: str) -> str:
 
         return f"<{greedy_prefix}{escaped_request_uri_variable}>"
 
+    # Hack: if uri endswith a param variable, make it greedy.
+    # This is basically just to fix two iot tests that assert on arns passed
+    # with and without encoding.  This might be generally useful, and I did
+    # add it to the Moto uri->regex method, but calling it out here for
+    # extra scrutiny.
+    if smithy_uri.endswith("}"):
+        smithy_uri = smithy_uri[:-1] + "+}"
     rule_string = PATH_PARAM_REGEX.sub(to_rule_variable, smithy_uri)
     return rule_string
 
