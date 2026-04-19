@@ -2,10 +2,8 @@
 
 from .responses import TimestreamQueryResponse
 
+response = TimestreamQueryResponse()
 url_bases = [
     r"https?://query\.timestream\.(.+)\.amazonaws\.com",
 ]
-
-url_paths = {
-    "{0}/?$": TimestreamQueryResponse.dispatch,
-}
+url_paths = {"{0}$": response.dispatch, "{0}/$": response.dispatch}
