@@ -15,13 +15,15 @@ if TYPE_CHECKING:
     from moto.core.model import ServiceModel
 
 
-def normalize_request(request: AWSPreparedRequest | Request) -> Request:
+def normalize_request(
+    request: AWSPreparedRequest | Request, decompress: bool = True
+) -> Request:
     if isinstance(request, Request):
         return request
     body = request.body
     # Request.from_values() does not automatically handle gzip-encoded bodies,
     # like the full WSGI server would, so we need to do it manually.
-    if request.headers.get("Content-Encoding") == "gzip":
+    if request.headers.get("Content-Encoding") == "gzip" and decompress:
         body = gzip_decompress(body)  # type: ignore[arg-type]
     parsed_url = urlparse(request.url)
     Request.max_form_memory_size = MAX_FORM_MEMORY_SIZE
