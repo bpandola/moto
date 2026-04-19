@@ -443,7 +443,7 @@ class BaseResponse(ActionAuthenticatorMixin):
                 "url_params": self.uri_params,
             }
         )
-        self.params = cast(Any, ChainMap(parsed, self.uri_params))
+        self.params = cast(Any, parsed)
 
     def determine_response_protocol(self, service_model: ServiceModel) -> str:
         content_type = self.headers.get("Content-Type", "")
@@ -548,7 +548,8 @@ class BaseResponse(ActionAuthenticatorMixin):
 
     def _get_param(self, param_name: str, if_none: Any = None) -> Any:
         if self.automated_parameter_parsing:
-            return get_value(self.params, param_name, default=if_none)
+            params = ChainMap(self.params, self.uri_params)
+            return get_value(params, param_name, default=if_none)
 
         val = self.querystring.get(param_name)
         if val is not None:
