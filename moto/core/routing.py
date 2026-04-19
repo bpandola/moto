@@ -51,6 +51,12 @@ PATH_PARAM_TO_RULE_VAR_TRANSLATION_TABLE = str.maketrans(
 )
 
 
+def add_s3_subdomain() -> bool:
+    if settings.S3_IGNORE_SUBDOMAIN_BUCKETNAME or settings.get_s3_custom_endpoints():
+        return False
+    return True
+
+
 @dataclass
 class ActionConstraintContext:
     request: Request
@@ -418,6 +424,7 @@ def _create_service_map(service: ServiceModel) -> dict[str, Map]:
                         subdomain = (
                             f"<{subdomain[1:-2]}>" if subdomain is not None else None
                         )
+                        assert subdomain != "<Bucket>"
                     rules.append(
                         StrictMethodRule(
                             string=rule_string,
@@ -426,7 +433,7 @@ def _create_service_map(service: ServiceModel) -> dict[str, Map]:
                             subdomain=subdomain,
                         )
                     )  # type: ignore
-                    if not settings.S3_IGNORE_SUBDOMAIN_BUCKETNAME:
+                    if add_s3_subdomain():
                         if op.path.startswith("/{Bucket}"):
                             new_path = op.path.replace("/{Bucket}", "", 1)
                             if new_path == "":
@@ -449,7 +456,7 @@ def _create_service_map(service: ServiceModel) -> dict[str, Map]:
                         )
                     )
                     s3_ops = [op for op in ops if op.path.startswith("/{Bucket}")]
-                    if s3_ops and not settings.S3_IGNORE_SUBDOMAIN_BUCKETNAME:
+                    if s3_ops and add_s3_subdomain():
                         new_path = s3_ops[0].path.replace("/{Bucket}", "", 1)
                         if new_path == "":
                             new_path = "/"
@@ -523,7 +530,9 @@ def _create_service_map(service: ServiceModel) -> dict[str, Map]:
             merge_slashes=False,
             # get service-specific converters
             converters={"path": GreedyPathConverter},
-            default_subdomain="default",  # "s3" if service.service_name == "s3" else "",
+            default_subdomain="default"
+            if add_s3_subdomain()
+            else "",  # "s3" if service.service_name == "s3" else "",
         )
     return protocol_to_rules
 
@@ -555,7 +564,7 @@ class ServiceOperationRouter:
             request.host,
             subdomain=request.host.split(".", 1)[0]
             if (request.host.find("s3") > 1 or request.server[0].endswith(".localhost"))  # type: ignore[index]
-            and not settings.S3_IGNORE_SUBDOMAIN_BUCKETNAME
+            and add_s3_subdomain()
             else None,
         )
 
