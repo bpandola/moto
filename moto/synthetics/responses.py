@@ -92,7 +92,7 @@ class SyntheticsResponse(BaseResponse):
         Override to provide default action for root endpoint.
         """
         action = super()._get_action()
-        if action is None and self.path == "/":
+        if not action and self.path == "/":
             return "GetHealthCheck"  # Default action for root endpoint
         return action or "Unknown"
 
