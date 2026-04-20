@@ -23,6 +23,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, cast
+from urllib.parse import parse_qsl
 
 from botocore.model import ListShape as BotocoreListShape
 from botocore.model import MapShape as BotocoreMapShape
@@ -33,7 +34,7 @@ from botocore.model import ShapeResolver as BotocoreShapeResolver
 from botocore.model import StringShape as BotocoreStringShape
 from botocore.model import StructureShape as BotocoreStructureShape
 from botocore.utils import CachedProperty, instance_cache
-from urllib.parse import parse_qsl
+
 
 class Shape(BotocoreShape):
     # Custom Moto model properties that we want available in the serialization dict.
@@ -100,6 +101,7 @@ class ServiceModel(BotocoreServiceModel):
     def is_query_compatible(self) -> bool:
         return "awsQueryCompatible" in self.metadata
 
+
 @dataclass
 class HTTPTrait:
     uri: str
@@ -109,7 +111,6 @@ class HTTPTrait:
 
     @classmethod
     def from_model(cls, http: dict[str, Any]) -> HTTPTrait:
-        deprecated = http.get("deprecated", False)
         uri = http.get("requestUri", "/")
         method = http.get("method", "POST")
         path = uri
@@ -119,9 +120,9 @@ class HTTPTrait:
         if "?" in uri:
             path, qs = uri.split("?", 1)
             parsed_qs = parse_qsl(qs, keep_blank_values=True)
-            query_args = {k:v for (k, v) in parsed_qs}
+            query_args = dict(parsed_qs)
 
-        return cls(uri,method, path, query_args)
+        return cls(uri, method, path, query_args)
 
 
 class OperationModel(BotocoreOperationModel):
@@ -133,7 +134,7 @@ class OperationModel(BotocoreOperationModel):
         return self._service_model
 
     @property
-    def http_trait(self)->HTTPTrait:
+    def http_trait(self) -> HTTPTrait:
         return HTTPTrait.from_model(self.http)
 
 

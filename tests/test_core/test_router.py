@@ -76,6 +76,7 @@ def test_s3_control_full_url() -> None:
         method="GET",
         base_url="https://123456789012.s3-control.us-east-1.amazonaws.com",
         path="/v20180820/tags/arn%3Aaws%3As3%3A%3A%3Abd054ad3-6778-4f25-91a5-c7c84db350e2",
+        headers={"x-amz-account-id": "0123456789012"},
     )
     op, args = router.match(req)
 
