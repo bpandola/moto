@@ -21,6 +21,7 @@ which may change over time.
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import Any, cast
 
 from botocore.model import ListShape as BotocoreListShape
@@ -32,7 +33,7 @@ from botocore.model import ShapeResolver as BotocoreShapeResolver
 from botocore.model import StringShape as BotocoreStringShape
 from botocore.model import StructureShape as BotocoreStructureShape
 from botocore.utils import CachedProperty, instance_cache
-
+from urllib.parse import parse_qsl
 
 class Shape(BotocoreShape):
     # Custom Moto model properties that we want available in the serialization dict.
@@ -99,6 +100,29 @@ class ServiceModel(BotocoreServiceModel):
     def is_query_compatible(self) -> bool:
         return "awsQueryCompatible" in self.metadata
 
+@dataclass
+class HTTPTrait:
+    uri: str
+    method: str
+    path: str
+    query_args: dict[str, Any]
+
+    @classmethod
+    def from_model(cls, http: dict[str, Any]) -> HTTPTrait:
+        deprecated = http.get("deprecated", False)
+        uri = http.get("requestUri", "/")
+        method = http.get("method", "POST")
+        path = uri
+        query_args: dict[str, Any] = {}
+        # Smithy requestUris can contain mandatory query string literals:
+        # https://smithy.io/2.0/spec/http-bindings.html#query-string-literals
+        if "?" in uri:
+            path, qs = uri.split("?", 1)
+            parsed_qs = parse_qsl(qs, keep_blank_values=True)
+            query_args = {k:v for (k, v) in parsed_qs}
+
+        return cls(uri,method, path, query_args)
+
 
 class OperationModel(BotocoreOperationModel):
     _operation_model: dict[str, Any]
@@ -107,6 +131,10 @@ class OperationModel(BotocoreOperationModel):
     @property
     def service_model(self) -> ServiceModel:
         return self._service_model
+
+    @property
+    def http_trait(self)->HTTPTrait:
+        return HTTPTrait.from_model(self.http)
 
 
 class ShapeResolver(BotocoreShapeResolver):

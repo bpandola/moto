@@ -15,20 +15,17 @@
 # Maybe we keep uses url_bases in urls.py but just get rid of all the url_paths?
 
 from __future__ import annotations
-
+from botocore.model import OperationNotFoundError
 import re
 from collections import defaultdict
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import (
-    Any,
-    NamedTuple,
-    TypeVar,
-)
-from urllib.parse import parse_qs, unquote, urlparse
+from typing import Any
+from urllib.parse import  unquote, urlparse
 
+from pip._internal.resolution.resolvelib import candidates
 from werkzeug.datastructures import Headers, MultiDict
-from werkzeug.exceptions import MethodNotAllowed, NotFound
+from werkzeug.exceptions import MethodNotAllowed, NotFound, BadRequest
 from werkzeug.routing import Map, MapAdapter, PathConverter, Rule
 
 from moto import settings
@@ -84,6 +81,31 @@ class HeaderValueConstraint(ActionConstraint):
     def accept(self, context: ActionConstraintContext) -> bool:
         return context.request.headers.get(self.name) == self.value
 
+class RequiredArg(ActionConstraint):
+    def __init__(self, name: str, value: str | None = None):
+        self.name = name
+        self.value = value
+
+    def accept(self, context: ActionConstraintContext) -> bool:
+        values = context.request.values
+        if self.name not in values:
+            return False
+        if self.value is not None:
+            return values.get(self.name) == self.value
+        return True
+
+class RequiredHeader(ActionConstraint):
+    def __init__(self, name: str, value: str | None = None):
+        self.name = name
+        self.value = value
+
+    def accept(self, context: ActionConstraintContext) -> bool:
+        headers = context.request.headers
+        if self.name not in headers:
+            return False
+        if self.value is not None:
+            return headers[self.name] == self.value
+        return True
 
 class ActionCandidate:
     def __init__(
@@ -94,10 +116,17 @@ class ActionCandidate:
         self.operation = operation
         self.constraints = constraints or []
 
+    @property
+    def weight(self)->int:
+        weight = 10 * len(self.constraints)
+        if self.operation.deprecated:
+            weight -= 5
+        return weight
+
 
 class ActionSelector:
     def __init__(self, candidates: list[ActionCandidate]):
-        self.candidates = candidates
+        self.candidates = sorted(candidates, key=lambda candidate: candidate.weight, reverse=True)
 
     def select_action(self, request: Request) -> OperationModel | None:
         context = ActionConstraintContext(request)
@@ -105,6 +134,51 @@ class ActionSelector:
             if all(constraint.accept(context) for constraint in candidate.constraints):
                 return candidate.operation
         return None
+
+class ActionMatcher:
+
+    def __init__(self, actions: list[OperationModel]):
+        self.actions = actions
+        self.action_map = {
+            action.name: action for action in self.actions
+        }
+
+    def match(self, request: Request)-> OperationModel:
+        raise OperationNotFoundError()
+
+class DataValueMatcher(ActionMatcher):
+
+    def match(self, request: Request) -> OperationModel:
+        action = request.values.get("Action")
+        if action is None:
+            raise BadRequest("No Action specified in request.")
+        operation = self.action_map.get(action)
+        if operation is None:
+            raise OperationNotFoundError(action)
+        return operation
+
+class TargetHeaderMatcher(ActionMatcher):
+
+    def match(self, request: Request) -> OperationModel:
+        target = request.headers.get("X-Amz-Target")
+        if target is None:
+            raise BadRequest("No X-Amz-Target specified in request.")
+        action = target.split('.')[-1]
+        operation = self.action_map.get(action)
+        if operation is None:
+            raise OperationNotFoundError(action)
+        return operation
+
+
+class HTTPTraitMatcher(ActionMatcher):
+    def match(self, request: Request) -> OperationModel:
+        for operation in self.actions:
+            http = operation.http_trait
+            for required_key, required_value in http.query_args.items():
+                if request.values.get(required_key) != required_value:
+                    continue
+            return operation
+        raise OperationNotFoundError()
 
 
 def get_raw_path(request: Request) -> str:
@@ -175,7 +249,7 @@ def to_werkzeug_rule_string(smithy_uri: str) -> str:
     return rule_string
 
 
-class StrictMethodRule(Rule):
+class BaseSmithyRule(Rule):
     """
     Small extension to Werkzeug's Rule class which reverts unwanted assumptions made by Werkzeug.
     Reverted assumptions:
@@ -217,10 +291,6 @@ def to_uri_params(werkzeug_path_variables: Mapping[str, Any]) -> dict[str, Any]:
     return uri_params
 
 
-HTTP_METHODS = ("GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "TRACE")
-
-E = TypeVar("E")
-RequestArguments = Mapping[str, Any]
 
 
 class GreedyPathConverter(PathConverter):
@@ -237,69 +307,6 @@ class GreedyPathConverter(PathConverter):
     correctly matched."""
 
 
-class _HttpOperation(NamedTuple):
-    """Useful intermediary representation of the 'http' block of an operation to make code cleaner"""
-
-    operation: OperationModel
-    path: str
-    method: str
-    query_args: Mapping[str, list[str]]
-    header_args: list[str]
-    deprecated: bool
-
-    @staticmethod
-    def from_operation(op: OperationModel) -> _HttpOperation:
-        # I don't know if any of this holds if we use our loader to load the model...
-        # See here: https://github.com/boto/botocore/blob/e2a72fcedae63c2875e56c007b3ffaa491375653/botocore/handlers.py#L1093
-
-        # ***original localstack comment****
-        # botocore >= 1.28 might modify the internal model (specifically for S3).
-        # It will modify the request URI to strip the bucket name from the path and set the original value at
-        # "authPath".
-        # Since botocore 1.31.2, botocore will strip the query from the `authPart`
-        # We need to add it back from `requestUri` field
-        # Use authPath if set, otherwise use the regular requestUri.
-        if auth_path := op.http.get("authPath"):
-            path, sep, query = op.http.get("requestUri", "").partition("?")
-            uri = f"{auth_path.rstrip('/')}{sep}{query}"
-        else:
-            uri = op.http.get("requestUri", "/")
-
-        method = op.http.get("method", "POST")
-        deprecated = op.deprecated
-
-        # requestUris can contain mandatory query args (f.e. /apikeys?mode=import)
-        path_query = uri.split("?")
-        path = path_query[0]
-        header_args = []
-        query_args: dict[str, list[str]] = {}
-
-        if len(path_query) > 1:
-            # parse the query args of the request URI (they are mandatory)
-            query_args = parse_qs(path_query[1], keep_blank_values=True)
-            # for mandatory keys without values, keep an empty list (instead of [''] - the result of parse_qs)
-            query_args = {k: list(filter(None, v)) for k, v in query_args.items()}
-
-        # find the required header and query parameters of the input shape
-        input_shape = op.input_shape
-        if isinstance(input_shape, StructureShape):
-            for required_member in input_shape.required_members:
-                member_shape = input_shape.members[required_member]
-                location = member_shape.serialization.get("location")
-                if location is not None:
-                    if location == "header":
-                        header_name = member_shape.serialization.get("name")
-                        header_args.append(header_name)
-                    elif location == "querystring":
-                        query_name = member_shape.serialization.get("name")
-                        # do not overwrite potentially already existing query params with specific values
-                        if query_name not in query_args:
-                            # an empty list defines a required query param only needs to be present
-                            # (no specific value will be enforced when matching)
-                            query_args[query_name] = []  # type: ignore[index]
-
-        return _HttpOperation(op, path, method, query_args, header_args, deprecated)  # type: ignore[arg-type]
-
 
 class _RequiredArgsRule:
     """
@@ -308,19 +315,17 @@ class _RequiredArgsRule:
     """
 
     endpoint: Any
-    required_query_args: Mapping[str, list[Any]] | None
-    required_header_args: list[str]
+    required_query_args: dict[str, Any]
     match_score: int
 
-    def __init__(self, operation: _HttpOperation) -> None:
+    def __init__(self, operation: OperationModel) -> None:
         super().__init__()
-        self.endpoint = operation.operation
-        self.required_query_args = operation.query_args or {}
-        self.required_header_args = operation.header_args or []
+        self.endpoint = operation
+        self.required_query_args = operation.http_trait.query_args or {}
         self.match_score = (
             10
-            + 10 * len(self.required_query_args)
-            + 10 * len(self.required_header_args)
+            + 10 * len(self.required_query_args.keys())
+
         )
         # If this operation is deprecated, the score is a bit less high (bot not as much as a matching required arg)
         if operation.deprecated:
@@ -335,25 +340,21 @@ class _RequiredArgsRule:
         :return: True if the query args and headers match the required args of this rule
         """
         if self.required_query_args:
-            for key, values in self.required_query_args.items():
+            for key, value in self.required_query_args.items():
                 if key not in query_args:
                     return False
                 # if a required query arg also has a list of required values set, the values need to match as well
-                if values:
-                    query_arg_values = query_args.getlist(key)
-                    for value in values:
-                        if value not in query_arg_values:
-                            return False
+                if value:
+                    query_arg_value = query_args.get(key)
+                    if value != query_arg_value:
+                        return False
 
-        if self.required_header_args:
-            for key in self.required_header_args:
-                if key not in headers:
-                    return False
+
 
         return True
 
 
-class _RequestMatchingRule(StrictMethodRule):
+class _RequestMatchingRule(BaseSmithyRule):
     """
     A Werkzeug Rule extension which initially acts as a normal rule (i.e. matches a path and method).
 
@@ -364,7 +365,7 @@ class _RequestMatchingRule(StrictMethodRule):
     """
 
     def __init__(
-        self, string: str, operations: list[_HttpOperation], method: str, **kwargs: Any
+        self, string: str, operations: list[OperationModel], method: str, **kwargs: Any
     ) -> None:
         super().__init__(string=string, methods=[method], **kwargs)
         # Create a rule which checks all required arguments (not only the path and method)
@@ -372,6 +373,28 @@ class _RequestMatchingRule(StrictMethodRule):
         # Sort the rules descending based on their rule score
         # (i.e. the first matching rule will have the highest score)=
         self.rules = sorted(rules, key=lambda rule: rule.match_score, reverse=True)
+        self.candidates = []
+        for operation in operations:
+            candidate = ActionCandidate(operation)
+            # http trait
+            for key, value in operation.http_trait.query_args.items():
+                candidate.constraints.append(RequiredArg(key, value))
+            # find the required header and query parameters of the input shape
+            input_shape = operation.input_shape
+            if isinstance(input_shape, StructureShape):
+                for required_member in input_shape.required_members:
+                    member_shape = input_shape.members[required_member]
+                    location = member_shape.serialization.get("location")
+                    if location is not None:
+                        if location == "header":
+                            header_name = member_shape.serialization.get("name", member_shape.name)
+                            candidate.constraints.append(RequiredHeader(header_name))
+                        elif location == "querystring":
+                            query_name = member_shape.serialization.get("name", member_shape.name)
+                            # do not overwrite potentially already existing query params with specific values
+                            if query_name not in operation.http_trait.query_args:
+                               candidate.constraints.append(RequiredArg(query_name))
+            self.candidates.append(candidate)
 
     def match_request(self, request: Request) -> _RequiredArgsRule:
         """
@@ -382,6 +405,10 @@ class _RequestMatchingRule(StrictMethodRule):
         :return: matching fine-grained rule
         :raises: NotFound if none of the fine-grained rules matches
         """
+        action_selector = ActionSelector(self.candidates)
+        value = action_selector.select_action(request)
+        return value
+
         for rule in self.rules:
             if rule.matches(request.args, request.headers):
                 return rule
@@ -398,10 +425,10 @@ def _create_service_map(service: ServiceModel) -> dict[str, Map]:
     # protocol = str(service.protocol)
 
     # group all operations by their path and method
-    path_index: dict[tuple[str, str], list[_HttpOperation]] = defaultdict(list)
+    path_index: dict[tuple[str, str], list[OperationModel]] = defaultdict(list)
     for op in ops:
-        http_op = _HttpOperation.from_operation(op)
-        path_index[(http_op.path, http_op.method)].append(http_op)
+        http_op =op.http_trait
+        path_index[(http_op.path, http_op.method)].append(op)
 
     protocol_to_rules: dict[str, Map] = {}
     protocol = str(service.protocol)
@@ -419,23 +446,23 @@ def _create_service_map(service: ServiceModel) -> dict[str, Map]:
                     # the default Werkzeug rule can be used directly (this is the case for most rules)
                     op = ops[0]
                     subdomain = None
-                    if op.operation.endpoint:
-                        subdomain = op.operation.endpoint.get("hostPrefix")  # type: ignore[attr-defined]
+                    if op.endpoint:
+                        subdomain = op.endpoint.get("hostPrefix")  # type: ignore[attr-defined]
                         subdomain = (
                             f"<{subdomain[1:-2]}>" if subdomain is not None else None
                         )
                         assert subdomain != "<Bucket>"
                     rules.append(
-                        StrictMethodRule(
+                        BaseSmithyRule(
                             string=rule_string,
                             methods=[method],
-                            endpoint=op.operation,
+                            endpoint=op,
                             subdomain=subdomain,
                         )
                     )  # type: ignore
                     if add_s3_subdomain():
-                        if op.path.startswith("/{Bucket}"):
-                            new_path = op.path.replace("/{Bucket}", "", 1)
+                        if op.http_trait.path.startswith("/{Bucket}"):
+                            new_path = op.http_trait.path.replace("/{Bucket}", "", 1)
                             if new_path == "":
                                 new_path = "/"
                             rule_string = to_werkzeug_rule_string(new_path)
@@ -455,9 +482,9 @@ def _create_service_map(service: ServiceModel) -> dict[str, Map]:
                             string=rule_string, method=method, operations=ops
                         )
                     )
-                    s3_ops = [op for op in ops if op.path.startswith("/{Bucket}")]
+                    s3_ops = [op for op in ops if op.http_trait.path.startswith("/{Bucket}")]
                     if s3_ops and add_s3_subdomain():
-                        new_path = s3_ops[0].path.replace("/{Bucket}", "", 1)
+                        new_path = s3_ops[0].http_trait.path.replace("/{Bucket}", "", 1)
                         if new_path == "":
                             new_path = "/"
                         rule_string = to_werkzeug_rule_string(new_path)
@@ -474,11 +501,11 @@ def _create_service_map(service: ServiceModel) -> dict[str, Map]:
                 candidate_list = []
                 for op in ops:
                     candidate = ActionCandidate(
-                        op.operation, [DataValueConstraint("Action", op.operation.name)]
+                        op, [DataValueConstraint("Action", op.name)]
                     )
                     candidate_list.append(candidate)
                 rules.append(
-                    StrictMethodRule(
+                    BaseSmithyRule(
                         string=rule_string,
                         methods=["POST", "GET"],
                         endpoint=ActionSelector(candidate_list),
@@ -487,7 +514,7 @@ def _create_service_map(service: ServiceModel) -> dict[str, Map]:
                 if service.service_name == "sqs":
                     rule_string = to_werkzeug_rule_string("/{AccountId}/{QueueName}")
                     rules.append(
-                        StrictMethodRule(
+                        BaseSmithyRule(
                             string=rule_string,
                             methods=["POST", "GET"],
                             endpoint=ActionSelector(candidate_list),
@@ -497,17 +524,17 @@ def _create_service_map(service: ServiceModel) -> dict[str, Map]:
                 candidate_list = []
                 for op in ops:
                     candidate = ActionCandidate(
-                        op.operation,
+                        op,
                         [
                             HeaderValueConstraint(
                                 "X-Amz-Target",
-                                f"{service.metadata.get('targetPrefix')}.{op.operation.name}",
+                                f"{service.metadata.get('targetPrefix')}.{op.name}",
                             )
                         ],
                     )
                     candidate_list.append(candidate)
                 rules.append(
-                    StrictMethodRule(
+                    BaseSmithyRule(
                         string=rule_string,
                         methods=[method],
                         endpoint=ActionSelector(candidate_list),
@@ -516,7 +543,7 @@ def _create_service_map(service: ServiceModel) -> dict[str, Map]:
                 if service.service_name == "sqs":
                     rule_string = to_werkzeug_rule_string("/{AccountId}/{QueueName}")
                     rules.append(
-                        StrictMethodRule(
+                        BaseSmithyRule(
                             string=rule_string,
                             methods=["POST"],
                             endpoint=ActionSelector(candidate_list),
@@ -591,7 +618,8 @@ class ServiceOperationRouter:
         # if the found rule is a _RequestMatchingRule, the multi rule matching needs to be invoked to perform the
         # fine-grained matching based on the whole request
         if isinstance(rule, _RequestMatchingRule):
-            rule = rule.match_request(request)  # type: ignore[assignment]
+            operation = rule.match_request(request)  # type: ignore[assignment]
+            return operation, to_uri_params(args)
 
         if isinstance(rule.endpoint, ActionSelector):
             operation = rule.endpoint.select_action(request)
