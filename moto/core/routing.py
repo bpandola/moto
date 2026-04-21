@@ -20,16 +20,18 @@ import re
 from collections import defaultdict
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import unquote, urlparse
 
-from botocore.model import OperationNotFoundError
-from werkzeug.exceptions import BadRequest, MethodNotAllowed, NotFound
+from werkzeug.exceptions import MethodNotAllowed, NotFound
 from werkzeug.routing import Map, MapAdapter, PathConverter, Rule
 
 from moto import settings
 from moto.core.model import OperationModel, ServiceModel, StructureShape
 from moto.core.request import Request, determine_request_protocol
+
+if TYPE_CHECKING:
+    from moto.s3.responses import S3Response
 
 # Regex to find path parameters in requestUris of AWS service specs (f.e. /{param1}/{param2+})
 # path_param_regex = re.compile(r"({.+?})")
@@ -61,24 +63,6 @@ class ActionConstraintContext:
 class ActionConstraint:
     def accept(self, context: ActionConstraintContext) -> bool:
         raise NotImplementedError
-
-
-class DataValueConstraint(ActionConstraint):
-    def __init__(self, name: str, value: str):
-        self.name = name
-        self.value = value
-
-    def accept(self, context: ActionConstraintContext) -> bool:
-        return context.request.values.get(self.name) == self.value
-
-
-class HeaderValueConstraint(ActionConstraint):
-    def __init__(self, name: str, value: str):
-        self.name = name
-        self.value = value
-
-    def accept(self, context: ActionConstraintContext) -> bool:
-        return context.request.headers.get(self.name) == self.value
 
 
 class RequiredArg(ActionConstraint):
@@ -140,49 +124,6 @@ class ActionSelector:
         return None
 
 
-class ActionMatcher:
-    def __init__(self, actions: list[OperationModel]):
-        self.actions = actions
-        self.action_map = {action.name: action for action in self.actions}
-
-    def match(self, request: Request) -> OperationModel:
-        raise OperationNotFoundError()
-
-
-class DataValueMatcher(ActionMatcher):
-    def match(self, request: Request) -> OperationModel:
-        action = request.values.get("Action")
-        if action is None:
-            raise BadRequest("No Action specified in request.")
-        operation = self.action_map.get(action)
-        if operation is None:
-            raise OperationNotFoundError(action)
-        return operation
-
-
-class TargetHeaderMatcher(ActionMatcher):
-    def match(self, request: Request) -> OperationModel:
-        target = request.headers.get("X-Amz-Target")
-        if target is None:
-            raise BadRequest("No X-Amz-Target specified in request.")
-        action = target.split(".")[-1]
-        operation = self.action_map.get(action)
-        if operation is None:
-            raise OperationNotFoundError(action)
-        return operation
-
-
-class HTTPTraitMatcher(ActionMatcher):
-    def match(self, request: Request) -> OperationModel:
-        for operation in self.actions:
-            http = operation.http_trait
-            for required_key, required_value in http.query_args.items():
-                if request.values.get(required_key) != required_value:
-                    continue
-            return operation
-        raise OperationNotFoundError()
-
-
 def get_raw_path(request: Request) -> str:
     """
     Returns the raw_path inside the request without the query string. The request can either be a Quart Request
@@ -199,7 +140,8 @@ def get_raw_path(request: Request) -> str:
         if raw_uri.startswith("//"):
             # if the RAW_URI starts with double slashes, `urlparse` will fail to decode it as path only
             # it also means that we already only have the path, so we just need to remove the query string
-            return raw_uri.split("?")[0]
+            raw_uri = "/%2F" + raw_uri[2:]
+            # return raw_uri.split("?")[0]
         return urlparse(raw_uri or request.path).path
 
     raise ValueError("cannot extract raw path from request object %s")
@@ -245,8 +187,9 @@ def to_werkzeug_rule_string(smithy_uri: str) -> str:
     # with and without encoding.  This might be generally useful, and I did
     # add it to the Moto uri->regex method, but calling it out here for
     # extra scrutiny.
-    if smithy_uri.endswith("}"):
-        smithy_uri = smithy_uri[:-1] + "+}"
+    # if smithy_uri[-1] == "}" and smithy_uri[-2] != "+":
+    #     smithy_uri = smithy_uri[:-1] + "+}"
+    # Turning this off for now to see if any other tests fail than iot
     rule_string = PATH_PARAM_REGEX.sub(to_rule_variable, smithy_uri)
     return rule_string
 
@@ -300,7 +243,7 @@ class GreedyPathConverter(PathConverter):
     """
 
     regex = ".*?"
-
+    # regex = "[^/].*?"
     part_isolating = False
     """From the werkzeug docs: If a custom converter can match a forward slash, /, it should have the
     attribute part_isolating set to False. This will ensure that rules using the custom converter are
@@ -556,7 +499,9 @@ class ServiceOperationRouter:
         self._service_model = service
         self._map = _create_service_map(service)
 
-    def match(self, request: Request) -> tuple[OperationModel, dict[str, Any]]:
+    def match(
+        self, request: Request, s3_response: S3Response | None = None
+    ) -> tuple[OperationModel, dict[str, Any]]:
         """
         Matches the given request to the operation it targets (or raises an exception if no operation matches).
 
@@ -569,9 +514,15 @@ class ServiceOperationRouter:
         # bind the map to get the actual matcher
         matcher: MapAdapter = protocol_map.bind(
             request.host,
+            # subdomain=request.host.split(".", 1)[0]
+            # if (request.host.find("s3") > 1 or request.server[0].endswith(".localhost"))  # type: ignore[index]
+            # and add_s3_subdomain()
+            # else None,
             subdomain=request.host.split(".", 1)[0]
-            if (request.host.find("s3") > 1 or request.server[0].endswith(".localhost"))  # type: ignore[index]
-            and add_s3_subdomain()
+            if (
+                s3_response is not None and s3_response.subdomain_based_buckets(request)
+            )
+            or ".s3-control" in request.host
             else None,
         )
 
@@ -595,22 +546,9 @@ class ServiceOperationRouter:
             # Our router handles this as a 404.
             raise NotFound() from e
 
-        # if the found rule is a _RequestMatchingRule, the multi rule matching needs to be invoked to perform the
-        # fine-grained matching based on the whole request
         assert isinstance(rule, ConstrainedRule)
-        operation = rule.match_request(request)  # type: ignore[assignment]
+        operation = rule.match_request(request)
         if operation is None:
             raise NotFound()
-
-        # if isinstance(rule.endpoint, ActionSelector):
-        #     operation = rule.endpoint.select_action(request)
-        #     if operation is None:
-        #         raise NotFound()
-        #     return operation, to_uri_params(args)
-
-        # uri_params =
-
-        # extract the operation model from the rule
-        # operation = rule.endpoint
 
         return operation, to_uri_params(args)
