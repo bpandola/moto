@@ -303,7 +303,11 @@ class BaseResponse(ActionAuthenticatorMixin):
         )
         try:
             self.service_router = get_service_router(self.boto3_service_name)
-            operation, uri_params = self.service_router.match(self.normalized_request)
+            s3_response = self if self.service_name == "s3" else None
+            operation, uri_params = self.service_router.match(
+                self.normalized_request,
+                s3_response,  # type: ignore[arg-type]
+            )
             self.action = operation.name
             self.uri_params = uri_params
         except Exception:
@@ -559,7 +563,7 @@ class BaseResponse(ActionAuthenticatorMixin):
         if self.body is not None:
             try:
                 return json.loads(self.body)[param_name]
-            except (ValueError, KeyError):
+            except (ValueError, KeyError, TypeError):
                 pass
         # try to get path parameter
         if param_name in self.uri_params:
