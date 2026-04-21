@@ -1,6 +1,9 @@
 from moto.core.request import Request
 from moto.core.routing import ServiceOperationRouter
 from moto.core.utils import get_service_model
+from moto.s3.responses import S3Response
+
+s3_response = S3Response()
 
 
 def test_op_router() -> None:
@@ -47,7 +50,7 @@ def test_s3_localhost_router() -> None:
     req = Request.from_values(
         method="GET", base_url="https://foobaz.localhost:5000", path="/"
     )
-    op, args = router.match(req)
+    op, args = router.match(req, s3_response)
 
     assert op.name == "ListObjects"
     assert args["Bucket"] == "foobaz"
@@ -62,11 +65,10 @@ def test_s3_full_url() -> None:
         path="/",
         query_string="tagging",
     )
-    op, args = router.match(req)
+    op, args = router.match(req, s3_response)
 
     assert op.name == "GetBucketTagging"
     assert args["Bucket"] == "b7525d4a-4973-4207-9f07-a73b4ec3ff65"
-    "https://123456789012.s3-control.us-east-1.amazonaws.com/v20180820/tags/arn%3Aaws%3As3%3A%3A%3Abd054ad3-6778-4f25-91a5-c7c84db350e2"
 
 
 def test_s3_control_full_url() -> None:

@@ -119,6 +119,13 @@
         "output": {
           "resultWrapper": "ListBucketResult"
         }
+      },
+      "PostObject":{
+        "name":"PostObject",
+        "http":{
+          "method":"POST",
+          "requestUri":"/{Bucket}"
+        }
       }
     },
     "shapes": {
