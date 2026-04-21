@@ -44,7 +44,9 @@ def determine_request_protocol(
     protocol = str(service_model.protocol)
     supported_protocols = service_model.metadata.get("protocols", [protocol])
     content_type = content_type if content_type is not None else ""
-    if content_type in JSON_TYPES:
+    if service_model.service_name == "s3":
+        protocol = "rest-xml"
+    elif content_type in JSON_TYPES:
         protocol = "rest-json" if content_type == APPLICATION_JSON else "json"
     elif content_type.startswith("application/x-www-form-urlencoded"):
         protocol = "ec2" if "ec2" in supported_protocols else "query"
