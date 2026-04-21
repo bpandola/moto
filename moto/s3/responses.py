@@ -189,6 +189,7 @@ class S3Response(BaseResponse):
         # E.G.: we don't want to touch put_object(), but we might have to decompress put_object_configuration()
         # Taking the naive approach to never decompress anything from S3 for now
         self.allow_request_decompression = False
+        # self.automated_parameter_parsing = True
 
     def setup_class(self, request: Any, full_url: str, headers: Any) -> None:  # type: ignore[override]
         super().setup_class(request, full_url, headers, use_raw_body=True)
@@ -345,15 +346,22 @@ class S3Response(BaseResponse):
                 self.partition
             ].get_access_point(self.current_account, ap_name)
             bucket_name = ap.bucket
-
+        else:
+            bucket_name_check = self._get_param("Bucket")
+            assert bucket_name == bucket_name_check, (
+                f"Param:{bucket_name_check} != Parse:{bucket_name}"
+            )
         return bucket_name
 
     def parse_key_name(self) -> str:
+        key_check = self._get_param("Key")
         url = self.get_safe_path()
         if self.subdomain_based_buckets(self.request):
-            return parse_key_name(url)
+            key = parse_key_name(url)
         else:
-            return bucketpath_parse_key_name(url)
+            key = bucketpath_parse_key_name(url)
+        assert key == key_check, f"Param:{key_check} != Parse:{key}"
+        return key
 
     @classmethod
     def ambiguous_dispatch(cls, *args: Any, **kwargs: Any) -> TYPE_RESPONSE:
