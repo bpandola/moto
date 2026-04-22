@@ -82,6 +82,28 @@ class StructureShape(BotocoreStructureShape, Shape):
         aliases = error_metadata.get("codeAliases", [])
         return aliases
 
+    def _required_members_by_location(self, location: str) -> list[Shape]:
+        members = []
+        for required_member in self.required_members:
+            member = self.members.get(required_member)
+            if member and member.serialization.get("location") == location:
+                members.append(member)
+        return members
+
+    @CachedProperty
+    def required_query_args(self) -> list[str]:
+        return [
+            shape.serialization.get("name", shape.name)
+            for shape in self._required_members_by_location("querystring")
+        ]
+
+    @CachedProperty
+    def required_headers(self) -> list[str]:
+        return [
+            shape.serialization.get("name", shape.name)
+            for shape in self._required_members_by_location("header")
+        ]
+
 
 class ServiceModel(BotocoreServiceModel):
     def __init__(
