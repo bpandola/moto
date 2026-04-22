@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import functools
 import json
 import logging
 import os
@@ -17,7 +16,6 @@ from typing import (
 )
 from urllib.parse import parse_qs, parse_qsl, urlparse
 
-from botocore.model import OperationNotFoundError
 from werkzeug.exceptions import HTTPException
 from werkzeug.http import http_date
 
@@ -27,7 +25,7 @@ from moto.core.common_types import TYPE_IF_NONE, TYPE_RESPONSE
 from moto.core.exceptions import ServiceException
 from moto.core.model import OperationModel, ServiceModel
 from moto.core.parse import PROTOCOL_PARSERS, XFormedDict
-from moto.core.request import determine_request_protocol, normalize_request
+from moto.core.request import Request, determine_request_protocol, normalize_request
 from moto.core.routing import ServiceOperationRouter
 from moto.core.serialize import (
     ResponseSerializer,
@@ -79,13 +77,6 @@ def _decode_dict(d: dict[Any, Any]) -> dict[str, Any]:
             decoded[newkey] = value
 
     return decoded
-
-
-@functools.cache
-def get_service_router(service_name: str) -> ServiceOperationRouter:
-    service_model = get_service_model(service_name)
-    service_router = ServiceOperationRouter(service_model)
-    return service_router
 
 
 @dataclass
@@ -298,29 +289,22 @@ class BaseResponse(ActionAuthenticatorMixin):
         if not self.is_werkzeug_request:
             self.response_headers["date"] = http_date(utcnow())
 
-        self.normalized_request = normalize_request(
-            request, self.allow_request_decompression
-        )
+        self.normalized_request = self.normalize_request(request)
+        service_model = get_service_model(self.boto3_service_name)
+        service_router = ServiceOperationRouter(service_model)
         try:
-            self.service_router = get_service_router(self.boto3_service_name)
             s3_response = self if self.service_name == "s3" else None
-            operation, uri_params = self.service_router.match(
+            operation, uri_params = service_router.match(
                 self.normalized_request,
                 s3_response,  # type: ignore[arg-type]
             )
-            self.action = operation.name
+            self.operation = operation
             self.uri_params = uri_params
         except Exception:
-            self.service_router = None  # type: ignore[assignment]
-            # HACK for things like CloudFormationResponse.cfnresponse()
-            self.action = (
-                querystring.get("Action")[0]  # type: ignore[index]
-                if "Action" in querystring
-                else ""
-            )
+            self.operation = OperationModel({}, service_model)
             self.uri_params = {}
-        if self.action and self.automated_parameter_parsing:
-            self.parse_parameters(request)
+        if self.automated_parameter_parsing:
+            self.parse_parameters()
 
         # Register visit with IAM
         from moto.iam.models import mark_account_as_visited
@@ -333,6 +317,15 @@ class BaseResponse(ActionAuthenticatorMixin):
             service=self.service_name,  # type: ignore[arg-type]
             region=self.region,
         )
+
+    def normalize_request(self, request: Any) -> Request:
+        normalized_request = normalize_request(request)
+        if (
+            normalized_request.content_encoding == "gzip"
+            and self.allow_request_decompression
+        ):
+            normalized_request.data = gzip_decompress(normalized_request.data)
+        return normalized_request
 
     def get_region_from_url(self, request: Any, full_url: str) -> str:
         url_match = self.region_regex.search(full_url)
@@ -422,28 +415,26 @@ class BaseResponse(ActionAuthenticatorMixin):
         return f"^{regexp}$"
 
     def _get_action(self) -> str:
-        return self.action
+        action = self.querystring.get("Action")
+        if action and isinstance(action, list):
+            action = action[0]
+        if action:
+            return action
+        return self.operation.name or ""
 
-    def parse_parameters(self, request: Any) -> None:
-        from botocore.awsrequest import AWSPreparedRequest
-        from werkzeug import Request
-
-        assert isinstance(request, (AWSPreparedRequest, Request)), str(request)
-        normalized_request = normalize_request(request)
-        service_model = get_service_model(self.boto3_service_name)
-        operation_model = service_model.operation_model(self._get_action())
+    def parse_parameters(self) -> None:
         protocol = determine_request_protocol(
-            service_model, normalized_request.content_type
+            self.operation.service_model, self.normalized_request.content_type
         )
         parser_cls = PROTOCOL_PARSERS[protocol]
-        parser = parser_cls(operation_model, map_type=self.PROTOCOL_PARSER_MAP_TYPE)
+        parser = parser_cls(self.operation, map_type=self.PROTOCOL_PARSER_MAP_TYPE)
         parsed = parser.parse(
             {
-                "method": normalized_request.method,
-                "values": normalized_request.values,
-                "headers": normalized_request.headers,
-                "body": normalized_request.data,
-                "url_path": normalized_request.path,
+                "method": self.normalized_request.method,
+                "values": self.normalized_request.values,
+                "headers": self.normalized_request.headers,
+                "body": self.normalized_request.data,
+                "url_path": self.normalized_request.path,
                 "url_params": self.uri_params,
             }
         )
@@ -457,12 +448,8 @@ class BaseResponse(ActionAuthenticatorMixin):
         return protocol
 
     def serialized(self, action_result: ActionResult) -> TYPE_RESPONSE:
-        service_model = get_service_model(self.boto3_service_name)
-        try:
-            operation_model = service_model.operation_model(self._get_action())
-        except OperationNotFoundError:
-            assert isinstance(action_result.result, Exception)
-            operation_model = OperationModel({}, service_model)
+        service_model = self.operation.service_model
+        operation_model = self.operation
         protocol = self.determine_response_protocol(service_model)
         serializer_cls = get_serializer_class(service_model.service_name, protocol)
         context = ActionContext(service_model, operation_model, serializer_cls, self)

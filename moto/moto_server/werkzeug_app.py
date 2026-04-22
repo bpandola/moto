@@ -24,7 +24,7 @@ from moto.core.base_backend import BackendDict
 from moto.core.utils import convert_to_flask_response
 from moto.settings import DISABLE_GLOBAL_CORS, MAX_FORM_MEMORY_SIZE
 
-from .utilities import AWSTestHelper, RegexConverter, decompress_request_body
+from .utilities import AWSTestHelper, RegexConverter
 
 HTTP_METHODS = ["GET", "POST", "PUT", "DELETE", "HEAD", "PATCH", "OPTIONS"]
 
@@ -165,15 +165,15 @@ class DomainDispatcherApplication:
                 host = f"api.{service}.{region}.amazonaws.com"
         elif service == "timestream":
             from moto.core.request import Request
-            from moto.core.responses import get_service_router
-            from moto.core.routing import NotFound
+            from moto.core.routing import NotFound, ServiceOperationRouter
+            from moto.core.utils import get_service_model
 
             possible_services = [
                 "timestream-write",
                 "timestream-query",
             ]
             for service_name in possible_services:
-                router = get_service_router(service_name)
+                router = ServiceOperationRouter(get_service_model(service_name))
                 request = Request(environ)
                 try:
                     op, _ = router.match(request)
@@ -204,8 +204,8 @@ class DomainDispatcherApplication:
             # between the various Bedrock services without having to manually
             # add every path to `moto/bedrock/urls.py`.
             from moto.core.request import Request
-            from moto.core.responses import get_service_router
-            from moto.core.routing import NotFound
+            from moto.core.routing import NotFound, ServiceOperationRouter
+            from moto.core.utils import get_service_model
 
             possible_services = [
                 "bedrock",
@@ -213,7 +213,7 @@ class DomainDispatcherApplication:
                 "bedrock-runtime",
             ]
             for service_name in possible_services:
-                router = get_service_router(service_name)
+                router = ServiceOperationRouter(get_service_model(service_name))
                 request = Request.from_values(
                     method=environ["REQUEST_METHOD"],
                     path=environ["PATH_INFO"],
@@ -355,7 +355,6 @@ def create_backend_app(service: backends.SERVICE_NAMES) -> Flask:
     backend_app = Flask("moto", template_folder=template_dir)
     backend_app.debug = True
     backend_app.service = service  # type: ignore[attr-defined]
-    backend_app.before_request(decompress_request_body)
     backend_app.config["MAX_FORM_MEMORY_SIZE"] = MAX_FORM_MEMORY_SIZE
 
     if not DISABLE_GLOBAL_CORS:
