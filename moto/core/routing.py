@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING, Any
 from urllib.parse import unquote, urlparse
 
 from werkzeug.exceptions import MethodNotAllowed, NotFound
-from werkzeug.routing import Map, MapAdapter, PathConverter, Rule
+from werkzeug.routing import BaseConverter, Map, MapAdapter, Rule
 
 from moto import settings
 from moto.core.model import OperationModel, ServiceModel, StructureShape
@@ -33,12 +33,49 @@ from moto.core.request import Request, determine_request_protocol
 if TYPE_CHECKING:
     from moto.s3.responses import S3Response
 
-PATH_PARAM_REGEX = re.compile(r"({.+?})")
+URI_LABEL_REGEX = re.compile(r"({.+?})")
+"""https://smithy.io/2.0/spec/http-bindings.html#labels"""
 
-PATH_PARAM_TO_RULE_VAR_REPLACEMENTS = {"-": "_HYPHEN_"}
-PATH_PARAM_TO_RULE_VAR_TRANSLATION_TABLE = str.maketrans(
-    PATH_PARAM_TO_RULE_VAR_REPLACEMENTS
+URI_LABEL_TO_RULE_VAR_REPLACEMENTS = {"-": "_HYPHEN_"}
+URI_LABEL_TO_RULE_VAR_TRANSLATION_TABLE = str.maketrans(
+    URI_LABEL_TO_RULE_VAR_REPLACEMENTS
 )
+
+
+class GreedyLabelConverter(BaseConverter):
+    """Like Werkzeug's PathConverter, but also matches leading slashes."""
+
+    NAME = "greedy_label"
+
+    regex = ".*?"
+    weight = 200
+    part_isolating = False
+
+
+def to_werkzeug_rule_string(smithy_uri: str) -> str:
+    """Converts a Smithy uri into a Werkzeug rule string.
+
+    Examples:
+        "/resources/{resource_id}/methods/{http_method}" -> "/resources/<resource_id>/methods/<http_method>"
+        "/v20180820/tags/{resourceArn+}" -> "/v20180820/tags/<converter:resourceArn>"
+    """
+
+    def to_rule_variable(match: re.Match[str]) -> str:
+        """Transform uri label into a rule variable placeholder."""
+        uri_label: str = match.group(0)
+        # Strip curly braces.
+        uri_label = uri_label[1:-1]
+        # Add converter prefix for greedy labels.
+        prefix = ""
+        if uri_label.endswith("+"):
+            uri_label = uri_label.strip("+")
+            prefix = f"{GreedyLabelConverter.NAME}:"
+        variable_name = uri_label.translate(URI_LABEL_TO_RULE_VAR_TRANSLATION_TABLE)
+        rule_variable = f"<{prefix}{variable_name}>"
+        return rule_variable
+
+    rule_string = URI_LABEL_REGEX.sub(to_rule_variable, smithy_uri)
+    return rule_string
 
 
 def add_s3_subdomain() -> bool:
@@ -119,125 +156,7 @@ class ActionSelector:
         return None
 
 
-def get_raw_path(request: Request) -> str:
-    """
-    Returns the raw_path inside the request without the query string. The request can either be a Quart Request
-    object (that encodes the raw path in request.scope['raw_path']) or a Werkzeug WSGI request (that encodes the raw
-    URI in request.environ['RAW_URI']).
-
-    :param request: the request object
-    :return: the raw path if any
-    """
-    if hasattr(request, "environ"):
-        # werkzeug/flask request (already a string, and contains the query part)
-        # we need to parse it, because the RAW_URI can contain a full URL if it is specified in the HTTP request
-        raw_uri: str = request.environ.get("RAW_URI", "")
-        if raw_uri.startswith("//"):
-            # if the RAW_URI starts with double slashes, `urlparse` will fail to decode it as path only
-            # it also means that we already only have the path, so we just need to remove the query string
-            raw_uri = "/%2F" + raw_uri[2:]
-            # return raw_uri.split("?")[0]
-        return urlparse(raw_uri or request.path).path
-
-    raise ValueError("cannot extract raw path from request object %s")
-
-
-def to_werkzeug_rule_string(smithy_uri: str) -> str:
-    """Converts a Smithy uri to a Werkzeug rule string.
-
-    Examples:
-        "/resources/{resource_id}/methods/{http_method}" -> "/resources/<resource_id>/methods/<http_method>"
-        "/v20180820/tags/{resourceArn+}" -> "/v20180820/tags/<path:resourceArn>"
-    """
-
-    def to_rule_variable(match: re.Match[str]) -> str:
-        """
-        Transforms a request URI path param to a valid Werkzeug Rule string variable placeholder.
-        This transformation function should be used in combination with _path_param_regex on the request URIs (without any
-        query params).
-
-        :param match: Regex match which contains a single group. The match group is a request URI path param, including the
-                        surrounding curly braces.
-        :return: Werkzeug rule string variable placeholder which is semantically equal to the given request URI path param
-
-        """
-        # get the group match and strip the curly braces
-        request_uri_variable: str = match.group(0)[1:-1]  # type: ignore[assignment]
-
-        # if the request URI param is greedy (f.e. /foo/{Bar+}), add Werkzeug's "path" prefix (/foo/{path:Bar})
-        greedy_prefix = ""
-        if request_uri_variable.endswith("+"):
-            greedy_prefix = "path:"
-            request_uri_variable = request_uri_variable.strip("+")
-
-        # replace forbidden chars (not allowed in Werkzeug rule variable names) with their placeholder
-        escaped_request_uri_variable = request_uri_variable.translate(
-            PATH_PARAM_TO_RULE_VAR_TRANSLATION_TABLE
-        )
-
-        return f"<{greedy_prefix}{escaped_request_uri_variable}>"
-
-    rule_string = PATH_PARAM_REGEX.sub(to_rule_variable, smithy_uri)
-    return rule_string
-
-
-class BaseSmithyRule(Rule):
-    """
-    Small extension to Werkzeug's Rule class which reverts unwanted assumptions made by Werkzeug.
-    Reverted assumptions:
-    - Werkzeug automatically matches HEAD requests to the corresponding GET request (i.e. Werkzeug's rule automatically
-      adds the HEAD HTTP method to a rule which should only match GET requests). This is implemented to simplify
-      implementing an app compliant with HTTP (where a HEAD request needs to return the headers of a corresponding GET
-      request), but it is unwanted for our strict rule matching in here.
-    """
-
-    def __init__(self, string: str, methods: list[str], **kwargs: Any) -> None:
-        super().__init__(string=string, methods=methods, **kwargs)
-
-        # Make sure Werkzeug's Rule does not add any other methods
-        # (f.e. the HEAD method even though the rule should only match GET)
-        if self.methods and "HEAD" in self.methods and "HEAD" not in methods:
-            self.methods = {method.upper() for method in methods}
-
-
-def to_uri_params(werkzeug_path_variables: Mapping[str, Any]) -> dict[str, Any]:
-    def post_process_arg_name(arg_key: str) -> str:
-        """
-        Reverses previous manipulations to the path parameters names (like replacing forbidden characters with
-        placeholders).
-        :param arg_key: Path param key name extracted using Werkzeug rules
-        :return: Post-processed ("un-sanitized") path param key
-        """
-        result = arg_key
-        for original, substitution in PATH_PARAM_TO_RULE_VAR_REPLACEMENTS.items():
-            result = result.replace(substitution, original)
-        return result
-
-    # post process the arg keys and values
-    # - the path param keys need to be "un-sanitized", i.e. sanitized rule variable names need to be reverted
-    # - the path param values might still be url-encoded
-    uri_params = {
-        post_process_arg_name(name): unquote(value)
-        for name, value in werkzeug_path_variables.items()
-    }
-    return uri_params
-
-
-class GreedyPathConverter(PathConverter):
-    """
-    This converter makes sure that the path ``/mybucket//mykey`` can be matched to the pattern
-    ``<Bucket>/<path:Key>`` and will result in `Key` being `/mykey`.
-    """
-
-    regex = ".*?"
-    # regex = "[^/].*?"
-    part_isolating = False
-    """From the werkzeug docs: If a custom converter can match a forward slash, /, it should have the
-    attribute part_isolating set to False. This will ensure that rules using the custom converter are
-    correctly matched."""
-
-
-class ConstrainedRule(BaseSmithyRule):
+class SmithyRule(Rule):
     """
     A Werkzeug Rule extension which initially acts as a normal rule (i.e. matches a path and method).
 
@@ -254,8 +173,23 @@ class ConstrainedRule(BaseSmithyRule):
         methods: list[str],
         **kwargs: Any,
     ) -> None:
-        super().__init__(string=string, methods=methods, **kwargs)
-        self.candidates = []
+        super().__init__(string, methods=methods, **kwargs)
+        self.candidates = self._initialize_candidates(operations)
+        # From Werkzeug: "If GET is present [...] and HEAD is not, HEAD is added automatically."
+        # This behavior is undesirable for our use-case, so we reverse it.
+        if self.methods and "HEAD" in self.methods and "HEAD" not in methods:
+            self.methods = {method.upper() for method in methods}
+
+    def match_request(self, request: Request) -> OperationModel | None:
+        action_selector = ActionSelector(self.candidates)
+        value = action_selector.select_action(request)
+        return value
+
+    @staticmethod
+    def _initialize_candidates(
+        operations: list[OperationModel],
+    ) -> list[ActionCandidate]:
+        candidates = []
         for operation in operations:
             candidate = ActionCandidate(operation)
             for name, value in operation.http_trait.query_args.items():
@@ -268,23 +202,11 @@ class ConstrainedRule(BaseSmithyRule):
                     candidate.add_constraint(RequiredArg(query_arg))
                 for header_name in input_shape.required_headers:
                     candidate.add_constraint(RequiredHeader(header_name))
-            self.candidates.append(candidate)
-
-    def match_request(self, request: Request) -> OperationModel | None:
-        """
-        Function which needs to be called by a caller if the _RequestMatchingRule already matched using Werkzeug's
-        default matching mechanism.
-
-        :param request: to perform the fine-grained matching on
-        :return: matching fine-grained rule
-        :raises: NotFound if none of the fine-grained rules matches
-        """
-        action_selector = ActionSelector(self.candidates)
-        value = action_selector.select_action(request)
-        return value
+            candidates.append(candidate)
+        return candidates
 
 
-class QueryProtocolRule(ConstrainedRule):
+class QueryProtocolRule(SmithyRule):
     def __init__(
         self,
         string: str,
@@ -300,7 +222,7 @@ class QueryProtocolRule(ConstrainedRule):
             candidate.add_constraint(RequiredArg("Action", operation.name))
 
 
-class JsonProtocolRule(ConstrainedRule):
+class JsonProtocolRule(SmithyRule):
     def __init__(
         self,
         string: str,
@@ -359,7 +281,7 @@ def _create_service_map(service: ServiceModel) -> dict[str, Map]:
                         )
                         assert subdomain != "<Bucket>"
                     rules.append(
-                        ConstrainedRule(
+                        SmithyRule(
                             string=rule_string,
                             operations=[op],
                             methods=[method],
@@ -373,7 +295,7 @@ def _create_service_map(service: ServiceModel) -> dict[str, Map]:
                                 new_path = "/"
                             rule_string = to_werkzeug_rule_string(new_path)
                             rules.append(
-                                ConstrainedRule(
+                                SmithyRule(
                                     string=rule_string,
                                     operations=ops,
                                     methods=[method],
@@ -384,9 +306,7 @@ def _create_service_map(service: ServiceModel) -> dict[str, Map]:
                     # if there is an ambiguity with only the (path, method) combination,
                     # a custom rule - which can use additional request metadata - needs to be used
                     rules.append(
-                        ConstrainedRule(
-                            string=rule_string, methods=[method], operations=ops
-                        )
+                        SmithyRule(string=rule_string, methods=[method], operations=ops)
                     )
                     s3_ops = [
                         op for op in ops if op.http_trait.path.startswith("/{Bucket}")
@@ -397,7 +317,7 @@ def _create_service_map(service: ServiceModel) -> dict[str, Map]:
                             new_path = "/"
                         rule_string = to_werkzeug_rule_string(new_path)
                         rules.append(
-                            ConstrainedRule(
+                            SmithyRule(
                                 string=rule_string,
                                 methods=[method],
                                 operations=s3_ops,
@@ -442,12 +362,25 @@ def _create_service_map(service: ServiceModel) -> dict[str, Map]:
             # we can't really use werkzeug's merge-slashes since it uses HTTP redirects to solve it
             merge_slashes=False,
             # get service-specific converters
-            converters={"path": GreedyPathConverter},
-            default_subdomain="default"
-            if add_s3_subdomain()
-            else "",  # "s3" if service.service_name == "s3" else "",
+            converters={GreedyLabelConverter.NAME: GreedyLabelConverter},
+            default_subdomain="default" if add_s3_subdomain() else "",
         )
     return protocol_to_rules
+
+
+def to_uri_params(arguments: Mapping[str, Any]) -> dict[str, Any]:
+    """Post-process Werkzeug mapped arguments back to Smithy label names and percent-decoded values."""
+
+    def to_label_name(arg: str) -> str:
+        label_name = arg
+        for original, substitution in URI_LABEL_TO_RULE_VAR_REPLACEMENTS.items():
+            label_name = label_name.replace(substitution, original)
+        return label_name
+
+    uri_params = {
+        to_label_name(name): unquote(value) for name, value in arguments.items()
+    }
+    return uri_params
 
 
 class ServiceOperationRouter:
@@ -474,13 +407,8 @@ class ServiceOperationRouter:
         """
         protocol = determine_request_protocol(self._service_model, request.content_type)
         protocol_map = self._map[protocol]
-        # bind the map to get the actual matcher
         matcher: MapAdapter = protocol_map.bind(
             request.host,
-            # subdomain=request.host.split(".", 1)[0]
-            # if (request.host.find("s3") > 1 or request.server[0].endswith(".localhost"))  # type: ignore[index]
-            # and add_s3_subdomain()
-            # else None,
             subdomain=request.host.split(".", 1)[0]
             if (
                 s3_response is not None and s3_response.subdomain_based_buckets(request)
@@ -489,25 +417,34 @@ class ServiceOperationRouter:
             else None,
         )
 
+        method = request.method
+        path_info = self._get_path_info_for_matching(request)
         try:
-            method = request.method
-
-            path = get_raw_path(request)
-            # trailing slashes are ignored in smithy matching,
-            # see https://smithy.io/1.0/spec/core/http-traits.html#literal-character-sequences and this
-            # makes sure that, e.g., in s3, `GET /mybucket/` is not matched to `GetBucket` and not to
-            # `GetObject` and the associated rule.
-            path = path.rstrip("/") if len(path) > 1 else path
-
-            rule, args = matcher.match(path, method=method, return_rule=True)
+            rule, arguments = matcher.match(path_info, method, return_rule=True)
         except MethodNotAllowed as e:
-            # MethodNotAllowed (405) exception is raised if a path is matching, but the method does not.
-            # Our router handles this as a 404.
             raise NotFound() from e
 
-        assert isinstance(rule, ConstrainedRule)
+        assert isinstance(rule, SmithyRule)
         operation = rule.match_request(request)
         if operation is None:
             raise NotFound()
 
-        return operation, to_uri_params(args)
+        return operation, to_uri_params(arguments)
+
+    @staticmethod
+    def _get_path_info_for_matching(request: Request) -> str:
+        raw_uri: str = request.environ.get("RAW_URI", "")
+        # If RAW_URI starts with a double slash, werkzeug will fail to parse it correctly and
+        # Request.path will be invalid.  This can occur with Amazon S3 Virtual-Hosted requests,
+        # where the bucket name is part of the domain name, combined with an object key that
+        # begins with a slash (e.g., bucket-name.s3.amazonaws.com//object-key).
+        if raw_uri.startswith("//"):
+            raw_uri = "/%2F" + raw_uri[2:]
+        # We have to parse because RAW_URI can contain a full URL.
+        to_parse = raw_uri or request.path
+        path_info = urlparse(to_parse).path
+        # Trailing slashes are always optional in Smithy matching:
+        # https://smithy.io/2.0/spec/http-bindings.html#literal-character-sequences
+        if len(path_info) > 1:
+            path_info = path_info.rstrip("/")
+        return path_info
