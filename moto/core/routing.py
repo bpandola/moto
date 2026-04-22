@@ -33,14 +33,6 @@ from moto.core.request import Request, determine_request_protocol
 if TYPE_CHECKING:
     from moto.s3.responses import S3Response
 
-# Regex to find path parameters in requestUris of AWS service specs (f.e. /{param1}/{param2+})
-# path_param_regex = re.compile(r"({.+?})")
-# Translation table which replaces characters forbidden in Werkzeug rule names with temporary replacements
-# Note: The temporary replacements must not occur in any requestUri of any operation in any service!
-# _rule_replacements = {"-": "_HYPHEN_"}
-# String translation table for #_rule_replacements for str#translate
-# _rule_replacement_table = str.maketrans(_rule_replacements)
-
 PATH_PARAM_REGEX = re.compile(r"({.+?})")
 
 PATH_PARAM_TO_RULE_VAR_REPLACEMENTS = {"-": "_HYPHEN_"}
@@ -101,6 +93,9 @@ class ActionCandidate:
     ):
         self.operation = operation
         self.constraints = constraints or []
+
+    def add_constraint(self, constraint: ActionConstraint) -> None:
+        self.constraints.append(constraint)
 
     @property
     def weight(self) -> int:
@@ -182,14 +177,6 @@ def to_werkzeug_rule_string(smithy_uri: str) -> str:
 
         return f"<{greedy_prefix}{escaped_request_uri_variable}>"
 
-    # Hack: if uri endswith a param variable, make it greedy.
-    # This is basically just to fix two iot tests that assert on arns passed
-    # with and without encoding.  This might be generally useful, and I did
-    # add it to the Moto uri->regex method, but calling it out here for
-    # extra scrutiny.
-    # if smithy_uri[-1] == "}" and smithy_uri[-2] != "+":
-    #     smithy_uri = smithy_uri[:-1] + "+}"
-    # Turning this off for now to see if any other tests fail than iot
     rule_string = PATH_PARAM_REGEX.sub(to_rule_variable, smithy_uri)
     return rule_string
 
@@ -230,8 +217,8 @@ def to_uri_params(werkzeug_path_variables: Mapping[str, Any]) -> dict[str, Any]:
     # - the path param keys need to be "un-sanitized", i.e. sanitized rule variable names need to be reverted
     # - the path param values might still be url-encoded
     uri_params = {
-        post_process_arg_name(key): unquote(value)
-        for key, value in werkzeug_path_variables.items()
+        post_process_arg_name(name): unquote(value)
+        for name, value in werkzeug_path_variables.items()
     }
     return uri_params
 
@@ -268,17 +255,12 @@ class ConstrainedRule(BaseSmithyRule):
         **kwargs: Any,
     ) -> None:
         super().__init__(string=string, methods=methods, **kwargs)
-        # Create a rule which checks all required arguments (not only the path and method)
-        # rules = [_RequiredArgsRule(op) for op in operations]
-        # Sort the rules descending based on their rule score
-        # (i.e. the first matching rule will have the highest score)=
-        # self.rules = sorted(rules, key=lambda rule: rule.match_score, reverse=True)
         self.candidates = []
         for operation in operations:
             candidate = ActionCandidate(operation)
             # http trait
             for key, value in operation.http_trait.query_args.items():
-                candidate.constraints.append(RequiredArg(key, value))
+                candidate.add_constraint(RequiredArg(key, value))
             # find the required header and query parameters of the input shape
             input_shape = operation.input_shape
             if isinstance(input_shape, StructureShape):
@@ -297,14 +279,14 @@ class ConstrainedRule(BaseSmithyRule):
                             header_name = member_shape.serialization.get(
                                 "name", member_shape.name
                             )
-                            candidate.constraints.append(RequiredHeader(header_name))
+                            candidate.add_constraint(RequiredHeader(header_name))
                         elif location == "querystring":
                             query_name = member_shape.serialization.get(
                                 "name", member_shape.name
                             )
                             # do not overwrite potentially already existing query params with specific values
                             if query_name not in operation.http_trait.query_args:
-                                candidate.constraints.append(RequiredArg(query_name))
+                                candidate.add_constraint(RequiredArg(query_name))
             self.candidates.append(candidate)
 
     def match_request(self, request: Request) -> OperationModel | None:
@@ -334,7 +316,7 @@ class QueryProtocolRule(ConstrainedRule):
         )
         for candidate in self.candidates:
             operation = candidate.operation
-            candidate.constraints.append(RequiredArg("Action", operation.name))
+            candidate.add_constraint(RequiredArg("Action", operation.name))
 
 
 class JsonProtocolRule(ConstrainedRule):
@@ -350,7 +332,7 @@ class JsonProtocolRule(ConstrainedRule):
         )
         for candidate in self.candidates:
             operation = candidate.operation
-            candidate.constraints.append(
+            candidate.add_constraint(
                 RequiredHeader(
                     "X-Amz-Target",
                     f"{operation.service_model.metadata.get('targetPrefix')}.{operation.name}",
