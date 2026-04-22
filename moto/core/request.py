@@ -5,7 +5,6 @@ from urllib.parse import urlparse
 
 from werkzeug.wrappers import Request
 
-from moto.core.utils import gzip_decompress
 from moto.settings import MAX_FORM_MEMORY_SIZE
 from moto.utilities.constants import APPLICATION_JSON, JSON_TYPES
 
@@ -15,16 +14,9 @@ if TYPE_CHECKING:
     from moto.core.model import ServiceModel
 
 
-def normalize_request(
-    request: AWSPreparedRequest | Request, decompress: bool = True
-) -> Request:
+def normalize_request(request: AWSPreparedRequest | Request) -> Request:
     if isinstance(request, Request):
         return request
-    body = request.body
-    # Request.from_values() does not automatically handle gzip-encoded bodies,
-    # like the full WSGI server would, so we need to do it manually.
-    if request.headers.get("Content-Encoding") == "gzip" and decompress:
-        body = gzip_decompress(body)  # type: ignore[arg-type]
     parsed_url = urlparse(request.url)
     Request.max_form_memory_size = MAX_FORM_MEMORY_SIZE
     normalized_request = Request.from_values(
@@ -32,7 +24,7 @@ def normalize_request(
         base_url=f"{parsed_url.scheme}://{parsed_url.netloc}",
         path=parsed_url.path,
         query_string=parsed_url.query,
-        data=body,
+        data=request.body,
         headers=[(k, v) for k, v in request.headers.items()],
     )
     return normalized_request
