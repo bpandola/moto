@@ -258,35 +258,16 @@ class ConstrainedRule(BaseSmithyRule):
         self.candidates = []
         for operation in operations:
             candidate = ActionCandidate(operation)
-            # http trait
-            for key, value in operation.http_trait.query_args.items():
-                candidate.add_constraint(RequiredArg(key, value))
-            # find the required header and query parameters of the input shape
+            for name, value in operation.http_trait.query_args.items():
+                candidate.add_constraint(RequiredArg(name, value))
             input_shape = operation.input_shape
             if isinstance(input_shape, StructureShape):
-                for required_member in input_shape.required_members:
-                    member_shape = input_shape.members[required_member]
-                    # This is to get around s3control AccountId required param
-                    # Look at TagResource - AccountId can be header or host, so we can't add to header constraint...
-                    # TODO: do more research and figure out exactly how to handle this...
-                    # if member_shape.serialization.get("hostLabel", False):
-                    #    continue
-                    # I commented this back out because it was only failing for the router tests,
-                    # which I fixed by adding the header.
-                    location = member_shape.serialization.get("location")
-                    if location is not None:
-                        if location == "header":
-                            header_name = member_shape.serialization.get(
-                                "name", member_shape.name
-                            )
-                            candidate.add_constraint(RequiredHeader(header_name))
-                        elif location == "querystring":
-                            query_name = member_shape.serialization.get(
-                                "name", member_shape.name
-                            )
-                            # do not overwrite potentially already existing query params with specific values
-                            if query_name not in operation.http_trait.query_args:
-                                candidate.add_constraint(RequiredArg(query_name))
+                for query_arg in input_shape.required_query_args:
+                    if query_arg in operation.http_trait.query_args:
+                        continue  # Already constrained, possibly with a value.
+                    candidate.add_constraint(RequiredArg(query_arg))
+                for header_name in input_shape.required_headers:
+                    candidate.add_constraint(RequiredHeader(header_name))
             self.candidates.append(candidate)
 
     def match_request(self, request: Request) -> OperationModel | None:
