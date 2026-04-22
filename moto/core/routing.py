@@ -489,12 +489,8 @@ class ServiceOperationRouter:
             else None,
         )
 
-        # perform the matching
         try:
-            # some services (at least S3) allow OPTIONS request (f.e. for CORS preflight requests) without them being
-            # specified. the specs do _not_ contain any operations on OPTIONS methods at all.
-            # avoid matching issues for preflight requests by matching against a similar GET request instead.
-            method = request.method if request.method != "OPTIONS" else "GET"
+            method = request.method
 
             path = get_raw_path(request)
             # trailing slashes are ignored in smithy matching,
