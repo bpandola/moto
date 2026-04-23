@@ -4,7 +4,7 @@ import datetime
 import inspect
 import re
 from collections.abc import Callable
-from functools import cache
+from functools import cache, lru_cache
 from gzip import compress, decompress
 from typing import Any, Optional
 from urllib.parse import ParseResult, urlparse
@@ -465,7 +465,7 @@ def get_pagination_model(service_name: str) -> dict[str, Any]:  # type: ignore[m
     return pagination_model["pagination"]
 
 
-@cache
+@lru_cache(10)
 def get_service_model(service_name: str) -> ServiceModel:
     model = _load_service_model(service_name, "service-2")
     service_model = ServiceModel(model, service_name)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gzip
 import json
 import logging
 import os
@@ -16,6 +17,7 @@ from typing import (
 )
 from urllib.parse import parse_qs, parse_qsl, urlparse
 
+from botocore.exceptions import UnknownServiceError
 from werkzeug.exceptions import HTTPException
 from werkzeug.http import http_date
 
@@ -26,7 +28,7 @@ from moto.core.exceptions import ServiceException
 from moto.core.model import OperationModel, ServiceModel
 from moto.core.parse import PROTOCOL_PARSERS, XFormedDict
 from moto.core.request import Request, determine_request_protocol, normalize_request
-from moto.core.routing import ServiceOperationRouter
+from moto.core.routing import NotFound, get_service_router
 from moto.core.serialize import (
     ResponseSerializer,
     XFormedAttributePicker,
@@ -38,7 +40,6 @@ from moto.core.utils import (
     get_pagination_model,
     get_service_model,
     get_value,
-    gzip_decompress,
     method_names_from_class,
     set_value,
     utcnow,
@@ -186,7 +187,9 @@ class BaseResponse(ActionAuthenticatorMixin):
         """
         use_raw_body: Use incoming bytes if True, encode to string otherwise
         """
+
         self.is_werkzeug_request = "werkzeug" in str(type(request))
+        request = self.normalize_request(request)
         self.parsed_url = urlparse(full_url)
         querystring: dict[str, Any] = OrderedDict()
         if hasattr(request, "body"):
@@ -232,11 +235,11 @@ class BaseResponse(ActionAuthenticatorMixin):
 
         # https://github.com/getmoto/moto/issues/6692
         # Content coming from SDK's can be GZipped for performance reasons
-        if (
-            headers.get("Content-Encoding", "") == "gzip"
-            and self.allow_request_decompression
-        ):
-            self.body = gzip_decompress(self.body)
+        # if (
+        #     headers.get("Content-Encoding", "") == "gzip"
+        #     and self.allow_request_decompression
+        # ):
+        #     self.body = gzip_decompress(self.body)
 
         if isinstance(self.body, bytes) and not use_raw_body:
             self.body = self.body.decode("utf-8")
@@ -289,10 +292,12 @@ class BaseResponse(ActionAuthenticatorMixin):
         if not self.is_werkzeug_request:
             self.response_headers["date"] = http_date(utcnow())
 
-        self.normalized_request = self.normalize_request(request)
-        service_model = get_service_model(self.boto3_service_name)
-        service_router = ServiceOperationRouter(service_model)
+        self.normalized_request = request
+        self.operation: OperationModel | None = None
+        self.uri_params = {}
         try:
+            service_model = get_service_model(self.boto3_service_name)
+            service_router = get_service_router(self.boto3_service_name)
             s3_response = self if self.service_name == "s3" else None
             operation, uri_params = service_router.match(
                 self.normalized_request,
@@ -300,10 +305,12 @@ class BaseResponse(ActionAuthenticatorMixin):
             )
             self.operation = operation
             self.uri_params = uri_params
-        except Exception:
+        except UnknownServiceError:
+            pass
+        except NotFound:
             self.operation = OperationModel({}, service_model)
             self.uri_params = {}
-        if self.automated_parameter_parsing:
+        if self.automated_parameter_parsing and self.operation:
             self.parse_parameters()
 
         # Register visit with IAM
@@ -324,7 +331,8 @@ class BaseResponse(ActionAuthenticatorMixin):
             normalized_request.content_encoding == "gzip"
             and self.allow_request_decompression
         ):
-            normalized_request.data = gzip_decompress(normalized_request.data)
+            normalized_request.stream = gzip.GzipFile(fileobj=normalized_request.stream)  # type: ignore[assignment]
+            normalized_request.get_data(parse_form_data=True)
         return normalized_request
 
     def get_region_from_url(self, request: Any, full_url: str) -> str:
@@ -420,9 +428,10 @@ class BaseResponse(ActionAuthenticatorMixin):
             action = action[0]
         if action:
             return action
-        return self.operation.name or ""
+        return self.operation.name if self.operation else ""
 
     def parse_parameters(self) -> None:
+        assert self.operation is not None
         protocol = determine_request_protocol(
             self.operation.service_model, self.normalized_request.content_type
         )
@@ -448,6 +457,7 @@ class BaseResponse(ActionAuthenticatorMixin):
         return protocol
 
     def serialized(self, action_result: ActionResult) -> TYPE_RESPONSE:
+        assert self.operation is not None
         service_model = self.operation.service_model
         operation_model = self.operation
         protocol = self.determine_response_protocol(service_model)
