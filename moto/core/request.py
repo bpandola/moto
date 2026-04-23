@@ -3,8 +3,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
+from botocore.httpchecksum import AwsChunkedWrapper
 from werkzeug.wrappers import Request as _Request
-from werkzeug.wrappers.request import cached_property
 
 from moto.settings import MAX_FORM_MEMORY_SIZE
 from moto.utilities.constants import APPLICATION_JSON, JSON_TYPES
@@ -20,19 +20,19 @@ class Request(_Request):
         super().__init__(*args, **kwargs)
         self.max_form_memory_size = MAX_FORM_MEMORY_SIZE
 
-    @cached_property
-    def data(self) -> bytes:
-        if self.content_encoding and "aws-chunked" in self.content_encoding:
-            # This is what we get in decorator mode (from AwsPreparedRequest).
-            if hasattr(self.input_stream, "getvalue"):
-                data = self.input_stream.getvalue()  # type: ignore[attr-defined]
-            # This is what we get off the wire in server mode (e.g from Java SDK).
-            elif hasattr(self.stream, "read"):
-                data = self.stream.read()
-            else:
-                raise ValueError("aws-chunked data not expected stream type")
-            return data
-        return super().get_data()
+    # @cached_property
+    # def data(self) -> bytes:
+    #     if self.content_encoding and "aws-chunked" in self.content_encoding:
+    #         # This is what we get in decorator mode (from AwsPreparedRequest).
+    #         if hasattr(self.input_stream, "getvalue"):
+    #             data = self.input_stream.getvalue()  # type: ignore[attr-defined]
+    #         # This is what we get off the wire in server mode (e.g from Java SDK).
+    #         elif hasattr(self.stream, "read"):
+    #             data = self.stream.read()
+    #         else:
+    #             raise ValueError("aws-chunked data not expected stream type")
+    #         return data
+    #     return super().get_data()
 
     @classmethod
     def from_values(cls, *args: Any, **kwargs: Any) -> Request:
@@ -45,13 +45,19 @@ def normalize_request(request: AWSPreparedRequest | _Request) -> Request:
         return request
     if isinstance(request, _Request):
         return Request(request.environ.copy())
+    body = request.body
+    if isinstance(request.body, AwsChunkedWrapper):
+        body = request.body.read()
+        request.headers.pop("Transfer-Encoding", None)
+    else:
+        body = request.body if request.body is not None else b""
     parsed_url = urlparse(request.url)
     normalized_request = Request.from_values(
         method=request.method,
         base_url=f"{parsed_url.scheme}://{parsed_url.netloc}",
         path=parsed_url.path,
         query_string=parsed_url.query,
-        data=request.body,
+        data=body,
         headers=[(k, v) for k, v in request.headers.items()],
     )
     return normalized_request
