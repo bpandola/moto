@@ -16,7 +16,9 @@ if TYPE_CHECKING:
 
 
 class Request(_Request):
-    max_form_memory_size: int = MAX_FORM_MEMORY_SIZE
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.max_form_memory_size = MAX_FORM_MEMORY_SIZE
 
     @cached_property
     def data(self) -> bytes:
@@ -27,7 +29,7 @@ class Request(_Request):
     @classmethod
     def from_values(cls, *args: Any, **kwargs: Any) -> Request:
         req = super().from_values(*args, **kwargs)
-        return Request(req.environ)
+        return Request(req.environ.copy())
 
 
 def normalize_request(request: AWSPreparedRequest | _Request) -> Request:

@@ -6,7 +6,7 @@ from threading import Lock
 from typing import Any, Optional
 
 try:
-    from flask import Flask
+    from flask import Flask, Request
     from flask_cors import CORS
 except ImportError:
     import warnings
@@ -21,6 +21,7 @@ import moto.backend_index as backend_index
 import moto.backends as backends
 from moto.core import DEFAULT_ACCOUNT_ID
 from moto.core.base_backend import BackendDict
+from moto.core.request import Request as MotoRequest
 from moto.core.utils import convert_to_flask_response
 from moto.settings import DISABLE_GLOBAL_CORS, MAX_FORM_MEMORY_SIZE
 
@@ -356,6 +357,11 @@ def create_backend_app(service: backends.SERVICE_NAMES) -> Flask:
     backend_app.debug = True
     backend_app.service = service  # type: ignore[attr-defined]
     backend_app.config["MAX_FORM_MEMORY_SIZE"] = MAX_FORM_MEMORY_SIZE
+
+    class BackendRequest(MotoRequest, Request):
+        pass
+
+    backend_app.request_class = BackendRequest
 
     if not DISABLE_GLOBAL_CORS:
         CORS(backend_app)
