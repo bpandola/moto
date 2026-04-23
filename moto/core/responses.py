@@ -307,7 +307,7 @@ class BaseResponse(ActionAuthenticatorMixin):
             self.uri_params = uri_params
         except UnknownServiceError:
             pass
-        except NotFound:
+        except (NotFound, NotImplementedError):
             self.operation = OperationModel({}, service_model)
             self.uri_params = {}
         if self.automated_parameter_parsing and self.operation:
