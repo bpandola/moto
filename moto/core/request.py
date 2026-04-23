@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
-from werkzeug.wrappers import Request
+from werkzeug.wrappers import Request as _Request
+from werkzeug.wrappers.request import cached_property
 
 from moto.settings import MAX_FORM_MEMORY_SIZE
 from moto.utilities.constants import APPLICATION_JSON, JSON_TYPES
@@ -14,11 +15,27 @@ if TYPE_CHECKING:
     from moto.core.model import ServiceModel
 
 
-def normalize_request(request: AWSPreparedRequest | Request) -> Request:
+class Request(_Request):
+    max_form_memory_size: int = MAX_FORM_MEMORY_SIZE
+
+    @cached_property
+    def data(self) -> bytes:
+        if self.content_encoding and "aws-chunked" in self.content_encoding:
+            return self.input_stream.getvalue()  # type: ignore[attr-defined]
+        return super().get_data()
+
+    @classmethod
+    def from_values(cls, *args: Any, **kwargs: Any) -> Request:
+        req = super().from_values(*args, **kwargs)
+        return Request(req.environ)
+
+
+def normalize_request(request: AWSPreparedRequest | _Request) -> Request:
     if isinstance(request, Request):
         return request
+    if isinstance(request, _Request):
+        return Request(request.environ.copy())
     parsed_url = urlparse(request.url)
-    Request.max_form_memory_size = MAX_FORM_MEMORY_SIZE
     normalized_request = Request.from_values(
         method=request.method,
         base_url=f"{parsed_url.scheme}://{parsed_url.netloc}",

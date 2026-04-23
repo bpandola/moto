@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import functools
 import re
 from collections import defaultdict
 from collections.abc import Mapping
@@ -29,6 +30,7 @@ from werkzeug.routing import BaseConverter, Map, MapAdapter, Rule
 from moto import settings
 from moto.core.model import OperationModel, ServiceModel, StructureShape
 from moto.core.request import Request, determine_request_protocol
+from moto.core.utils import get_service_model
 
 if TYPE_CHECKING:
     from moto.s3.responses import S3Response
@@ -448,3 +450,10 @@ class ServiceOperationRouter:
         if len(path_info) > 1:
             path_info = path_info.rstrip("/")
         return path_info
+
+
+@functools.lru_cache(10)
+def get_service_router(service_name: str) -> ServiceOperationRouter:
+    service_model = get_service_model(service_name)
+    service_router = ServiceOperationRouter(service_model)
+    return service_router
