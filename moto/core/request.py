@@ -23,7 +23,15 @@ class Request(_Request):
     @cached_property
     def data(self) -> bytes:
         if self.content_encoding and "aws-chunked" in self.content_encoding:
-            return self.input_stream.getvalue()  # type: ignore[attr-defined]
+            # This is what we get in decorator mode (from AwsPreparedRequest).
+            if hasattr(self.input_stream, "getvalue"):
+                data = self.input_stream.getvalue()  # type: ignore[attr-defined]
+            # This is what we get off the wire in server mode (e.g from Java SDK).
+            elif hasattr(self.stream, "read"):
+                data = self.stream.read()
+            else:
+                raise ValueError("aws-chunked data not expected stream type")
+            return data
         return super().get_data()
 
     @classmethod
