@@ -20,7 +20,6 @@ from moto.moto_api._internal.models import moto_api_backend
 
 from . import debug, error, info, with_color
 from .certificate_creator import CertificateCreator
-from .utils import get_body_from_form_data
 
 # Adapted from https://github.com/xxlv/proxy3
 
@@ -74,7 +73,6 @@ class MotoRequestHandler:
         path: str,
         headers: Any,
         body: bytes,
-        form_data: dict[str, Any],
     ) -> Any:
         handler = self.get_handler_for_host(host=host, path=path)
         if handler is None:
@@ -83,7 +81,6 @@ class MotoRequestHandler:
         request = AWSPreparedRequest(
             method, full_url, headers, body, stream_output=False
         )
-        request.form_data = form_data  # type: ignore[attr-defined]
         return handler(request, full_url, headers)
 
 
@@ -163,15 +160,6 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
         elif "Content-Length" in req.headers:
             content_length = int(req.headers["Content-Length"])
             req_body = self.rfile.read(content_length)
-        if self.headers.get("Content-Type", "").startswith("multipart/form-data"):
-            boundary = self.headers["Content-Type"].split("boundary=")[-1]
-            req_body, form_data = get_body_from_form_data(req_body, boundary)  # type: ignore
-            for key, val in form_data.items():
-                self.headers[key] = [val]  # type: ignore
-        else:
-            form_data = {}
-
-        req_body = self.decode_request_body(req.headers, req_body)  # type: ignore
 
         try:
             info(f"{with_color(33, req.command.upper())} {host}{path}")  # noqa
@@ -184,7 +172,6 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
                 path=path,
                 headers=req.headers,
                 body=req_body,
-                form_data=form_data,
             )
             debug("\t=====RESPONSE========")
             debug("\t" + with_color(color=33, text=response))
