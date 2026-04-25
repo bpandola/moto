@@ -278,16 +278,6 @@ class ProxyRequestHandler(BaseHTTPRequestHandler):
                 break
         return chunked_body
 
-    def decode_request_body(self, headers: dict[str, str], body: Any) -> Any:
-        if body is None:
-            return body
-        if headers.get("Content-Type", "") in [
-            "application/x-amz-json-1.1",
-            "application/x-www-form-urlencoded; charset=utf-8",
-        ]:
-            return body.decode("utf-8")
-        return body
-
     do_HEAD = do_GET
     do_POST = do_GET
     do_PUT = do_GET
