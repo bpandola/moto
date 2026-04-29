@@ -82,7 +82,7 @@ class LayerDataType(TypedDict):
 
 def zip2tar(zip_bytes: bytes) -> io.BytesIO:
     tarstream = io.BytesIO()
-    timeshift = int((datetime.now() - utcnow()).total_seconds())
+    timeshift = int((datetime.now().astimezone() - utcnow()).total_seconds())
     tarf = tarfile.TarFile(fileobj=tarstream, mode="w")
     with zipfile.ZipFile(io.BytesIO(zip_bytes), "r") as zipf:
         for zipinfo in zipf.infolist():

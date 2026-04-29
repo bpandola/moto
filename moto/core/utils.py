@@ -242,18 +242,13 @@ def utcfromtimestamp(value: int) -> datetime.datetime:
     """
     Return the UTC datetime corresponding to the POSIX timestamp, with tzinfo None. The resulting object is naive.
     """
-    # Python 3.12 starts throwing deprecation warnings for utcfromtimestamp()
-    # The docs recommend to use fromtimestamp(UTC) instead
-    #
-    # fromtimestamp(UTC) creates an aware datetime - but utcfromtimestamp() creates a naive datetime
-    # That's why we have to `replace(tzinfo=None)` to make now(UTC) naive.
     if PYTHON_311:
         # Only available from 3.11
         from datetime import UTC  # type: ignore
 
-        return datetime.datetime.fromtimestamp(value, tz=UTC).replace(tzinfo=None)
+        return datetime.datetime.fromtimestamp(value, tz=UTC)
     else:
-        return datetime.datetime.utcfromtimestamp(value)
+        return datetime.datetime.fromtimestamp(value, tz=datetime.timezone.utc)
 
 
 def utcnow() -> datetime.datetime:
