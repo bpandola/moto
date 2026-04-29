@@ -8,7 +8,7 @@ import json
 import re
 from collections import OrderedDict
 from collections.abc import MutableMapping
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import TYPE_CHECKING, Any, Optional, TypedDict
 from urllib.parse import unquote
 from xml.etree import ElementTree as ETree
@@ -29,13 +29,12 @@ class RequestParserError(Exception):
 
 
 def default_timestamp_parser(value: str) -> datetime:
-    """Parse a timestamp and return a naive datetime object in UTC.
+    """Parse a timestamp and return an aware datetime object in UTC.
     This matches Moto's internal representation of timestamps, based
     on moto.core.utils.utcnow().
     """
     parsed = botocore_parse_timestamp(value)
-    as_naive_utc = parsed.astimezone(timezone.utc).replace(tzinfo=None)
-    return as_naive_utc
+    return parsed
 
 
 def default_blob_parser(value):
