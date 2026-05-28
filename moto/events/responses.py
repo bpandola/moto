@@ -2,6 +2,7 @@ import json
 from typing import Any
 
 from moto.core.responses import BaseResponse
+from moto.core.utils import unix_time
 from moto.events.models import EventsBackend, events_backends
 
 
@@ -173,7 +174,9 @@ class EventsHandler(BaseResponse):
 
     def put_events(self) -> str:
         events = self._get_param("Entries")
-
+        for event in events:
+            if "Time" in event:
+                event["Time"] = unix_time(event["Time"])
         entries = self.events_backend.put_events(events)
 
         failed_count = len([e for e in entries if "ErrorCode" in e])
@@ -385,8 +388,8 @@ class EventsHandler(BaseResponse):
         name = self._get_param("ReplayName")
         description = self._get_param("Description")
         source_arn = self._get_param("EventSourceArn")
-        start_time = self._get_param("EventStartTime")
-        end_time = self._get_param("EventEndTime")
+        start_time = str(unix_time(self._get_param("EventStartTime")))
+        end_time = str(unix_time(self._get_param("EventEndTime")))
         destination = self._get_param("Destination")
 
         result = self.events_backend.start_replay(
@@ -568,5 +571,8 @@ class EventsHandler(BaseResponse):
 
     def put_partner_events(self) -> str:
         entries = self._get_param("Entries")
+        for entry in entries:
+            if "Time" in entry:
+                entry["Time"] = unix_time(entry["Time"])
         self.events_backend.put_partner_events(entries)
         return json.dumps({"Entries": [], "FailedEntryCount": 0})
