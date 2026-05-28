@@ -17,15 +17,14 @@ class DAXResponse(BaseResponse):
         return dax_backends[self.current_account][self.region]
 
     def create_cluster(self) -> str:
-        params = self._get_params()
-        cluster_name = params.get("ClusterName")
-        node_type = params.get("NodeType")
-        description = params.get("Description")
-        replication_factor = params.get("ReplicationFactor")
-        iam_role_arn = params.get("IamRoleArn")
-        tags = params.get("Tags", [])
-        sse_specification = params.get("SSESpecification", {})
-        encryption_type = params.get("ClusterEndpointEncryptionType", "NONE")
+        cluster_name = self._get_param("ClusterName")
+        node_type = self._get_param("NodeType")
+        description = self._get_param("Description")
+        replication_factor = self._get_param("ReplicationFactor")
+        iam_role_arn = self._get_param("IamRoleArn")
+        tags = self._get_param("Tags", [])
+        sse_specification = self._get_param("SSESpecification", {})
+        encryption_type = self._get_param("ClusterEndpointEncryptionType", "NONE")
 
         self._validate_arn(iam_role_arn)
         self._validate_name(cluster_name)
@@ -43,15 +42,14 @@ class DAXResponse(BaseResponse):
         return json.dumps({"Cluster": cluster.to_json()})
 
     def delete_cluster(self) -> str:
-        cluster_name = self._get_params().get("ClusterName")
+        cluster_name = self._get_param("ClusterName")
         cluster = self.dax_backend.delete_cluster(cluster_name)
         return json.dumps({"Cluster": cluster.to_json()})
 
     def describe_clusters(self) -> str:
-        params = self._get_params()
-        cluster_names = params.get("ClusterNames", [])
-        max_results = params.get("MaxResults")
-        next_token = params.get("NextToken")
+        cluster_names = self._get_param("ClusterNames", [])
+        max_results = self._get_param("MaxResults")
+        next_token = self._get_param("NextToken")
 
         for name in cluster_names:
             self._validate_name(name)
@@ -90,25 +88,22 @@ class DAXResponse(BaseResponse):
             raise InvalidParameterValueException(msg)
 
     def list_tags(self) -> str:
-        params = self._get_params()
-        resource_name = params.get("ResourceName")
+        resource_name = self._get_param("ResourceName")
         tags = self.dax_backend.list_tags(resource_name=resource_name)
         return json.dumps(tags)
 
     def increase_replication_factor(self) -> str:
-        params = self._get_params()
-        cluster_name = params.get("ClusterName")
-        new_replication_factor = params.get("NewReplicationFactor")
+        cluster_name = self._get_param("ClusterName")
+        new_replication_factor = self._get_param("NewReplicationFactor")
         cluster = self.dax_backend.increase_replication_factor(
             cluster_name=cluster_name, new_replication_factor=new_replication_factor
         )
         return json.dumps({"Cluster": cluster.to_json()})
 
     def decrease_replication_factor(self) -> str:
-        params = self._get_params()
-        cluster_name = params.get("ClusterName")
-        new_replication_factor = params.get("NewReplicationFactor")
-        node_ids_to_remove = params.get("NodeIdsToRemove")
+        cluster_name = self._get_param("ClusterName")
+        new_replication_factor = self._get_param("NewReplicationFactor")
+        node_ids_to_remove = self._get_param("NodeIdsToRemove")
         cluster = self.dax_backend.decrease_replication_factor(
             cluster_name=cluster_name,
             new_replication_factor=new_replication_factor,
@@ -117,9 +112,8 @@ class DAXResponse(BaseResponse):
         return json.dumps({"Cluster": cluster.to_json()})
 
     def tag_resource(self) -> str:
-        params = self._get_params()
-        resource_name = params.get("ResourceName")
-        tags = params.get("Tags")
+        resource_name = self._get_param("ResourceName")
+        tags = self._get_param("Tags")
         self.dax_backend.tag_resource(
             resource_name=resource_name,
             tags=tags,
@@ -127,9 +121,8 @@ class DAXResponse(BaseResponse):
         return "{}"
 
     def untag_resource(self) -> str:
-        params = self._get_params()
-        resource_name = params.get("ResourceName")
-        tag_keys = params.get("TagKeys")
+        resource_name = self._get_param("ResourceName")
+        tag_keys = self._get_param("TagKeys")
         self.dax_backend.untag_resource(
             resource_name=resource_name,
             tag_keys=tag_keys,
