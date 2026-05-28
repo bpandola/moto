@@ -31,9 +31,8 @@ class PrometheusServiceResponse(BaseResponse):
         return amp_backends[self.current_account][self.region]
 
     def create_workspace(self) -> str:
-        params = self._get_params()
-        alias = params.get("alias")
-        tags = params.get("tags")
+        alias = self._get_param("alias")
+        tags = self._get_param("tags")
         workspace = self.amp_backend.create_workspace(alias=alias, tags=tags)
         return json.dumps(dict(workspace.to_dict()))
 
@@ -48,8 +47,7 @@ class PrometheusServiceResponse(BaseResponse):
         return json.dumps({"tags": tags})
 
     def update_workspace_alias(self) -> str:
-        params = self._get_params()
-        alias = params.get("alias")
+        alias = self._get_param("alias")
         workspace_id = self._get_param("workspaceId")
         self.amp_backend.update_workspace_alias(alias=alias, workspace_id=workspace_id)
         return json.dumps({})
@@ -71,9 +69,8 @@ class PrometheusServiceResponse(BaseResponse):
         )
 
     def tag_resource(self) -> str:
-        params = self._get_params()
         resource_arn = self._get_param("resourceArn")
-        tags = params.get("tags")
+        tags = self._get_param("tags")
         self.amp_backend.tag_resource(resource_arn=resource_arn, tags=tags)
         return json.dumps({})
 
@@ -84,12 +81,11 @@ class PrometheusServiceResponse(BaseResponse):
         return json.dumps({})
 
     def create_rule_groups_namespace(self) -> str:
-        params = self._get_params()
-        data = params.get("data")
+        data = self._get_param("data")
         if isinstance(data, bytes):
             data = base64.b64encode(data).decode("utf-8")
-        name = params.get("name")
-        tags = params.get("tags")
+        name = self._get_param("name")
+        tags = self._get_param("tags")
         workspace_id = self._get_param("workspaceId")
         rule_group_namespace = self.amp_backend.create_rule_groups_namespace(
             data=data,
@@ -117,8 +113,7 @@ class PrometheusServiceResponse(BaseResponse):
         return json.dumps({"ruleGroupsNamespace": ns.to_dict()})
 
     def put_rule_groups_namespace(self) -> str:
-        params = self._get_params()
-        data = params.get("data")
+        data = self._get_param("data")
         if isinstance(data, bytes):
             data = base64.b64encode(data).decode("utf-8")
         name = self._get_param("name")
