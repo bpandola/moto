@@ -20,21 +20,19 @@ class EventBridgePipesResponse(BaseResponse):
         return pipes_backends[self.current_account][self.region]
 
     def create_pipe(self) -> ActionResult:
-        params = self._get_params()
-
-        name = params.get("Name") or self._get_param("Name")
-        description = params.get("Description")
-        desired_state = params.get("DesiredState")
-        source = params.get("Source")
-        source_parameters = params.get("SourceParameters")
-        enrichment = params.get("Enrichment")
-        enrichment_parameters = params.get("EnrichmentParameters")
-        target = params.get("Target")
-        target_parameters = params.get("TargetParameters")
-        role_arn = params.get("RoleArn")
-        tags = params.get("Tags")
-        log_configuration = params.get("LogConfiguration")
-        kms_key_identifier = params.get("KmsKeyIdentifier")
+        name = self._get_param("Name")
+        description = self._get_param("Description")
+        desired_state = self._get_param("DesiredState")
+        source = self._get_param("Source")
+        source_parameters = self._get_param("SourceParameters")
+        enrichment = self._get_param("Enrichment")
+        enrichment_parameters = self._get_param("EnrichmentParameters")
+        target = self._get_param("Target")
+        target_parameters = self._get_param("TargetParameters")
+        role_arn = self._get_param("RoleArn")
+        tags = self._get_param("Tags")
+        log_configuration = self._get_param("LogConfiguration")
+        kms_key_identifier = self._get_param("KmsKeyIdentifier")
 
         if not source:
             raise ValidationException("Source is a required parameter")
@@ -126,8 +124,7 @@ class EventBridgePipesResponse(BaseResponse):
 
     def tag_resource(self) -> ActionResult:
         resource_arn = self._get_param("resourceArn")
-        params = self._get_params()
-        tags = params.get("Tags") or params.get("tags")
+        tags = self._get_param("tags")
         if not tags:
             raise ValidationException("Tags is a required parameter")
 
@@ -153,15 +150,13 @@ class EventBridgePipesResponse(BaseResponse):
         return ActionResult({"tags": tags})
 
     def list_pipes(self) -> ActionResult:
-        params = self._get_params()
-
-        name_prefix = params.get("NamePrefix")
-        desired_state = params.get("DesiredState")
-        current_state = params.get("CurrentState")
-        source_prefix = params.get("SourcePrefix")
-        target_prefix = params.get("TargetPrefix")
-        next_token = params.get("NextToken")
-        limit = params.get("Limit")
+        name_prefix = self._get_param("NamePrefix")
+        desired_state = self._get_param("DesiredState")
+        current_state = self._get_param("CurrentState")
+        source_prefix = self._get_param("SourcePrefix")
+        target_prefix = self._get_param("TargetPrefix")
+        next_token = self._get_param("NextToken")
+        limit = self._get_param("Limit")
 
         pipes, next_token = self.pipes_backend.list_pipes(
             name_prefix=name_prefix,
