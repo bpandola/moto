@@ -1356,7 +1356,6 @@ class EventsBackend(BaseBackend):
 
         return matching_rules
 
-    @paginate(pagination_model=PAGINATION_MODEL)
     def list_rules(
         self, prefix: str | None = None, event_bus_arn: str | None = None
     ) -> list[Rule]:
@@ -1376,8 +1375,7 @@ class EventsBackend(BaseBackend):
 
         return matching_rules
 
-    @paginate(pagination_model=PAGINATION_MODEL)
-    def list_targets_by_rule(  # type: ignore[misc]
+    def list_targets_by_rule(
         self, rule_id: str, event_bus_arn: str | None
     ) -> list[dict[str, Any]]:
         # We'll let a KeyError exception be thrown for response to handle if

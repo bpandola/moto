@@ -1,7 +1,7 @@
 import json
 from typing import Any
 
-from moto.core.responses import BaseResponse
+from moto.core.responses import ActionResult, BaseResponse, PaginatedResult
 from moto.core.utils import unix_time
 from moto.events.models import EventsBackend, events_backends
 
@@ -132,45 +132,33 @@ class EventsHandler(BaseResponse):
 
         return json.dumps(res), self.response_headers
 
-    def list_rules(self) -> tuple[str, dict[str, Any]]:
+    def list_rules(self) -> ActionResult:
         prefix = self._get_param("NamePrefix")
         event_bus_arn = self._get_param("EventBusName")
-        next_token = self._get_param("NextToken")
-        limit = self._get_param("Limit")
 
-        rules, token = self.events_backend.list_rules(
+        rules = self.events_backend.list_rules(
             prefix=prefix,
             event_bus_arn=event_bus_arn,
-            next_token=next_token,
-            limit=limit,
         )
-        rules_obj = {
-            "Rules": [rule.describe() for rule in rules],
-            "NextToken": token,
-        }
+        return PaginatedResult({"Rules": [rule.describe() for rule in rules]})
 
-        return json.dumps(rules_obj), self.response_headers
-
-    def list_targets_by_rule(self) -> tuple[str, dict[str, Any]]:
+    def list_targets_by_rule(self) -> ActionResult | tuple[str, dict[str, Any]]:
         rule_name = self._get_param("Rule")
         event_bus_arn = self._get_param("EventBusName")
-        next_token = self._get_param("NextToken")
-        limit = self._get_param("Limit")
 
         if not rule_name:
             return self.error("ValidationException", "Parameter Rule is required.")
 
         try:
-            target_page, token = self.events_backend.list_targets_by_rule(
-                rule_name, event_bus_arn, next_token=next_token, limit=limit
+            target_page = self.events_backend.list_targets_by_rule(
+                rule_name, event_bus_arn
             )
-            targets = {"Targets": target_page, "NextToken": token}
         except KeyError:
             return self.error(
                 "ResourceNotFoundException", "Rule " + rule_name + " does not exist."
             )
 
-        return json.dumps(targets), self.response_headers
+        return PaginatedResult({"Targets": target_page})
 
     def put_events(self) -> str:
         events = self._get_param("Entries")

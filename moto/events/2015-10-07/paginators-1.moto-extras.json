@@ -1,0 +1,17 @@
+{
+  "version": 1.0,
+  "merge": {
+    "pagination": {
+      "ListRules": {
+        "unique_attribute": "Arn",
+        "limit_default": 50,
+        "fail_on_invalid_token": false
+      },
+      "ListTargetsByRule": {
+        "unique_attribute": "Arn",
+        "limit_default": 50,
+        "fail_on_invalid_token": false
+      }
+    }
+  }
+}
