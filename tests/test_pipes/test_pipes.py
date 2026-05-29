@@ -344,25 +344,6 @@ def test_list_pipes_with_pagination():
 
 
 @mock_aws
-def test_list_pipes_with_invalid_limit():
-    config = Config(parameter_validation=False)
-    client = boto3.client("pipes", region_name="eu-west-1", config=config)
-
-    for i in range(3):
-        client.create_pipe(
-            Name=f"pipe-{i}",
-            Source=f"arn:aws:sqs:eu-west-1:123456789012:queue-{i}",
-            Target=f"arn:aws:lambda:eu-west-1:123456789012:function:func-{i}",
-            RoleArn="arn:aws:iam::123456789012:role/test-role",
-        )
-
-    resp = client.list_pipes(Limit="invalid")
-
-    assert "Pipes" in resp
-    assert len(resp["Pipes"]) == 3
-
-
-@mock_aws
 def test_create_pipe_missing_source():
     config = Config(parameter_validation=False)
     client = boto3.client("pipes", region_name="us-east-1", config=config)

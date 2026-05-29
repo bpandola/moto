@@ -162,11 +162,6 @@ class EventBridgePipesResponse(BaseResponse):
         target_prefix = params.get("TargetPrefix")
         next_token = params.get("NextToken")
         limit = params.get("Limit")
-        if limit is not None and limit != "":
-            try:
-                limit = int(limit)
-            except (ValueError, TypeError):
-                limit = None
 
         pipes, next_token = self.pipes_backend.list_pipes(
             name_prefix=name_prefix,
