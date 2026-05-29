@@ -1,4 +1,5 @@
 import json
+from typing import Any
 
 from moto.core.responses import BaseResponse
 
@@ -14,10 +15,14 @@ class OrganizationsResponse(BaseResponse):
     def organizations_backend(self) -> OrganizationsBackend:
         return organizations_backends[self.current_account][self.partition]
 
+    @property
+    def request_params(self) -> dict[str, Any]:  # type: ignore[misc]
+        return self._get_params()
+
     def create_organization(self) -> str:
         return json.dumps(
             self.organizations_backend.create_organization(
-                region=self.region, **self._get_params()
+                region=self.region, **self.request_params
             )
         )
 
@@ -33,22 +38,22 @@ class OrganizationsResponse(BaseResponse):
 
     def create_organizational_unit(self) -> str:
         return json.dumps(
-            self.organizations_backend.create_organizational_unit(**self._get_params())
+            self.organizations_backend.create_organizational_unit(**self.request_params)
         )
 
     def delete_organizational_unit(self) -> str:
-        self.organizations_backend.delete_organizational_unit(**self._get_params())
+        self.organizations_backend.delete_organizational_unit(**self.request_params)
         return "{}"
 
     def update_organizational_unit(self) -> str:
         return json.dumps(
-            self.organizations_backend.update_organizational_unit(**self._get_params())
+            self.organizations_backend.update_organizational_unit(**self.request_params)
         )
 
     def describe_organizational_unit(self) -> str:
         return json.dumps(
             self.organizations_backend.describe_organizational_unit(
-                **self._get_params()
+                **self.request_params
             )
         )
 
@@ -71,32 +76,34 @@ class OrganizationsResponse(BaseResponse):
         return json.dumps(response)
 
     def list_parents(self) -> str:
-        return json.dumps(self.organizations_backend.list_parents(**self._get_params()))
+        return json.dumps(
+            self.organizations_backend.list_parents(**self.request_params)
+        )
 
     def create_account(self) -> str:
         return json.dumps(
-            self.organizations_backend.create_account(**self._get_params())
+            self.organizations_backend.create_account(**self.request_params)
         )
 
     def close_account(self) -> str:
-        self.organizations_backend.close_account(**self._get_params())
+        self.organizations_backend.close_account(**self.request_params)
         return "{}"
 
     def describe_account(self) -> str:
         return json.dumps(
-            self.organizations_backend.describe_account(**self._get_params())
+            self.organizations_backend.describe_account(**self.request_params)
         )
 
     def describe_create_account_status(self) -> str:
         return json.dumps(
             self.organizations_backend.describe_create_account_status(
-                **self._get_params()
+                **self.request_params
             )
         )
 
     def list_create_account_status(self) -> str:
         return json.dumps(
-            self.organizations_backend.list_create_account_status(**self._get_params())
+            self.organizations_backend.list_create_account_status(**self.request_params)
         )
 
     def list_accounts(self) -> str:
@@ -122,31 +129,31 @@ class OrganizationsResponse(BaseResponse):
         return json.dumps(response)
 
     def move_account(self) -> str:
-        self.organizations_backend.move_account(**self._get_params())
+        self.organizations_backend.move_account(**self.request_params)
         return "{}"
 
     def list_children(self) -> str:
         return json.dumps(
-            self.organizations_backend.list_children(**self._get_params())
+            self.organizations_backend.list_children(**self.request_params)
         )
 
     def create_policy(self) -> str:
         return json.dumps(
-            self.organizations_backend.create_policy(**self._get_params())
+            self.organizations_backend.create_policy(**self.request_params)
         )
 
     def describe_policy(self) -> str:
         return json.dumps(
-            self.organizations_backend.describe_policy(**self._get_params())
+            self.organizations_backend.describe_policy(**self.request_params)
         )
 
     def update_policy(self) -> str:
         return json.dumps(
-            self.organizations_backend.update_policy(**self._get_params())
+            self.organizations_backend.update_policy(**self.request_params)
         )
 
     def attach_policy(self) -> str:
-        self.organizations_backend.attach_policy(**self._get_params())
+        self.organizations_backend.attach_policy(**self.request_params)
         return "{}"
 
     def list_policies(self) -> str:
@@ -160,7 +167,7 @@ class OrganizationsResponse(BaseResponse):
         return json.dumps(response)
 
     def delete_policy(self) -> str:
-        self.organizations_backend.delete_policy(**self._get_params())
+        self.organizations_backend.delete_policy(**self.request_params)
         return json.dumps({})
 
     def list_policies_for_target(self) -> str:
@@ -179,24 +186,24 @@ class OrganizationsResponse(BaseResponse):
 
     def list_targets_for_policy(self) -> str:
         return json.dumps(
-            self.organizations_backend.list_targets_for_policy(**self._get_params())
+            self.organizations_backend.list_targets_for_policy(**self.request_params)
         )
 
     def tag_resource(self) -> str:
-        self.organizations_backend.tag_resource(**self._get_params())
+        self.organizations_backend.tag_resource(**self.request_params)
         return "{}"
 
     def list_tags_for_resource(self) -> str:
         return json.dumps(
-            self.organizations_backend.list_tags_for_resource(**self._get_params())
+            self.organizations_backend.list_tags_for_resource(**self.request_params)
         )
 
     def untag_resource(self) -> str:
-        self.organizations_backend.untag_resource(**self._get_params())
+        self.organizations_backend.untag_resource(**self.request_params)
         return "{}"
 
     def enable_aws_service_access(self) -> str:
-        self.organizations_backend.enable_aws_service_access(**self._get_params())
+        self.organizations_backend.enable_aws_service_access(**self.request_params)
         return "{}"
 
     def list_aws_service_access_for_organization(self) -> str:
@@ -205,51 +212,51 @@ class OrganizationsResponse(BaseResponse):
         )
 
     def disable_aws_service_access(self) -> str:
-        self.organizations_backend.disable_aws_service_access(**self._get_params())
+        self.organizations_backend.disable_aws_service_access(**self.request_params)
         return "{}"
 
     def register_delegated_administrator(self) -> str:
         self.organizations_backend.register_delegated_administrator(
-            **self._get_params()
+            **self.request_params
         )
         return "{}"
 
     def list_delegated_administrators(self) -> str:
         return json.dumps(
             self.organizations_backend.list_delegated_administrators(
-                **self._get_params()
+                **self.request_params
             )
         )
 
     def list_delegated_services_for_account(self) -> str:
         return json.dumps(
             self.organizations_backend.list_delegated_services_for_account(
-                **self._get_params()
+                **self.request_params
             )
         )
 
     def deregister_delegated_administrator(self) -> str:
         self.organizations_backend.deregister_delegated_administrator(
-            **self._get_params()
+            **self.request_params
         )
         return "{}"
 
     def enable_policy_type(self) -> str:
         return json.dumps(
-            self.organizations_backend.enable_policy_type(**self._get_params())
+            self.organizations_backend.enable_policy_type(**self.request_params)
         )
 
     def disable_policy_type(self) -> str:
         return json.dumps(
-            self.organizations_backend.disable_policy_type(**self._get_params())
+            self.organizations_backend.disable_policy_type(**self.request_params)
         )
 
     def detach_policy(self) -> str:
-        self.organizations_backend.detach_policy(**self._get_params())
+        self.organizations_backend.detach_policy(**self.request_params)
         return "{}"
 
     def remove_account_from_organization(self) -> str:
         self.organizations_backend.remove_account_from_organization(
-            **self._get_params()
+            **self.request_params
         )
         return "{}"
