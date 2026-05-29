@@ -13,7 +13,6 @@ from moto.core.base_backend import BackendDict, BaseBackend
 from moto.core.common_models import BaseModel
 from moto.core.utils import utcnow
 from moto.moto_api._internal import mock_random as random
-from moto.utilities.paginator import paginate
 from moto.utilities.utils import get_partition, load_resource, md5_hash
 
 from ..settings import (
@@ -35,7 +34,6 @@ from .exceptions import (
     UserNotFoundError,
 )
 from .utils import (
-    PAGINATION_MODEL,
     check_secret_hash,
     cognito_totp,
     expand_attrs,
@@ -1026,7 +1024,6 @@ class CognitoIdpBackend(BaseBackend):
             "MfaConfiguration": user_pool.mfa_config,
         }
 
-    @paginate(pagination_model=PAGINATION_MODEL)
     def list_user_pools(self) -> list[CognitoIdpUserPool]:
         return list(self.user_pools.values())
 
@@ -1097,7 +1094,6 @@ class CognitoIdpBackend(BaseBackend):
         user_pool.clients[user_pool_client.id] = user_pool_client
         return user_pool_client
 
-    @paginate(pagination_model=PAGINATION_MODEL)
     def list_user_pool_clients(
         self, user_pool_id: str
     ) -> list[CognitoIdpUserPoolClient]:
@@ -1146,7 +1142,6 @@ class CognitoIdpBackend(BaseBackend):
         user_pool.identity_providers[name] = identity_provider
         return identity_provider
 
-    @paginate(pagination_model=PAGINATION_MODEL)
     def list_identity_providers(
         self, user_pool_id: str
     ) -> list[CognitoIdpIdentityProvider]:
@@ -1214,7 +1209,6 @@ class CognitoIdpBackend(BaseBackend):
 
         return user_pool.groups[group_name]
 
-    @paginate(pagination_model=PAGINATION_MODEL)
     def list_groups(self, user_pool_id: str) -> list[CognitoIdpGroup]:
         user_pool = self.describe_user_pool(user_pool_id)
 
@@ -1255,7 +1249,6 @@ class CognitoIdpBackend(BaseBackend):
         group.users.add(user)
         user.groups.add(group)
 
-    @paginate(pagination_model=PAGINATION_MODEL)
     def list_users_in_group(
         self, user_pool_id: str, group_name: str
     ) -> list[CognitoIdpUser]:
@@ -1263,7 +1256,6 @@ class CognitoIdpBackend(BaseBackend):
         group = self.get_group(user_pool_id, group_name)
         return list(filter(lambda user: user in group.users, user_pool.users.values()))
 
-    @paginate(pagination_model=PAGINATION_MODEL)
     def admin_list_groups_for_user(
         self, user_pool_id: str, username: str
     ) -> list[CognitoIdpGroup]:
@@ -1394,7 +1386,6 @@ class CognitoIdpBackend(BaseBackend):
                 return user
         raise NotAuthorizedError("Invalid token")
 
-    @paginate(pagination_model=PAGINATION_MODEL)
     def list_users(self, user_pool_id: str, filt: str) -> list[CognitoIdpUser]:
         user_pool = self.describe_user_pool(user_pool_id)
         users = list(user_pool.users.values())
@@ -1922,7 +1913,6 @@ class CognitoIdpBackend(BaseBackend):
 
         return resource_server
 
-    @paginate(pagination_model=PAGINATION_MODEL)
     def list_resource_servers(self, user_pool_id: str) -> list[CognitoResourceServer]:
         user_pool = self.user_pools[user_pool_id]
         resource_servers = list(user_pool.resource_servers.values())

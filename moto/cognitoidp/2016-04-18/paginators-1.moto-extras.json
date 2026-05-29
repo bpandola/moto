@@ -1,0 +1,39 @@
+{
+  "version": 1.0,
+  "merge": {
+    "pagination": {
+      "ListUserPools": {
+        "unique_attribute": "Id",
+        "limit_default": 60
+      },
+      "ListUserPoolClients": {
+        "unique_attribute": "ClientId",
+        "limit_default": 60
+      },
+      "ListIdentityProviders": {
+        "unique_attribute": "ProviderName",
+        "limit_default": 60
+      },
+      "ListUsers": {
+        "unique_attribute": "Username",
+        "limit_default": 60
+      },
+      "ListGroups": {
+        "unique_attribute": "GroupName",
+        "limit_default": 60
+      },
+      "AdminListGroupsForUser": {
+        "unique_attribute": "GroupName",
+        "limit_default": 60
+      },
+      "ListUsersInGroup": {
+        "unique_attribute": "Username",
+        "limit_default": 60
+      },
+      "ListResourceServers": {
+        "unique_attribute": "Identifier",
+        "limit_default": 60
+      }
+    }
+  }
+}

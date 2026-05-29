@@ -1,7 +1,13 @@
 import json
 from typing import Any
 
-from moto.core.responses import TYPE_RESPONSE, ActionResult, BaseResponse, EmptyResult
+from moto.core.responses import (
+    TYPE_RESPONSE,
+    ActionResult,
+    BaseResponse,
+    EmptyResult,
+    PaginatedResult,
+)
 from moto.utilities.utils import load_resource
 
 from .exceptions import InvalidParameterException
@@ -69,17 +75,10 @@ class CognitoIdpResponse(BaseResponse):
         return ActionResult(response)
 
     def list_user_pools(self) -> ActionResult:
-        max_results = self._get_param("MaxResults")
-        next_token = self._get_param("NextToken")
-        user_pools, next_token = self.backend.list_user_pools(
-            max_results=max_results, next_token=next_token
+        user_pools = self.backend.list_user_pools()
+        return PaginatedResult(
+            {"UserPools": [user_pool.to_json() for user_pool in user_pools]}
         )
-        response: dict[str, Any] = {
-            "UserPools": [user_pool.to_json() for user_pool in user_pools]
-        }
-        if next_token:
-            response["NextToken"] = str(next_token)
-        return ActionResult(response)
 
     def describe_user_pool(self) -> ActionResult:
         user_pool_id = self._get_param("UserPoolId")
@@ -140,19 +139,14 @@ class CognitoIdpResponse(BaseResponse):
 
     def list_user_pool_clients(self) -> ActionResult:
         user_pool_id = self._get_param("UserPoolId")
-        max_results = self._get_param("MaxResults")
-        next_token = self._get_param("NextToken")
-        user_pool_clients, next_token = self.backend.list_user_pool_clients(
-            user_pool_id, max_results=max_results, next_token=next_token
+        user_pool_clients = self.backend.list_user_pool_clients(user_pool_id)
+        return PaginatedResult(
+            {
+                "UserPoolClients": [
+                    user_pool_client.to_json() for user_pool_client in user_pool_clients
+                ]
+            }
         )
-        response: dict[str, Any] = {
-            "UserPoolClients": [
-                user_pool_client.to_json() for user_pool_client in user_pool_clients
-            ]
-        }
-        if next_token:
-            response["NextToken"] = str(next_token)
-        return ActionResult(response)
 
     def describe_user_pool_client(self) -> ActionResult:
         user_pool_id = self._get_param("UserPoolId")
@@ -189,19 +183,15 @@ class CognitoIdpResponse(BaseResponse):
 
     def list_identity_providers(self) -> ActionResult:
         user_pool_id = self._get_param("UserPoolId")
-        max_results = self._get_param("MaxResults")
-        next_token = self._get_param("NextToken")
-        identity_providers, next_token = self.backend.list_identity_providers(
-            user_pool_id, max_results=max_results, next_token=next_token
+        identity_providers = self.backend.list_identity_providers(user_pool_id)
+        return PaginatedResult(
+            {
+                "Providers": [
+                    identity_provider.to_json()
+                    for identity_provider in identity_providers
+                ]
+            }
         )
-        response: dict[str, Any] = {
-            "Providers": [
-                identity_provider.to_json() for identity_provider in identity_providers
-            ]
-        }
-        if next_token:
-            response["NextToken"] = str(next_token)
-        return ActionResult(response)
 
     def describe_identity_provider(self) -> ActionResult:
         user_pool_id = self._get_param("UserPoolId")
@@ -249,13 +239,8 @@ class CognitoIdpResponse(BaseResponse):
 
     def list_groups(self) -> ActionResult:
         user_pool_id = self._get_param("UserPoolId")
-        limit = self._get_param("Limit")
-        token = self._get_param("NextToken")
-        groups, token = self.backend.list_groups(
-            user_pool_id, limit=limit, next_token=token
-        )
-        response = {"Groups": [group.to_json() for group in groups], "NextToken": token}
-        return ActionResult(response)
+        groups = self.backend.list_groups(user_pool_id)
+        return PaginatedResult({"Groups": [group.to_json() for group in groups]})
 
     def delete_group(self) -> ActionResult:
         group_name = self._get_param("GroupName")
@@ -288,27 +273,16 @@ class CognitoIdpResponse(BaseResponse):
     def list_users_in_group(self) -> ActionResult:
         user_pool_id = self._get_param("UserPoolId")
         group_name = self._get_param("GroupName")
-        limit = self._get_param("Limit")
-        token = self._get_param("NextToken")
-        users, token = self.backend.list_users_in_group(
-            user_pool_id, group_name, limit=limit, next_token=token
+        users = self.backend.list_users_in_group(user_pool_id, group_name)
+        return PaginatedResult(
+            {"Users": [user.to_json(extended=True) for user in users]}
         )
-        response = {
-            "Users": [user.to_json(extended=True) for user in users],
-            "NextToken": token,
-        }
-        return ActionResult(response)
 
     def admin_list_groups_for_user(self) -> ActionResult:
         username = self._get_param("Username")
         user_pool_id = self._get_param("UserPoolId")
-        limit = self._get_param("Limit")
-        token = self._get_param("NextToken")
-        groups, token = self.backend.admin_list_groups_for_user(
-            user_pool_id, username, limit=limit, next_token=token
-        )
-        response = {"Groups": [group.to_json() for group in groups], "NextToken": token}
-        return ActionResult(response)
+        groups = self.backend.admin_list_groups_for_user(user_pool_id, username)
+        return PaginatedResult({"Groups": [group.to_json() for group in groups]})
 
     def admin_remove_user_from_group(self) -> ActionResult:
         user_pool_id = self._get_param("UserPoolId")
@@ -364,22 +338,17 @@ class CognitoIdpResponse(BaseResponse):
 
     def list_users(self) -> ActionResult:
         user_pool_id = self._get_param("UserPoolId")
-        limit = self._get_param("Limit")
-        token = self._get_param("PaginationToken")
         filt = self._get_param("Filter")
         attributes_to_get = self._get_param("AttributesToGet")
-        users, token = self.backend.list_users(
-            user_pool_id, filt, limit=limit, pagination_token=token
+        users = self.backend.list_users(user_pool_id, filt)
+        return PaginatedResult(
+            {
+                "Users": [
+                    user.to_json(extended=True, attributes_to_get=attributes_to_get)
+                    for user in users
+                ]
+            }
         )
-        response: dict[str, Any] = {
-            "Users": [
-                user.to_json(extended=True, attributes_to_get=attributes_to_get)
-                for user in users
-            ]
-        }
-        if token:
-            response["PaginationToken"] = str(token)
-        return ActionResult(response)
 
     def admin_disable_user(self) -> ActionResult:
         user_pool_id = self._get_param("UserPoolId")
@@ -523,20 +492,15 @@ class CognitoIdpResponse(BaseResponse):
         return ActionResult({"ResourceServer": resource_server.to_json()})
 
     def list_resource_servers(self) -> ActionResult:
-        max_results = self._get_param("MaxResults")
-        next_token = self._get_param("NextToken")
         user_pool_id = self._get_param("UserPoolId")
-        resource_servers, next_token = self.backend.list_resource_servers(
-            user_pool_id, max_results=max_results, next_token=next_token
+        resource_servers = self.backend.list_resource_servers(user_pool_id)
+        return PaginatedResult(
+            {
+                "ResourceServers": [
+                    resource_server.to_json() for resource_server in resource_servers
+                ]
+            }
         )
-        response: dict[str, Any] = {
-            "ResourceServers": [
-                resource_server.to_json() for resource_server in resource_servers
-            ]
-        }
-        if next_token:
-            response["NextToken"] = str(next_token)
-        return ActionResult(response)
 
     def sign_up(self) -> ActionResult:
         client_id = self._get_param("ClientId")
