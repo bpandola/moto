@@ -8,12 +8,10 @@ from moto.core.common_models import BaseModel
 from moto.core.utils import unix_time
 from moto.moto_api._internal import mock_random as random
 from moto.moto_api._internal.managed_state_model import ManagedState
-from moto.utilities.paginator import paginate
 from moto.utilities.tagging_service import TaggingService
 from moto.utilities.utils import get_partition
 
 from .exceptions import ClusterNotFoundFault
-from .utils import PAGINATION_MODEL
 
 
 class DaxParameterGroup(BaseModel):
@@ -217,7 +215,6 @@ class DAXBackend(BaseBackend):
         self.clusters[cluster_name].delete()
         return self.clusters[cluster_name]
 
-    @paginate(PAGINATION_MODEL)
     def describe_clusters(self, cluster_names: Iterable[str]) -> list[DaxCluster]:
         clusters = self.clusters
         if not cluster_names:

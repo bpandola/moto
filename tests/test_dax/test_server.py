@@ -11,4 +11,4 @@ def test_dax_list():
     )
 
     assert resp.status_code == 200
-    assert json.loads(resp.data) == {"Clusters": [], "NextToken": None}
+    assert json.loads(resp.data) == {"Clusters": []}

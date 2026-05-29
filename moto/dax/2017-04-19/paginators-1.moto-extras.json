@@ -1,0 +1,10 @@
+{
+  "version": 1.0,
+  "merge": {
+    "pagination": {
+      "DescribeClusters": {
+        "unique_attribute": "ClusterArn"
+      }
+    }
+  }
+}

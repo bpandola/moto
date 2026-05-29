@@ -1,7 +1,7 @@
 import json
 import re
 
-from moto.core.responses import BaseResponse
+from moto.core.responses import ActionResult, BaseResponse, PaginatedResult
 
 from .exceptions import InvalidParameterValueException
 from .models import DAXBackend, dax_backends
@@ -46,20 +46,14 @@ class DAXResponse(BaseResponse):
         cluster = self.dax_backend.delete_cluster(cluster_name)
         return json.dumps({"Cluster": cluster.to_json()})
 
-    def describe_clusters(self) -> str:
+    def describe_clusters(self) -> ActionResult:
         cluster_names = self._get_param("ClusterNames", [])
-        max_results = self._get_param("MaxResults")
-        next_token = self._get_param("NextToken")
 
         for name in cluster_names:
             self._validate_name(name)
 
-        clusters, next_token = self.dax_backend.describe_clusters(
-            cluster_names=cluster_names, max_results=max_results, next_token=next_token
-        )
-        return json.dumps(
-            {"Clusters": [c.to_json() for c in clusters], "NextToken": next_token}
-        )
+        clusters = self.dax_backend.describe_clusters(cluster_names=cluster_names)
+        return PaginatedResult({"Clusters": [c.to_json() for c in clusters]})
 
     def _validate_arn(self, arn: str) -> None:
         if not arn.startswith("arn:"):
