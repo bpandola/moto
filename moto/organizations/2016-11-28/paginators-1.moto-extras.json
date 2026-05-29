@@ -1,0 +1,26 @@
+{
+  "version": 1.0,
+  "merge": {
+    "pagination": {
+      "ListAccounts": {
+        "unique_attribute": "JoinedTimestamp"
+      },
+      "ListAccountsForParent": {
+        "unique_attribute": "Id",
+        "limit_default": 20
+      },
+      "ListOrganizationalUnitsForParent": {
+        "unique_attribute": "Id",
+        "limit_default": 20
+      },
+      "ListPolicies": {
+        "unique_attribute": "Id",
+        "limit_default": 20
+      },
+      "ListPoliciesForTarget": {
+        "unique_attribute": "Id",
+        "limit_default": 20
+      }
+    }
+  }
+}

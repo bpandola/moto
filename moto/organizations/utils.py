@@ -37,44 +37,6 @@ POLICY_ID_REGEX = (
     rf"{DEFAULT_SCP_POLICY_ID}|{DEFAULT_RCP_POLICY_ID}|p-[a-z0-9]{{{POLICY_ID_SIZE}}}"
 )
 
-PAGINATION_MODEL = {
-    "list_accounts": {
-        "input_token": "next_token",
-        "limit_key": "max_results",
-        "limit_default": 100,
-        "result_key": "Accounts",
-        "unique_attribute": "JoinedTimestamp",
-    },
-    "list_accounts_for_parent": {
-        "input_token": "next_token",
-        "limit_key": "max_results",
-        "limit_default": 20,
-        "result_key": "Accounts",
-        "unique_attribute": "id",
-    },
-    "list_policies": {
-        "input_token": "next_token",
-        "limit_key": "max_results",
-        "limit_default": 20,
-        "result_key": "Policies",
-        "unique_attribute": "Id",
-    },
-    "list_policies_for_target": {
-        "input_token": "next_token",
-        "limit_key": "max_results",
-        "limit_default": 20,
-        "result_key": "Policies",
-        "unique_attribute": "Id",
-    },
-    "list_organizational_units_for_parent": {
-        "input_token": "next_token",
-        "limit_key": "max_results",
-        "limit_default": 20,
-        "result_key": "OrganizationalUnits",
-        "unique_attribute": "id",
-    },
-}
-
 
 def make_random_org_id() -> str:
     # The regex pattern for an organization ID string requires "o-"

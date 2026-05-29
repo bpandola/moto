@@ -25,10 +25,7 @@ from moto.organizations.exceptions import (
     TargetNotFoundException,
 )
 from moto.organizations.exceptions import OrganizationsClientError as RESTError
-from moto.utilities.paginator import paginate
 from moto.utilities.utils import PARTITION_NAMES, get_partition
-
-from .utils import PAGINATION_MODEL
 
 
 class FakeOrganization(BaseModel):
@@ -573,7 +570,6 @@ class OrganizationsBackend(BaseBackend):
         ou = self.get_organizational_unit_by_id(kwargs["OrganizationalUnitId"])
         return ou.describe()
 
-    @paginate(pagination_model=PAGINATION_MODEL)
     def list_organizational_units_for_parent(
         self, parent_id: str
     ) -> list[FakeOrganizationalUnit]:
@@ -657,12 +653,10 @@ class OrganizationsBackend(BaseBackend):
             next_token = str(len(accounts_resp))
         return {"CreateAccountStatuses": accounts_resp, "NextToken": next_token}
 
-    @paginate(pagination_model=PAGINATION_MODEL)
     def list_accounts(self) -> list[FakeAccount]:
         accounts = [account.describe() for account in self.accounts]
         return sorted(accounts, key=lambda x: x["JoinedTimestamp"])  # type: ignore
 
-    @paginate(pagination_model=PAGINATION_MODEL)
     def list_accounts_for_parent(self, parent_id: str) -> list[FakeAccount]:
         parent_id = self.validate_parent_id(parent_id)
         accounts = [
@@ -772,7 +766,6 @@ class OrganizationsBackend(BaseBackend):
         else:
             raise InvalidInputException("You specified an invalid value.")
 
-    @paginate(pagination_model=PAGINATION_MODEL)
     def list_policies(self, policy_type: str) -> list[FakePolicy]:
         if not FakePolicy.supported_policy_type(policy_type):
             raise InvalidInputException("You specified an invalid value.")
@@ -797,7 +790,6 @@ class OrganizationsBackend(BaseBackend):
             "We can't find a policy with the PolicyId that you specified.",
         )
 
-    @paginate(pagination_model=PAGINATION_MODEL)
     def list_policies_for_target(
         self, target_id: str, policy_type: str
     ) -> list[FakePolicy]:

@@ -1,7 +1,7 @@
 import json
 from typing import Any
 
-from moto.core.responses import BaseResponse
+from moto.core.responses import ActionResult, BaseResponse, PaginatedResult
 
 from .models import OrganizationsBackend, organizations_backends
 
@@ -57,23 +57,18 @@ class OrganizationsResponse(BaseResponse):
             )
         )
 
-    def list_organizational_units_for_parent(self) -> str:
-        max_results = self._get_int_param("MaxResults")
-        next_token = self._get_param("NextToken")
+    def list_organizational_units_for_parent(self) -> ActionResult:
         parent_id = self._get_param("ParentId")
-        (
-            ous,
-            next_token,
-        ) = self.organizations_backend.list_organizational_units_for_parent(
-            max_results=max_results, next_token=next_token, parent_id=parent_id
+        ous = self.organizations_backend.list_organizational_units_for_parent(
+            parent_id=parent_id
         )
-        response = {
-            "OrganizationalUnits": [
-                {"Id": ou.id, "Arn": ou.arn, "Name": ou.name} for ou in ous
-            ],
-            "NextToken": next_token,
-        }
-        return json.dumps(response)
+        return PaginatedResult(
+            {
+                "OrganizationalUnits": [
+                    {"Id": ou.id, "Arn": ou.arn, "Name": ou.name} for ou in ous
+                ]
+            }
+        )
 
     def list_parents(self) -> str:
         return json.dumps(
@@ -106,27 +101,16 @@ class OrganizationsResponse(BaseResponse):
             self.organizations_backend.list_create_account_status(**self.request_params)
         )
 
-    def list_accounts(self) -> str:
-        max_results = self._get_int_param("MaxResults")
-        next_token = self._get_param("NextToken")
-        accounts, next_token = self.organizations_backend.list_accounts(
-            max_results=max_results, next_token=next_token
-        )
-        response = {"Accounts": accounts, "NextToken": next_token}
-        return json.dumps(response)
+    def list_accounts(self) -> ActionResult:
+        accounts = self.organizations_backend.list_accounts()
+        return PaginatedResult({"Accounts": accounts})
 
-    def list_accounts_for_parent(self) -> str:
-        max_results = self._get_int_param("MaxResults")
-        next_token = self._get_param("NextToken")
+    def list_accounts_for_parent(self) -> ActionResult:
         parent_id = self._get_param("ParentId")
-        accounts, next_token = self.organizations_backend.list_accounts_for_parent(
-            max_results=max_results, next_token=next_token, parent_id=parent_id
+        accounts = self.organizations_backend.list_accounts_for_parent(
+            parent_id=parent_id
         )
-        response = {
-            "Accounts": [a.describe() for a in accounts],
-            "NextToken": next_token,
-        }
-        return json.dumps(response)
+        return PaginatedResult({"Accounts": [a.describe() for a in accounts]})
 
     def move_account(self) -> str:
         self.organizations_backend.move_account(**self.request_params)
@@ -156,33 +140,23 @@ class OrganizationsResponse(BaseResponse):
         self.organizations_backend.attach_policy(**self.request_params)
         return "{}"
 
-    def list_policies(self) -> str:
+    def list_policies(self) -> ActionResult:
         policy_type = self._get_param("Filter")
-        max_results = self._get_int_param("MaxResults")
-        next_token = self._get_param("NextToken")
-        policies, next_token = self.organizations_backend.list_policies(
-            policy_type=policy_type, max_results=max_results, next_token=next_token
-        )
-        response = {"Policies": policies, "NextToken": next_token}
-        return json.dumps(response)
+        policies = self.organizations_backend.list_policies(policy_type=policy_type)
+        return PaginatedResult({"Policies": policies})
 
     def delete_policy(self) -> str:
         self.organizations_backend.delete_policy(**self.request_params)
         return json.dumps({})
 
-    def list_policies_for_target(self) -> str:
+    def list_policies_for_target(self) -> ActionResult:
         target_id = self._get_param("TargetId")
         policy_type = self._get_param("Filter")
-        max_results = self._get_int_param("MaxResults")
-        next_token = self._get_param("NextToken")
-        policies, next_token = self.organizations_backend.list_policies_for_target(
+        policies = self.organizations_backend.list_policies_for_target(
             target_id=target_id,
             policy_type=policy_type,
-            max_results=max_results,
-            next_token=next_token,
         )
-        response = {"Policies": policies, "NextToken": next_token}
-        return json.dumps(response)
+        return PaginatedResult({"Policies": policies})
 
     def list_targets_for_policy(self) -> str:
         return json.dumps(
