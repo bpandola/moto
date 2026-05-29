@@ -20,11 +20,10 @@ from moto.logs.metric_filters import MetricFilters
 from moto.moto_api._internal import mock_random
 from moto.s3.models import MissingBucket, s3_backends
 from moto.utilities.arns import parse_arn
-from moto.utilities.paginator import paginate
 from moto.utilities.tagging_service import TaggingService
 from moto.utilities.utils import get_partition
 
-from .utils import PAGINATION_MODEL, EventMessageFilter
+from .utils import EventMessageFilter
 
 MAX_RESOURCE_POLICIES_PER_REGION = 10
 
@@ -972,7 +971,6 @@ class LogsBackend(BaseBackend):
             raise ResourceNotFoundException()
         del self.groups[log_group_name]
 
-    @paginate(pagination_model=PAGINATION_MODEL)
     def describe_log_groups(
         self, log_group_name_prefix: str | None = None
     ) -> list[LogGroup]:

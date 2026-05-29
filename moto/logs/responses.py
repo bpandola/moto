@@ -3,7 +3,7 @@ import re
 from collections.abc import Callable
 from typing import Any
 
-from moto.core.responses import ActionResult, BaseResponse
+from moto.core.responses import ActionResult, BaseResponse, PaginatedResult
 
 from .exceptions import InvalidParameterException
 from .models import LogsBackend, logs_backends
@@ -165,9 +165,8 @@ class LogsResponse(BaseResponse):
         self.logs_backend.delete_log_group(log_group_name)
         return ""
 
-    def describe_log_groups(self) -> str:
+    def describe_log_groups(self) -> ActionResult:
         log_group_name_prefix = self._get_param("logGroupNamePrefix")
-        next_token = self._get_param("nextToken")
         limit = self._get_param("limit", 50)
         if limit > 50:
             raise InvalidParameterException(
@@ -175,16 +174,10 @@ class LogsResponse(BaseResponse):
                 parameter="limit",
                 value=limit,
             )
-        groups, next_token = self.logs_backend.describe_log_groups(
-            limit=limit,
+        groups = self.logs_backend.describe_log_groups(
             log_group_name_prefix=log_group_name_prefix,
-            next_token=next_token,
         )
-        result = {
-            "logGroups": [g.to_describe_dict() for g in groups],
-            "nextToken": next_token,
-        }
-        return json.dumps(result)
+        return PaginatedResult({"logGroups": [g.to_describe_dict() for g in groups]})
 
     def put_destination(self) -> str:
         destination_name = self._get_param("destinationName")

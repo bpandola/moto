@@ -1,0 +1,12 @@
+{
+  "version": 1.0,
+  "merge": {
+    "pagination": {
+      "DescribeLogGroups": {
+        "unique_attribute": "arn",
+        "limit_default": 50,
+        "fail_on_invalid_token": false
+      }
+    }
+  }
+}
