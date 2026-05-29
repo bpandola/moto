@@ -5,10 +5,8 @@ from datetime import datetime
 from moto.core.base_backend import BackendDict, BaseBackend
 from moto.core.common_models import BaseModel
 from moto.moto_api._internal import mock_random
-from moto.utilities.paginator import paginate
 
 from .exceptions import ChannelGroupNotEmpty, ChannelGroupNotFound, ChannelNotFound
-from .utils import PAGINATION_MODEL
 
 
 class Channel(BaseModel):
@@ -82,7 +80,6 @@ class MediaPackagev2Backend(BaseBackend):
             raise ChannelGroupNotFound
         return self.channel_groups[channel_group_name]
 
-    @paginate(PAGINATION_MODEL)
     def list_channel_groups(self) -> list[ChannelGroup]:
         return list(self.channel_groups.values())
 

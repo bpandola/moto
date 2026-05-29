@@ -1,0 +1,11 @@
+{
+  "version": 1.0,
+  "merge": {
+    "pagination": {
+      "ListChannelGroups": {
+        "unique_attribute": "arn",
+        "limit_default": 10000
+      }
+    }
+  }
+}

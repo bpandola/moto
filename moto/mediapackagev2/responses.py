@@ -1,4 +1,9 @@
-from moto.core.responses import ActionResult, BaseResponse, EmptyResult
+from moto.core.responses import (
+    ActionResult,
+    BaseResponse,
+    EmptyResult,
+    PaginatedResult,
+)
 from moto.core.serialize import never_return
 
 from .models import MediaPackagev2Backend, mediapackagev2_backends
@@ -44,14 +49,8 @@ class mediapackagev2Response(BaseResponse):
         return ActionResult(result=group)
 
     def list_channel_groups(self) -> ActionResult:
-        max_results = self._get_int_param("MaxResults")
-        next_token = self._get_param("NextToken")
-
-        groups, next_token = self.mediapackagev2_backend.list_channel_groups(
-            max_results=max_results,
-            next_token=next_token,
-        )
-        return ActionResult(result={"Items": groups, "NextToken": next_token})
+        groups = self.mediapackagev2_backend.list_channel_groups()
+        return PaginatedResult({"Items": groups})
 
     def get_channel(self) -> ActionResult:
         channel_group_name = self._get_param("ChannelGroupName")
