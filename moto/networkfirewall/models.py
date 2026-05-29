@@ -5,17 +5,7 @@ from typing import Any
 from moto.core.base_backend import BackendDict, BaseBackend
 from moto.core.common_models import BaseModel
 from moto.es.exceptions import ResourceNotFound
-from moto.utilities.paginator import paginate
 from moto.utilities.tagging_service import TaggingService
-
-PAGINATION_MODEL = {
-    "list_firewalls": {
-        "input_token": "next_token",
-        "limit_key": "max_results",
-        "limit_default": 100,
-        "unique_attribute": "arn",
-    },
-}
 
 
 class NetworkFirewallModel(BaseModel):
@@ -152,7 +142,6 @@ class NetworkFirewallBackend(BaseBackend):
         firewall.logging_configs = logging_configuration
         return firewall
 
-    @paginate(pagination_model=PAGINATION_MODEL)
     def list_firewalls(self, vpc_ids: list[str]) -> list[NetworkFirewallModel]:
         firewalls = list(self.firewalls.values())
         if vpc_ids:

@@ -2,7 +2,7 @@
 
 import json
 
-from moto.core.responses import BaseResponse
+from moto.core.responses import ActionResult, BaseResponse, PaginatedResult
 
 from .models import NetworkFirewallBackend, networkfirewall_backends
 
@@ -82,17 +82,11 @@ class NetworkFirewallResponse(BaseResponse):
             }
         )
 
-    def list_firewalls(self) -> str:
-        next_token = self._get_param("NextToken")
+    def list_firewalls(self) -> ActionResult:
         vpc_ids = self._get_param("VpcIds")
-        max_results = self._get_param("MaxResults")
-        firewalls, next_token = self.networkfirewall_backend.list_firewalls(
-            next_token=next_token,
-            vpc_ids=vpc_ids,
-            max_results=max_results,
-        )
+        firewalls = self.networkfirewall_backend.list_firewalls(vpc_ids=vpc_ids)
         firewall_list = [fw.to_dict() for fw in firewalls]
-        return json.dumps({"nextToken": next_token, "Firewalls": firewall_list})
+        return PaginatedResult({"Firewalls": firewall_list})
 
     def describe_firewall(self) -> str:
         firewall_name = self._get_param("FirewallName")
