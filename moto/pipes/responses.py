@@ -2,7 +2,12 @@
 
 from typing import Any
 
-from moto.core.responses import ActionResult, BaseResponse, EmptyResult
+from moto.core.responses import (
+    ActionResult,
+    BaseResponse,
+    EmptyResult,
+    PaginatedResult,
+)
 
 from .exceptions import ValidationException
 from .models import EventBridgePipesBackend, pipes_backends
@@ -160,24 +165,16 @@ class EventBridgePipesResponse(BaseResponse):
         current_state = params.get("CurrentState")
         source_prefix = params.get("SourcePrefix")
         target_prefix = params.get("TargetPrefix")
-        next_token = params.get("NextToken")
-        limit = params.get("Limit")
 
-        pipes, next_token = self.pipes_backend.list_pipes(
+        pipes = self.pipes_backend.list_pipes(
             name_prefix=name_prefix,
             desired_state=desired_state,
             current_state=current_state,
             source_prefix=source_prefix,
             target_prefix=target_prefix,
-            next_token=next_token,
-            limit=limit,
         )
 
-        response_dict: dict[str, Any] = {"Pipes": pipes}
-        if next_token:
-            response_dict["NextToken"] = next_token
-
-        return ActionResult(response_dict)
+        return PaginatedResult({"Pipes": pipes})
 
     def start_pipe(self) -> ActionResult:
         name = self._get_param("Name")

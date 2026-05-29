@@ -7,19 +7,9 @@ from moto.core.base_backend import BackendDict, BaseBackend
 from moto.core.common_models import BaseModel
 from moto.core.utils import utcnow
 from moto.moto_api._internal.managed_state_model import ManagedState
-from moto.utilities.paginator import paginate
 from moto.utilities.utils import get_partition
 
 from .exceptions import NotFoundException
-
-PAGINATION_MODEL = {
-    "list_pipes": {
-        "input_token": "next_token",
-        "limit_key": "limit",
-        "limit_default": 100,
-        "unique_attribute": "Arn",
-    },
-}
 
 
 class PipeStatus(str, Enum):
@@ -194,8 +184,7 @@ class EventBridgePipesBackend(BaseBackend):
 
         return pipe.tags
 
-    @paginate(pagination_model=PAGINATION_MODEL)
-    def list_pipes(  # type: ignore[misc]
+    def list_pipes(
         self,
         name_prefix: str | None,
         desired_state: str | None,
