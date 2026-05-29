@@ -1,7 +1,12 @@
 import datetime
 from base64 import b64encode
 
-from moto.core.responses import ActionResult, BaseResponse, EmptyResult
+from moto.core.responses import (
+    ActionResult,
+    BaseResponse,
+    EmptyResult,
+    PaginatedResult,
+)
 from moto.core.utils import unix_time
 
 from .models import KinesisBackend, kinesis_backends
@@ -166,17 +171,11 @@ class KinesisResponse(BaseResponse):
     def list_shards(self) -> ActionResult:
         stream_arn = self._get_param("StreamARN")
         stream_name = self._get_param("StreamName")
-        next_token = self._get_param("NextToken")
-        max_results = self._get_param("MaxResults", 10000)
-        shards, token = self.kinesis_backend.list_shards(
+        shards = self.kinesis_backend.list_shards(
             stream_arn=stream_arn,
             stream_name=stream_name,
-            limit=max_results,
-            next_token=next_token,
         )
-        return ActionResult(
-            {"Shards": [s.to_json() for s in shards], "NextToken": token}
-        )
+        return PaginatedResult({"Shards": [s.to_json() for s in shards]})
 
     def update_shard_count(self) -> ActionResult:
         stream_arn = self._get_param("StreamARN")

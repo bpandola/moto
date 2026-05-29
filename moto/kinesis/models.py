@@ -14,7 +14,6 @@ from moto.core.base_backend import BackendDict, BaseBackend
 from moto.core.common_models import BaseModel, CloudFormationModel
 from moto.core.utils import unix_time, utcnow
 from moto.moto_api._internal import mock_random as random
-from moto.utilities.paginator import paginate
 from moto.utilities.utils import get_partition, md5_hash
 
 from .exceptions import (
@@ -34,7 +33,6 @@ from .exceptions import (
     ValidationException,
 )
 from .utils import (
-    PAGINATION_MODEL,
     compose_new_shard_iterator,
     compose_shard_iterator,
     decompose_shard_iterator,
@@ -806,7 +804,6 @@ class KinesisBackend(BaseBackend):
 
         return current_shard_count
 
-    @paginate(pagination_model=PAGINATION_MODEL)
     def list_shards(
         self, stream_arn: str | None, stream_name: str | None
     ) -> list[Shard]:

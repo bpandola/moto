@@ -1,0 +1,12 @@
+{
+  "version": 1.0,
+  "merge": {
+    "pagination": {
+      "ListShards": {
+        "unique_attribute": "ShardId",
+        "limit_default": 10000,
+        "fail_on_invalid_token": false
+      }
+    }
+  }
+}
