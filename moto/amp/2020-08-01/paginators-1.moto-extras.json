@@ -1,0 +1,13 @@
+{
+  "version": 1.0,
+  "merge": {
+    "pagination": {
+      "ListWorkspaces": {
+        "unique_attribute": "arn"
+      },
+      "ListRuleGroupsNamespaces": {
+        "unique_attribute": "name"
+      }
+    }
+  }
+}

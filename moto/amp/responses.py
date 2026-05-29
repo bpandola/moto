@@ -4,7 +4,7 @@ import base64
 import json
 from typing import Any
 
-from moto.core.responses import BaseResponse
+from moto.core.responses import ActionResult, BaseResponse, PaginatedResult
 
 from .models import PrometheusServiceBackend, amp_backends
 
@@ -57,16 +57,10 @@ class PrometheusServiceResponse(BaseResponse):
         self.amp_backend.delete_workspace(workspace_id=workspace_id)
         return json.dumps({})
 
-    def list_workspaces(self) -> str:
+    def list_workspaces(self) -> ActionResult:
         alias = self._get_param("alias")
-        max_results = self._get_int_param("maxResults")
-        next_token = self._get_param("nextToken")
-        workspaces, next_token = self.amp_backend.list_workspaces(
-            alias, max_results=max_results, next_token=next_token
-        )
-        return json.dumps(
-            {"nextToken": next_token, "workspaces": [w.to_dict() for w in workspaces]}
-        )
+        workspaces = self.amp_backend.list_workspaces(alias)
+        return PaginatedResult({"workspaces": [w.to_dict() for w in workspaces]})
 
     def tag_resource(self) -> str:
         resource_arn = self._get_param("resourceArn")
@@ -125,22 +119,15 @@ class PrometheusServiceResponse(BaseResponse):
         )
         return json.dumps(ns.to_dict())
 
-    def list_rule_groups_namespaces(self) -> str:
-        max_results = self._get_int_param("maxResults")
-        next_token = self._get_param("nextToken")
+    def list_rule_groups_namespaces(self) -> ActionResult:
         name = self._get_param("name")
         workspace_id = self._get_param("workspaceId")
-        namespaces, next_token = self.amp_backend.list_rule_groups_namespaces(
-            max_results=max_results,
+        namespaces = self.amp_backend.list_rule_groups_namespaces(
             name=name,
-            next_token=next_token,
             workspace_id=workspace_id,
         )
-        return json.dumps(
-            {
-                "nextToken": next_token,
-                "ruleGroupsNamespaces": [ns.to_dict() for ns in namespaces],
-            }
+        return PaginatedResult(
+            {"ruleGroupsNamespaces": [ns.to_dict() for ns in namespaces]}
         )
 
     def create_logging_configuration(self) -> str:
