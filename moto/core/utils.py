@@ -18,6 +18,7 @@ from ..settings import get_s3_custom_endpoints
 from .common_types import TYPE_RESPONSE
 from .constants import MISSING
 from .loaders import create_loader
+from .request import normalize_request
 from .versions import PYTHON_311
 
 
@@ -115,11 +116,13 @@ class convert_to_flask_response:
         return f"{outer}.{self.callback.__name__}"
 
     def __call__(self, args: Any = None, **kwargs: Any) -> Any:
-        from flask import Response, request
+        from flask import Response
+        from flask import request as flask_request
 
         from moto.moto_api import recorder
 
         try:
+            request = normalize_request(flask_request)
             recorder._record_request(request)
             result = self.callback(request, request.url, dict(request.headers))
         except ClientError as exc:

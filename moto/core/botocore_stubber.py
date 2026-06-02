@@ -9,6 +9,7 @@ from moto.core.base_backend import BackendDict
 from moto.core.common_types import TYPE_RESPONSE
 from moto.core.config import passthrough_service, passthrough_url, service_whitelisted
 from moto.core.exceptions import ServiceNotWhitelisted
+from moto.core.request import normalize_request
 from moto.core.utils import get_equivalent_url_in_aws_domain
 
 
@@ -43,6 +44,7 @@ class BotocoreStubber:
             return response
 
     def process_request(self, request: Any) -> TYPE_RESPONSE | None:
+        request = normalize_request(request)
         # Handle non-standard AWS endpoint hostnames from ISO regions or custom
         # S3 endpoints.
         parsed_url, _ = get_equivalent_url_in_aws_domain(request.url)
@@ -75,9 +77,9 @@ class BotocoreStubber:
                 else:
                     backend = backend_dict["global"]
 
-                for header, value in request.headers.items():
-                    if isinstance(value, bytes):
-                        request.headers[header] = value.decode("utf-8")
+                # for header, value in request.headers.items():
+                #     if isinstance(value, bytes):
+                #         request.headers[header] = value.decode("utf-8")
 
                 for url, method_to_execute in backend.urls.items():
                     if re.compile(url).match(clean_url):

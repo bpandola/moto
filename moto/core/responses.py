@@ -236,6 +236,7 @@ class BaseResponse(ActionAuthenticatorMixin):
         """
         self.is_werkzeug_request = "werkzeug" in str(type(request))
         request = self.normalize_request(request)
+        self.normalized_request = request
         self.parsed_url = urlparse(full_url)
         querystring: dict[str, Any] = OrderedDict()
         if hasattr(request, "body"):
@@ -249,6 +250,8 @@ class BaseResponse(ActionAuthenticatorMixin):
             # definition for back-compatibility
             self.body = request.data
 
+        # self.form_data is only used by s3 in one place and can be replaced
+        # with self.normalized_rquest.values
         if hasattr(request, "form"):
             self.form_data = request.form
             for key, value in request.form.items():
@@ -256,6 +259,7 @@ class BaseResponse(ActionAuthenticatorMixin):
         else:
             self.form_data = {}
 
+        # This is all s3 only and can be removed and fixed in s3
         if hasattr(request, "form") and "key" in request.form:
             if "file" in request.form:
                 self.body = request.form["file"]

@@ -37,6 +37,10 @@ def normalize_request(
         body = request.body.read()
     else:
         body = request.body if request.body is not None else b""
+    for header, value in request.headers.items():
+        if isinstance(value, bytes):
+            request.headers[header] = value.decode("utf-8")
+
     headers_to_strip: list[str] = ["Transfer-Encoding"]
     parsed_url = urlparse(request.url)
     normalized_request = Request.from_values(
