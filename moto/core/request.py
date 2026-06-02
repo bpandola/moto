@@ -33,11 +33,11 @@ def normalize_request(
         return request
     if isinstance(request, WerkzeugRequest):
         return Request(request.environ.copy())
-    body = request.body if request.body is not None else b""
-    headers_to_strip: list[str] = []
     if isinstance(request.body, AwsChunkedWrapper):
         body = request.body.read()
-        headers_to_strip.append("Transfer-Encoding")
+    else:
+        body = request.body if request.body is not None else b""
+    headers_to_strip: list[str] = ["Transfer-Encoding"]
     parsed_url = urlparse(request.url)
     normalized_request = Request.from_values(
         method=request.method,
