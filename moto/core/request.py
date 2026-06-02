@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
-from werkzeug.wrappers import Request
+from botocore.httpchecksum import AwsChunkedWrapper
+from werkzeug.wrappers import Request as WerkzeugRequest
 
-from moto.core.utils import gzip_decompress
 from moto.settings import MAX_FORM_MEMORY_SIZE
 from moto.utilities.constants import APPLICATION_JSON, JSON_TYPES
 
@@ -15,23 +15,39 @@ if TYPE_CHECKING:
     from moto.core.model import ServiceModel
 
 
-def normalize_request(request: AWSPreparedRequest | Request) -> Request:
+class Request(WerkzeugRequest):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.max_form_memory_size = MAX_FORM_MEMORY_SIZE
+
+    @classmethod
+    def from_values(cls, *args: Any, **kwargs: Any) -> Request:
+        req = super().from_values(*args, **kwargs)
+        return Request(req.environ.copy())
+
+
+def normalize_request(
+    request: AWSPreparedRequest | WerkzeugRequest | Request,
+) -> Request:
     if isinstance(request, Request):
         return request
-    body = request.body
-    # Request.from_values() does not automatically handle gzip-encoded bodies,
-    # like the full WSGI server would, so we need to do it manually.
-    if request.headers.get("Content-Encoding") == "gzip":
-        body = gzip_decompress(body)  # type: ignore[arg-type]
+    if isinstance(request, WerkzeugRequest):
+        return Request(request.environ.copy())
+    body = request.body if request.body is not None else b""
+    headers_to_strip: list[str] = []
+    if isinstance(request.body, AwsChunkedWrapper):
+        body = request.body.read()
+        headers_to_strip.append("Transfer-Encoding")
     parsed_url = urlparse(request.url)
-    Request.max_form_memory_size = MAX_FORM_MEMORY_SIZE
     normalized_request = Request.from_values(
         method=request.method,
         base_url=f"{parsed_url.scheme}://{parsed_url.netloc}",
         path=parsed_url.path,
         query_string=parsed_url.query,
         data=body,
-        headers=[(k, v) for k, v in request.headers.items()],
+        headers=[
+            (k, v) for k, v in request.headers.items() if k not in headers_to_strip
+        ],
     )
     return normalized_request
 

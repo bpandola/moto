@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import functools
+import gzip
 import json
 import logging
 import os
@@ -26,7 +27,7 @@ from moto.core.common_types import TYPE_IF_NONE, TYPE_RESPONSE
 from moto.core.exceptions import ServiceException
 from moto.core.model import OperationModel, ServiceModel
 from moto.core.parse import PROTOCOL_PARSERS, XFormedDict
-from moto.core.request import determine_request_protocol, normalize_request
+from moto.core.request import Request, determine_request_protocol, normalize_request
 from moto.core.serialize import (
     ResponseSerializer,
     XFormedAttributePicker,
@@ -38,7 +39,6 @@ from moto.core.utils import (
     get_pagination_model,
     get_service_model,
     get_value,
-    gzip_decompress,
     method_names_from_class,
     set_value,
     utcnow,
@@ -216,6 +216,18 @@ class BaseResponse(ActionAuthenticatorMixin):
     def dispatch(cls, *args: Any, **kwargs: Any) -> Any:  # type: ignore[misc]
         return cls()._dispatch(*args, **kwargs)
 
+    def normalize_request(self, request: Any) -> Request:
+        normalized_request = normalize_request(request)
+        # https://github.com/getmoto/moto/issues/6692
+        # Content coming from SDK's can be GZipped for performance reasons
+        if (
+            normalized_request.content_encoding == "gzip"
+            and self.allow_request_decompression
+        ):
+            normalized_request.stream = gzip.GzipFile(fileobj=normalized_request.stream)  # type: ignore[assignment]
+            normalized_request.get_data(parse_form_data=True)
+        return normalized_request
+
     def setup_class(
         self, request: Any, full_url: str, headers: Any, use_raw_body: bool = False
     ) -> None:
@@ -223,6 +235,7 @@ class BaseResponse(ActionAuthenticatorMixin):
         use_raw_body: Use incoming bytes if True, encode to string otherwise
         """
         self.is_werkzeug_request = "werkzeug" in str(type(request))
+        request = self.normalize_request(request)
         self.parsed_url = urlparse(full_url)
         querystring: dict[str, Any] = OrderedDict()
         if hasattr(request, "body"):
@@ -265,14 +278,6 @@ class BaseResponse(ActionAuthenticatorMixin):
         if hasattr(self.body, "read"):
             self.body = self.body.read()
         self.raw_body = self.body
-
-        # https://github.com/getmoto/moto/issues/6692
-        # Content coming from SDK's can be GZipped for performance reasons
-        if (
-            headers.get("Content-Encoding", "") == "gzip"
-            and self.allow_request_decompression
-        ):
-            self.body = gzip_decompress(self.body)
 
         if isinstance(self.body, bytes) and not use_raw_body:
             self.body = self.body.decode("utf-8")

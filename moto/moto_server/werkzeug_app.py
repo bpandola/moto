@@ -7,6 +7,7 @@ from typing import Any
 
 try:
     from flask import Flask
+    from flask import Request as FlaskRequest
     from flask_cors import CORS
 except ImportError:
     import warnings
@@ -21,10 +22,11 @@ import moto.backend_index as backend_index
 import moto.backends as backends
 from moto.core import DEFAULT_ACCOUNT_ID
 from moto.core.base_backend import BackendDict
+from moto.core.request import Request
 from moto.core.utils import convert_to_flask_response
 from moto.settings import DISABLE_GLOBAL_CORS, MAX_FORM_MEMORY_SIZE
 
-from .utilities import AWSTestHelper, RegexConverter, decompress_request_body
+from .utilities import AWSTestHelper, RegexConverter
 
 HTTP_METHODS = ["GET", "POST", "PUT", "DELETE", "HEAD", "PATCH", "OPTIONS"]
 
@@ -327,8 +329,12 @@ def create_backend_app(service: backends.SERVICE_NAMES) -> Flask:
     backend_app = Flask("moto", template_folder=template_dir)
     backend_app.debug = True
     backend_app.service = service  # type: ignore[attr-defined]
-    backend_app.before_request(decompress_request_body)
     backend_app.config["MAX_FORM_MEMORY_SIZE"] = MAX_FORM_MEMORY_SIZE
+
+    class BackendRequest(Request, FlaskRequest):
+        pass
+
+    backend_app.request_class = BackendRequest
 
     if not DISABLE_GLOBAL_CORS:
         CORS(backend_app)
