@@ -43,16 +43,28 @@ def normalize_request(
 
     headers_to_strip: list[str] = ["Transfer-Encoding"]
     parsed_url = urlparse(request.url)
+    # If path starts with a double slash, werkzeug will fail to parse it correctly and
+    # Request.path will be invalid.  This can occur with Amazon S3 Virtual-Hosted requests,
+    # where the bucket name is part of the domain name, combined with an object key that
+    # begins with a slash (e.g., bucket-name.s3.amazonaws.com//object-key).
+    path = (
+        "/%2F" + parsed_url.path[2:]
+        if parsed_url.path.startswith("//")
+        else parsed_url.path
+    )
     normalized_request = Request.from_values(
         method=request.method,
         base_url=f"{parsed_url.scheme}://{parsed_url.netloc}",
-        path=parsed_url.path,
+        path=path,
         query_string=parsed_url.query,
         data=body,
         headers=[
             (k, v) for k, v in request.headers.items() if k not in headers_to_strip
         ],
     )
+    # There are some S3 checks that fail when CONTENT_LENGTH not set.
+    if "CONTENT_LENGTH" not in normalized_request.environ:
+        normalized_request.environ["CONTENT_LENGTH"] = "0"
     return normalized_request
 
 

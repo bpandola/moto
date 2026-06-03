@@ -312,7 +312,7 @@ class BaseResponse(ActionAuthenticatorMixin):
         self.uri = full_url
 
         self.path = self.parsed_url.path
-        if self.is_werkzeug_request and "RAW_URI" in request.environ:
+        if hasattr(request, "environ") and "RAW_URI" in request.environ:
             self.raw_path = urlparse(request.environ.get("RAW_URI")).path
             if self.raw_path and not self.raw_path.startswith("/"):
                 self.raw_path = f"/{self.raw_path}"

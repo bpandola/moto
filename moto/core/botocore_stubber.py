@@ -44,7 +44,6 @@ class BotocoreStubber:
             return response
 
     def process_request(self, request: Any) -> TYPE_RESPONSE | None:
-        request = normalize_request(request)
         # Handle non-standard AWS endpoint hostnames from ISO regions or custom
         # S3 endpoints.
         parsed_url, _ = get_equivalent_url_in_aws_domain(request.url)
@@ -53,7 +52,7 @@ class BotocoreStubber:
 
         if passthrough_url(clean_url):
             return None
-
+        request = normalize_request(request)
         for service, pattern in backend_index.backend_url_patterns:
             if pattern.match(clean_url):
                 if passthrough_service(service):
