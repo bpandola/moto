@@ -577,9 +577,8 @@ def test_bucket_name_with_special_chars(name):
 )
 @mock_aws
 def test_key_with_special_characters(key):
-    # TODO: remove this
-    # if settings.is_test_proxy_mode():
-    #   raise SkipTest("Keys starting with a / don't work well in ProxyMode")
+    if settings.is_test_proxy_mode():
+        raise SkipTest("Keys starting with a / don't work well in ProxyMode")
     s3_resource = boto3.resource("s3", region_name=DEFAULT_REGION_NAME)
     client = boto3.client("s3", region_name=DEFAULT_REGION_NAME)
     bucket = s3_resource.Bucket(str(uuid.uuid4()))
@@ -2776,9 +2775,8 @@ def test_paths_with_leading_slashes_work():
 
 @mock_aws
 def test_root_dir_with_empty_name_works():
-    # TODO: remove this
-    # if not settings.TEST_DECORATOR_MODE:
-    #    raise SkipTest("Does not work in server mode due to error in Workzeug")
+    if not settings.TEST_DECORATOR_MODE:
+        raise SkipTest("Does not work in server mode due to error in Workzeug")
     store_and_read_back_a_key("/")
 
 
