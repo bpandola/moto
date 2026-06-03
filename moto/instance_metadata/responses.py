@@ -92,4 +92,7 @@ class InstanceMetadataResponse(BaseResponse):
                 headers = dict(headers)
         except ImportError:
             pass
+        # This became an issue when I attempted to fix the S3 issue with Content-Length: 0
+        if headers.get("Content-Length") is not None:
+            headers.pop("Content-Length", None)
         return 200, headers, result
