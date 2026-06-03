@@ -25,6 +25,38 @@ class Request(WerkzeugRequest):
         req = super().from_values(*args, **kwargs)
         return Request(req.environ.copy())
 
+    @property
+    def raw_path(self) -> str:
+        raw_uri: str = self.environ.get("RAW_URI", "")
+        # If RAW_URI starts with a double slash, werkzeug will fail to parse it correctly and
+        # Request.path will be invalid.  This can occur with Amazon S3 Virtual-Hosted requests,
+        # where the bucket name is part of the domain name, combined with an object key that
+        # begins with a slash (e.g., bucket-name.s3.amazonaws.com//object-key).
+        revert_quote = False
+        if raw_uri.startswith("//"):
+            raw_uri = "/%2F" + raw_uri[2:]
+            revert_quote = True
+        # We have to parse because RAW_URI can contain a full URL.
+        to_parse = raw_uri or self.path
+        raw_path = urlparse(to_parse).path
+        if revert_quote:
+            raw_path = raw_path.replace("%2F", "/", 1)
+        if raw_path and not raw_path.startswith("/"):
+            raw_path = f"/{raw_path}"
+        if not raw_path:
+            raw_path = "/"
+        return raw_path
+
+    @property
+    def raw_url(self) -> str:
+        url_root = self.url_root.rstrip("/")
+        raw_url = f"{url_root}{self.raw_path}"
+        if self.query_string:
+            qs = f"{self.query_string.decode()}"
+            # qs = qs.replace("%2F", "/")
+            raw_url += f"?{qs}"
+        return raw_url
+
 
 def normalize_request(
     request: AWSPreparedRequest | WerkzeugRequest | Request,
@@ -47,11 +79,12 @@ def normalize_request(
     # Request.path will be invalid.  This can occur with Amazon S3 Virtual-Hosted requests,
     # where the bucket name is part of the domain name, combined with an object key that
     # begins with a slash (e.g., bucket-name.s3.amazonaws.com//object-key).
-    path = (
-        "/%2F" + parsed_url.path[2:]
-        if parsed_url.path.startswith("//")
-        else parsed_url.path
-    )
+    # path = (
+    #     "/%2F" + parsed_url.path[2:]
+    #     if parsed_url.path.startswith("//")
+    #     else parsed_url.path
+    # )
+    path = parsed_url.path
     normalized_request = Request.from_values(
         method=request.method,
         base_url=f"{parsed_url.scheme}://{parsed_url.netloc}",

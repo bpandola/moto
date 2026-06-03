@@ -44,15 +44,18 @@ class BotocoreStubber:
             return response
 
     def process_request(self, request: Any) -> TYPE_RESPONSE | None:
+        # request_url = request.url
+        request = normalize_request(request)
+        # assert request_url == request.raw_url, (request_url, request.raw_url)
         # Handle non-standard AWS endpoint hostnames from ISO regions or custom
         # S3 endpoints.
-        parsed_url, _ = get_equivalent_url_in_aws_domain(request.url)
+        parsed_url, _ = get_equivalent_url_in_aws_domain(request.raw_url)
         # Remove the querystring from the URL, as we'll never match on that
         clean_url = f"{parsed_url.scheme}://{parsed_url.netloc}{parsed_url.path}"
 
         if passthrough_url(clean_url):
             return None
-        request = normalize_request(request)
+
         for service, pattern in backend_index.backend_url_patterns:
             if pattern.match(clean_url):
                 if passthrough_service(service):
@@ -75,10 +78,6 @@ class BotocoreStubber:
                         backend = backend_dict[DEFAULT_ACCOUNT_ID]["aws"]
                 else:
                     backend = backend_dict["global"]
-
-                # for header, value in request.headers.items():
-                #     if isinstance(value, bytes):
-                #         request.headers[header] = value.decode("utf-8")
 
                 for url, method_to_execute in backend.urls.items():
                     if re.compile(url).match(clean_url):
