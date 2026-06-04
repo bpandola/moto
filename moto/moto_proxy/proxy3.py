@@ -82,7 +82,10 @@ class MotoRequestHandler:
         request = AWSPreparedRequest(
             method, full_url, headers, body, stream_output=False
         )
-        return handler(request, full_url, headers)
+        from moto.core.request import normalize_request
+
+        normalized_request = normalize_request(request)
+        return handler(normalized_request, full_url, headers)
 
 
 class ProxyRequestHandler(BaseHTTPRequestHandler):

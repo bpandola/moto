@@ -234,6 +234,7 @@ class BaseResponse(ActionAuthenticatorMixin):
         """
         use_raw_body: Use incoming bytes if True, encode to string otherwise
         """
+        assert isinstance(request, Request)
         self.is_werkzeug_request = "werkzeug" in str(type(request))
         request = self.normalize_request(request)
         self.normalized_request = request
