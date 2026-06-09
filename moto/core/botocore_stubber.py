@@ -35,7 +35,7 @@ class BotocoreStubber:
     ) -> AWSResponse | None:
         if not self.enabled:
             return None
-
+        request = normalize_request(request)
         response = self.process_request(request)
         if response is not None:
             status, headers, body = response
@@ -45,7 +45,7 @@ class BotocoreStubber:
 
     def process_request(self, request: Any) -> TYPE_RESPONSE | None:
         # request_url = request.url
-        request = normalize_request(request)
+        # request = normalize_request(request)
         # assert request_url == request.raw_url, (request_url, request.raw_url)
         # Handle non-standard AWS endpoint hostnames from ISO regions or custom
         # S3 endpoints.

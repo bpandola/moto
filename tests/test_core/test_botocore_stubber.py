@@ -1,8 +1,7 @@
 from time import time
 
-from werkzeug.wrappers import Request
-
 from moto.core.botocore_stubber import BotocoreStubber
+from moto.core.request import Request
 
 
 def test_performance_for_url_with_many_dots() -> None:
