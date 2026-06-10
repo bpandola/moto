@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
+from botocore.awsrequest import AWSPreparedRequest
 from botocore.httpchecksum import AwsChunkedWrapper
 from werkzeug.wrappers import Request as WerkzeugRequest
 
@@ -10,8 +11,6 @@ from moto.settings import MAX_FORM_MEMORY_SIZE
 from moto.utilities.constants import APPLICATION_JSON, JSON_TYPES
 
 if TYPE_CHECKING:
-    from botocore.awsrequest import AWSPreparedRequest
-
     from moto.core.model import ServiceModel
 
 
@@ -19,6 +18,14 @@ class Request(WerkzeugRequest):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self.max_form_memory_size = MAX_FORM_MEMORY_SIZE
+
+    @classmethod
+    def from_primitives(
+        cls, method: str, url: str, headers: Any, body: str | bytes | None = None
+    ) -> Request:
+        # TODO: do a from values here instead of using AWS intermediary
+        wrapper = AWSPreparedRequest(method, url, headers, body, stream_output=False)
+        return normalize_request(wrapper)
 
     @classmethod
     def from_values(cls, *args: Any, **kwargs: Any) -> Request:
