@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import copy
 import json
 import os
 import re
+from collections.abc import Iterator
 from datetime import datetime
 from os import environ
 from typing import Any
@@ -187,29 +189,31 @@ class AmiBackend:
     def _load_amis(self) -> None:
         if "MOTO_AMIS_PATH" not in os.environ and not settings.ec2_load_default_amis():
             return
-        for ami in AMIS:
-            ami_id = ami["ami_id"]
+
+        def iter_default_amis() -> Iterator[dict[str, Any]]:
+            for ami in AMIS:
+                yield ami
+            if "MOTO_AMIS_PATH" not in environ:
+                for path in ["latest_amis", "ecs/optimized_amis"]:
+                    try:
+                        latest_amis: list[dict[str, Any]] = load_resource(
+                            f"ec2/resources/{path}/{self.region_name}.json",  # type: ignore[attr-defined]
+                        )
+                        for ami in latest_amis:
+                            yield ami
+                    except FileNotFoundError:
+                        # Will error on unknown (new) regions - just return an empty list here
+                        pass
+
+        for ami_config in iter_default_amis():
+            ami_id = ami_config["ami_id"]
+            kwargs = copy.copy(ami_config)
             # we are assuming the default loaded amis are owned by amazon
             # owner_alias is required for terraform owner filters
-            ami["owner_alias"] = "amazon"
-            if ami.get("creation_date"):
-                ami["creation_date"] = parse_timestamp(ami["creation_date"])
-            self.amis[ami_id] = Ami(self, **ami)
-        if "MOTO_AMIS_PATH" not in environ:
-            for path in ["latest_amis", "ecs/optimized_amis"]:
-                try:
-                    latest_amis: list[dict[str, Any]] = load_resource(
-                        f"ec2/resources/{path}/{self.region_name}.json",  # type: ignore[attr-defined]
-                    )
-                    for ami in latest_amis:
-                        ami_id = ami["ami_id"]
-                        ami["owner_alias"] = "amazon"
-                        if ami.get("creation_date"):
-                            ami["creation_date"] = parse_timestamp(ami["creation_date"])
-                        self.amis[ami_id] = Ami(self, **ami)
-                except FileNotFoundError:
-                    # Will error on unknown (new) regions - just return an empty list here
-                    pass
+            kwargs["owner_alias"] = "amazon"
+            if "creation_date" in ami_config:
+                kwargs["creation_date"] = parse_timestamp(ami_config["creation_date"])
+            self.amis[ami_id] = Ami(self, **kwargs)
 
     def create_image(
         self,
