@@ -51,6 +51,7 @@ SIGNING_ALIASES = {
     "execute-api": "iot",
     "iotdata": "data.iot",
     "mobiletargeting": "pinpoint",
+    "payment-cryptography": "controlplane.payment-cryptography",
 }
 
 # Some services are only recognizable by the version
@@ -144,6 +145,8 @@ class DomainDispatcherApplication:
             # All MediaStore API calls have a target header
             # If no target is set, assume we're trying to reach the mediastore-data service
             host = f"data.{service}.{region}.amazonaws.com"
+        elif service == "aidevops":
+            host = f"{service}.{region}.api.aws"
         elif service == "dsql":
             host = f"{service}.{region}.api.aws"
         elif service == "dynamodb":

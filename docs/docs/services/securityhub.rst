@@ -35,6 +35,7 @@ securityhub
 - [ ] create_automation_rule
 - [ ] create_automation_rule_v2
 - [ ] create_configuration_policy
+- [ ] create_connector
 - [ ] create_connector_v2
 - [ ] create_finding_aggregator
 - [ ] create_insight
@@ -45,6 +46,7 @@ securityhub
 - [ ] delete_aggregator_v2
 - [ ] delete_automation_rule_v2
 - [ ] delete_configuration_policy
+- [ ] delete_connector
 - [ ] delete_connector_v2
 - [ ] delete_finding_aggregator
 - [ ] delete_insight
@@ -61,6 +63,7 @@ securityhub
 - [ ] disable_import_findings_for_product
 - [ ] disable_organization_admin_account
 - [X] disable_security_hub
+- [ ] disable_security_hub_feature_v2
 - [ ] disable_security_hub_v2
 - [ ] disassociate_from_administrator_account
 - [ ] disassociate_from_master_account
@@ -68,12 +71,15 @@ securityhub
 - [ ] enable_import_findings_for_product
 - [X] enable_organization_admin_account
 - [X] enable_security_hub
+- [ ] enable_security_hub_feature_v2
 - [ ] enable_security_hub_v2
+- [ ] generate_recommended_policy_v2
 - [X] get_administrator_account
 - [ ] get_aggregator_v2
 - [ ] get_automation_rule_v2
 - [ ] get_configuration_policy
 - [ ] get_configuration_policy_association
+- [ ] get_connector
 - [ ] get_connector_v2
 - [ ] get_enabled_standards
 - [ ] get_finding_aggregator
@@ -91,6 +97,7 @@ Filters and SortCriteria is not yet implemented
 - [ ] get_invitations_count
 - [X] get_master_account
 - [X] get_members
+- [ ] get_recommended_policy_v2
 - [ ] get_resources_statistics_v2
 - [ ] get_resources_trends_v2
 - [ ] get_resources_v2
@@ -101,9 +108,11 @@ Filters and SortCriteria is not yet implemented
 - [ ] list_automation_rules_v2
 - [ ] list_configuration_policies
 - [ ] list_configuration_policy_associations
+- [ ] list_connectors
 - [ ] list_connectors_v2
 - [ ] list_enabled_products_for_import
 - [ ] list_finding_aggregators
+- [ ] list_free_trial_statuses_v2
 - [ ] list_invitations
 - [X] list_members
 - [ ] list_organization_admin_accounts
@@ -119,6 +128,7 @@ Filters and SortCriteria is not yet implemented
 - [ ] update_aggregator_v2
 - [ ] update_automation_rule_v2
 - [ ] update_configuration_policy
+- [ ] update_connector
 - [ ] update_connector_v2
 - [ ] update_finding_aggregator
 - [ ] update_findings

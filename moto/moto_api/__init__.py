@@ -38,7 +38,13 @@ state_manager.register_default_transition(
     "dsql::cluster", transition={"progression": "manual", "times": 1}
 )
 state_manager.register_default_transition(
+    "dsql::stream", transition={"progression": "manual", "times": 1}
+)
+state_manager.register_default_transition(
     model_name="ecs::task", transition={"progression": "manual", "times": 1}
+)
+state_manager.register_default_transition(
+    model_name="fis::experiment", transition={"progression": "manual", "times": 1}
 )
 state_manager.register_default_transition(
     model_name="glue::job_run", transition={"progression": "immediate"}

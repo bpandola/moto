@@ -36,6 +36,12 @@ from .exceptions import (
 )
 
 TRANSACTION_MAX_ITEMS = 25
+SELECT_VALUES = [
+    "SPECIFIC_ATTRIBUTES",
+    "COUNT",
+    "ALL_ATTRIBUTES",
+    "ALL_PROJECTED_ATTRIBUTES",
+]
 
 
 def include_consumed_capacity(
@@ -131,7 +137,7 @@ def validate_put_has_empty_attrs(field_updates: dict[str, Any], table: Table) ->
         for set_type, error in [("NS", "number"), ("SS", "string")]:
             if set_type in attr and attr[set_type] == []:
                 raise MockValidationException(
-                    f"One or more parameter values were invalid: An {error} set  may not be empty"
+                    f"1 validation error detected: One or more parameter values were invalid: An {error} set  may not be empty"
                 )
 
         else:
@@ -159,11 +165,65 @@ def validate_attributes_used(
     attribute_names: dict[str, Any] | None,
     names_used: list[str],
     provided_attr: str = "Names",
+    validation_error_prefix: bool = True,
 ) -> None:
     for name in attribute_names or []:
         if name not in names_used:
+            msg = f"Value provided in ExpressionAttribute{provided_attr} unused in expressions: keys: {{{name}}}"
+            if validation_error_prefix:
+                msg = f"1 validation error detected: {msg}"
+            raise MockValidationException(msg)
+
+
+def validate_select(
+    *,
+    operation: str,
+    select: str | None,
+    projection_expression: str | None,
+    attributes_to_get: list[str] | None,
+    table: Table,
+    index_name: str | None,
+) -> None:
+    if select is None:
+        return
+
+    if select not in SELECT_VALUES:
+        raise MockValidationException(
+            f"1 validation error detected: Value '{select}' at 'select' failed to satisfy constraint: Member must satisfy enum value set: [{', '.join(SELECT_VALUES)}]"
+        )
+
+    validation_prefix = "1 validation error detected: " if operation == "Query" else ""
+
+    if select == "SPECIFIC_ATTRIBUTES" and not (
+        projection_expression or attributes_to_get
+    ):
+        raise MockValidationException(
+            f"{validation_prefix}Must specify the AttributesToGet or ProjectionExpression when choosing to get SPECIFIC_ATTRIBUTES"
+        )
+
+    if select != "SPECIFIC_ATTRIBUTES":
+        selection_description = "only the Count" if select == "COUNT" else select
+        if projection_expression:
             raise MockValidationException(
-                f"Value provided in ExpressionAttribute{provided_attr} unused in expressions: keys: {{{name}}}"
+                f"{validation_prefix}Cannot specify the ProjectionExpression when choosing to get {selection_description}"
+            )
+        if attributes_to_get:
+            raise MockValidationException(
+                f"{validation_prefix}Cannot specify the AttributesToGet when choosing to get {selection_description}"
+            )
+
+    if select == "ALL_PROJECTED_ATTRIBUTES" and index_name is None:
+        raise MockValidationException(
+            f"{validation_prefix}ALL_PROJECTED_ATTRIBUTES can be used only when Querying using an IndexName"
+        )
+
+    if select == "ALL_ATTRIBUTES" and index_name:
+        global_index = next(
+            (index for index in table.global_indexes if index.name == index_name), None
+        )
+        if global_index and global_index.projection.get("ProjectionType") != "ALL":
+            raise MockValidationException(
+                f"One or more parameter values were invalid: Select type ALL_ATTRIBUTES is not supported for global secondary index {index_name} because its projection type is not ALL"
             )
 
 
@@ -751,7 +811,9 @@ class DynamoHandler(BaseResponse):
         projection_expressions = parser.parse()
 
         validate_attributes_used(
-            expression_attribute_names, parser.expr_attr_names_found
+            expression_attribute_names,
+            parser.expr_attr_names_found,
+            validation_error_prefix=False,
         )
 
         item = self.dynamodb_backend.get_item(name, key, projection_expressions)
@@ -806,7 +868,9 @@ class DynamoHandler(BaseResponse):
             )
             projection_expressions = parser.parse()
             validate_attributes_used(
-                expression_attribute_names, parser.expr_attr_names_found
+                expression_attribute_names,
+                parser.expr_attr_names_found,
+                validation_error_prefix=False,
             )
 
             results["Responses"][table_name] = []
@@ -954,13 +1018,24 @@ class DynamoHandler(BaseResponse):
                 filter_kwargs.update(query_filters)
 
         validate_attributes_used(
-            expression_attribute_names, expression_attribute_names_used
+            expression_attribute_names,
+            expression_attribute_names_used,
+            validation_error_prefix=False,
         )
         index_name = self.body.get("IndexName")
         exclusive_start_key = self.body.get("ExclusiveStartKey")
         limit = self.body.get("Limit")
         scan_index_forward = self.body.get("ScanIndexForward", True)
         consistent_read = self.body.get("ConsistentRead", False)
+
+        validate_select(
+            operation="Query",
+            select=self.body.get("Select"),
+            projection_expression=projection_expression,
+            attributes_to_get=self.body.get("AttributesToGet"),
+            table=self.dynamodb_backend.get_table(name),
+            index_name=index_name,
+        )
 
         items, scanned_count, last_evaluated_key = self.dynamodb_backend.query(
             name,
@@ -986,7 +1061,7 @@ class DynamoHandler(BaseResponse):
             "ScannedCount": scanned_count,
         }
 
-        if self.body.get("Select", "").upper() != "COUNT":
+        if self.body.get("Select") != "COUNT":
             result["Items"] = [item.attrs for item in items]
 
         if last_evaluated_key is not None:
@@ -1053,7 +1128,18 @@ class DynamoHandler(BaseResponse):
             )
 
         validate_attributes_used(
-            expression_attribute_names, expression_attribute_names_used
+            expression_attribute_names,
+            expression_attribute_names_used,
+            validation_error_prefix=False,
+        )
+
+        validate_select(
+            operation="Scan",
+            select=self.body.get("Select"),
+            projection_expression=projection_expression,
+            attributes_to_get=self.body.get("AttributesToGet"),
+            table=self.dynamodb_backend.get_table(name),
+            index_name=index_name,
         )
 
         try:
@@ -1073,11 +1159,12 @@ class DynamoHandler(BaseResponse):
         except ValueError as err:
             raise MockValidationException(f"Bad Filter Expression: {err}")
 
-        result = {
+        result: dict[str, Any] = {
             "Count": len(items),
-            "Items": [item.attrs for item in items],
             "ScannedCount": scanned_count,
         }
+        if self.body.get("Select") != "COUNT":
+            result["Items"] = [item.attrs for item in items]
         if last_evaluated_key is not None:
             result["LastEvaluatedKey"] = last_evaluated_key
         return DynamoResult(result)
@@ -1150,7 +1237,7 @@ class DynamoHandler(BaseResponse):
             update_expression = update_expression.strip()
             if update_expression == "":
                 raise MockValidationException(
-                    "Invalid UpdateExpression: The expression can not be empty;"
+                    "1 validation error detected: Invalid UpdateExpression: The expression can not be empty;"
                 )
             update_expression_ast = UpdateExpressionParser.make(update_expression)
             attr_name_clauses = update_expression_ast.find_clauses(
@@ -1264,7 +1351,7 @@ class DynamoHandler(BaseResponse):
         if values is None:
             return {}
         if len(values) == 0:
-            raise ExpressionAttributeValuesEmpty
+            raise ExpressionAttributeValuesEmpty(validation_error_prefix=True)
         for key in values:
             if not key.startswith(":"):
                 raise MockValidationException(
@@ -1272,7 +1359,7 @@ class DynamoHandler(BaseResponse):
                 )
             if values[key] == {"NS": []}:
                 raise MockValidationException(
-                    f"ExpressionAttributeValues contains invalid value: One or more parameter values were invalid: An number set  may not be empty for key {key}"
+                    "1 validation error detected: One or more parameter values were invalid: An number set  may not be empty"
                 )
         return values
 
@@ -1435,7 +1522,9 @@ class DynamoHandler(BaseResponse):
                 ]
 
             validate_attributes_used(
-                expression_attribute_names, expression_attribute_names_used
+                expression_attribute_names,
+                expression_attribute_names_used,
+                validation_error_prefix=False,
             )
 
         self.dynamodb_backend.transact_write_items(transact_items)

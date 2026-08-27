@@ -38,6 +38,7 @@ backend_url_patterns = [
     ("bedrockruntime", re.compile("https?://bedrock-runtime\\.(.+)\\.amazonaws\\.com")),
     ("budgets", re.compile("https?://budgets\\.amazonaws\\.com")),
     ("ce", re.compile("https?://ce\\.(.+)\\.amazonaws\\.com")),
+    ("cleanrooms", re.compile("https?://cleanrooms\\.(.+)\\.amazonaws\\.com")),
     ("clouddirectory", re.compile("https?://clouddirectory\\.(.+)\\.amazonaws\\.com")),
     ("cloudformation", re.compile("https?://cloudformation\\.(.+)\\.amazonaws\\.com")),
     ("cloudfront", re.compile("https?://cloudfront\\.amazonaws\\.com")),
@@ -63,6 +64,7 @@ backend_url_patterns = [
     ("datapipeline", re.compile("https?://datapipeline\\.(.+)\\.amazonaws\\.com")),
     ("datasync", re.compile("https?://(.*\\.)?(datasync)\\.(.+)\\.amazonaws.com")),
     ("dax", re.compile("https?://dax\\.(.+)\\.amazonaws\\.com")),
+    ("devopsagent", re.compile("https?://(.*\\.)?aidevops\\.(.+)\\.api\\.aws")),
     ("directconnect", re.compile("https?://directconnect\\.(.+)\\.amazonaws\\.com")),
     ("dms", re.compile("https?://dms\\.(.+)\\.amazonaws\\.com")),
     ("ds", re.compile("https?://ds\\.(.+)\\.amazonaws\\.com")),
@@ -166,7 +168,12 @@ backend_url_patterns = [
     ("opensearchserverless", re.compile("https?://aoss\\.(.+)\\.amazonaws\\.com")),
     ("organizations", re.compile("https?://organizations\\.(.+)\\.amazonaws\\.com")),
     ("osis", re.compile("https?://osis\\.(.+)\\.amazonaws\\.com")),
-    ("panorama", re.compile("https?://panorama\\.(.+)\\.amazonaws.com")),
+    (
+        "paymentcryptography",
+        re.compile(
+            "https?://controlplane\\.payment-cryptography\\.(.+)\\.amazonaws\\.com"
+        ),
+    ),
     ("personalize", re.compile("https?://personalize\\.(.+)\\.amazonaws\\.com")),
     ("pinpoint", re.compile("https?://pinpoint\\.(.+)\\.amazonaws\\.com")),
     ("pipes", re.compile("https?://pipes\\.(.+)\\.amazonaws\\.com")),

@@ -3423,6 +3423,44 @@ def test_update_item_with_attribute_in_right_hand_side_and_operation():
 
 
 @mock_aws
+def test_update_item_arithmetic_preserves_decimal_precision():
+    # DynamoDB numbers are arbitrary-precision decimals. Both `+` and `-` in an
+    # update expression must preserve full precision - `-` used to coerce values
+    # to float(), which lost precision (0.3 - 0.1 -> 0.19999999999999998) and
+    # emitted scientific notation for large numbers.
+    dynamodb, table_name = create_simple_table_and_return_client()
+
+    dynamodb.put_item(
+        TableName=table_name,
+        Item={
+            "id": {"S": "1"},
+            "bal": {"N": "0.3"},
+            "big": {"N": "100000000000000000000.00000001"},
+        },
+    )
+
+    # 0.3 - 0.1 must be exactly 0.2, matching `+`
+    dynamodb.update_item(
+        TableName=table_name,
+        Key={"id": {"S": "1"}},
+        UpdateExpression="SET bal = bal - :val",
+        ExpressionAttributeValues={":val": {"N": "0.1"}},
+    )
+    result = dynamodb.get_item(TableName=table_name, Key={"id": {"S": "1"}})
+    assert result["Item"]["bal"]["N"] == "0.2"
+
+    # Large-magnitude subtraction must not lose precision or emit "1e+20"
+    dynamodb.update_item(
+        TableName=table_name,
+        Key={"id": {"S": "1"}},
+        UpdateExpression="SET big = big - :val",
+        ExpressionAttributeValues={":val": {"N": "1"}},
+    )
+    result = dynamodb.get_item(TableName=table_name, Key={"id": {"S": "1"}})
+    assert result["Item"]["big"]["N"] == "99999999999999999999.00000001"
+
+
+@mock_aws
 def test_non_existing_attribute_should_raise_exception():
     """
     Does error message get correctly raised if attribute is referenced but it does not exist for the item.
@@ -4001,28 +4039,23 @@ def test_error_when_providing_expression_and_nonexpression_params():
     )
 
 
-@mock_aws
-def test_error_when_providing_empty_update_expression():
-    client = boto3.client("dynamodb", "eu-central-1")
-    table_name = f"T{uuid4()}"
-    client.create_table(
-        TableName=table_name,
-        KeySchema=[{"AttributeName": "pkey", "KeyType": "HASH"}],
-        AttributeDefinitions=[{"AttributeName": "pkey", "AttributeType": "S"}],
-        BillingMode="PAY_PER_REQUEST",
-    )
+@pytest.mark.aws_verified
+@dynamodb_aws_verified()
+def test_error_when_providing_empty_update_expression(table_name=None):
+    client = boto3.client("dynamodb", "us-east-1")
 
     with pytest.raises(ClientError) as ex:
         client.update_item(
             TableName=table_name,
-            Key={"pkey": {"S": "testrecord"}},
+            Key={"pk": {"S": "testrecord"}},
             UpdateExpression="",
             ExpressionAttributeValues={":order": {"SS": ["item"]}},
         )
     err = ex.value.response["Error"]
     assert err["Code"] == "ValidationException"
     assert (
-        err["Message"] == "Invalid UpdateExpression: The expression can not be empty;"
+        err["Message"]
+        == "1 validation error detected: Invalid UpdateExpression: The expression can not be empty;"
     )
 
 
