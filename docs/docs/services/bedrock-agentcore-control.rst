@@ -14,21 +14,31 @@ bedrock-agentcore-control
 
 |start-h3| Implemented features for this service |end-h3|
 
+- [ ] add_dataset_examples
+- [ ] batch_put_gateway_rate_limits
 - [X] create_agent_runtime
 - [X] create_agent_runtime_endpoint
 - [ ] create_api_key_credential_provider
 - [ ] create_browser
 - [ ] create_browser_profile
+- [ ] create_capacity_provider
 - [ ] create_code_interpreter
 - [ ] create_configuration_bundle
+- [ ] create_dataset
+- [ ] create_dataset_version
 - [ ] create_evaluator
 - [X] create_gateway
+- [ ] create_gateway_rate_limit
 - [ ] create_gateway_rule
 - [X] create_gateway_target
 - [ ] create_harness
+- [ ] create_harness_endpoint
 - [X] create_memory
 - [ ] create_oauth2_credential_provider
 - [ ] create_online_evaluation_config
+- [ ] create_payment_connector
+- [ ] create_payment_credential_provider
+- [ ] create_payment_manager
 - [ ] create_policy
 - [ ] create_policy_engine
 - [ ] create_registry
@@ -39,16 +49,24 @@ bedrock-agentcore-control
 - [ ] delete_api_key_credential_provider
 - [ ] delete_browser
 - [ ] delete_browser_profile
+- [ ] delete_capacity_provider
 - [ ] delete_code_interpreter
 - [ ] delete_configuration_bundle
+- [ ] delete_dataset
+- [ ] delete_dataset_examples
 - [ ] delete_evaluator
 - [X] delete_gateway
+- [ ] delete_gateway_rate_limit
 - [ ] delete_gateway_rule
 - [X] delete_gateway_target
 - [ ] delete_harness
+- [ ] delete_harness_endpoint
 - [X] delete_memory
 - [ ] delete_oauth2_credential_provider
 - [ ] delete_online_evaluation_config
+- [ ] delete_payment_connector
+- [ ] delete_payment_credential_provider
+- [ ] delete_payment_manager
 - [ ] delete_policy
 - [ ] delete_policy_engine
 - [ ] delete_registry
@@ -60,20 +78,30 @@ bedrock-agentcore-control
 - [ ] get_api_key_credential_provider
 - [ ] get_browser
 - [ ] get_browser_profile
+- [ ] get_capacity_provider
 - [ ] get_code_interpreter
 - [ ] get_configuration_bundle
 - [ ] get_configuration_bundle_version
+- [ ] get_dataset
 - [ ] get_evaluator
 - [X] get_gateway
+- [ ] get_gateway_rate_limit
 - [ ] get_gateway_rule
 - [X] get_gateway_target
 - [ ] get_harness
+- [ ] get_harness_endpoint
 - [X] get_memory
 - [ ] get_oauth2_credential_provider
 - [ ] get_online_evaluation_config
+- [ ] get_payment_connector
+- [ ] get_payment_credential_provider
+- [ ] get_payment_manager
 - [ ] get_policy
 - [ ] get_policy_engine
+- [ ] get_policy_engine_summary
 - [ ] get_policy_generation
+- [ ] get_policy_generation_summary
+- [ ] get_policy_summary
 - [ ] get_registry
 - [ ] get_registry_record
 - [ ] get_resource_policy
@@ -81,25 +109,39 @@ bedrock-agentcore-control
 - [ ] get_workload_identity
 - [X] list_agent_runtime_endpoints
 - [X] list_agent_runtime_versions
+- [ ] list_agent_runtime_versions_by_capacity_provider
 - [X] list_agent_runtimes
 - [ ] list_api_key_credential_providers
 - [ ] list_browser_profiles
 - [ ] list_browsers
+- [ ] list_capacity_providers
 - [ ] list_code_interpreters
 - [ ] list_configuration_bundle_versions
 - [ ] list_configuration_bundles
+- [ ] list_dataset_examples
+- [ ] list_dataset_versions
+- [ ] list_datasets
 - [ ] list_evaluators
+- [ ] list_gateway_rate_limits
 - [ ] list_gateway_rules
 - [X] list_gateway_targets
 - [X] list_gateways
+- [ ] list_harness_endpoints
+- [ ] list_harness_versions
 - [ ] list_harnesses
 - [X] list_memories
 - [ ] list_oauth2_credential_providers
 - [ ] list_online_evaluation_configs
+- [ ] list_payment_connectors
+- [ ] list_payment_credential_providers
+- [ ] list_payment_managers
 - [ ] list_policies
+- [ ] list_policy_engine_summaries
 - [ ] list_policy_engines
 - [ ] list_policy_generation_assets
+- [ ] list_policy_generation_summaries
 - [ ] list_policy_generations
+- [ ] list_policy_summaries
 - [ ] list_registries
 - [ ] list_registry_records
 - [X] list_tags_for_resource
@@ -114,15 +156,23 @@ bedrock-agentcore-control
 - [X] update_agent_runtime
 - [X] update_agent_runtime_endpoint
 - [ ] update_api_key_credential_provider
+- [ ] update_capacity_provider
 - [ ] update_configuration_bundle
+- [ ] update_dataset
+- [ ] update_dataset_examples
 - [ ] update_evaluator
 - [X] update_gateway
+- [ ] update_gateway_rate_limit
 - [ ] update_gateway_rule
 - [X] update_gateway_target
 - [ ] update_harness
+- [ ] update_harness_endpoint
 - [X] update_memory
 - [ ] update_oauth2_credential_provider
 - [ ] update_online_evaluation_config
+- [ ] update_payment_connector
+- [ ] update_payment_credential_provider
+- [ ] update_payment_manager
 - [ ] update_policy
 - [ ] update_policy_engine
 - [ ] update_registry

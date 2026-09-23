@@ -29,6 +29,7 @@ cognito-idp
 - [ ] admin_forget_device
 - [ ] admin_get_device
 - [X] admin_get_user
+- [ ] admin_get_user_auth_factors
 - [X] admin_initiate_auth
 - [ ] admin_link_provider_for_user
 - [ ] admin_list_devices
@@ -59,6 +60,7 @@ cognito-idp
 - [X] create_user_pool
 - [X] create_user_pool_client
 - [X] create_user_pool_domain
+- [ ] create_user_pool_replica
 - [X] delete_group
 - [X] delete_identity_provider
 - [ ] delete_managed_login_branding
@@ -70,6 +72,7 @@ cognito-idp
 - [X] delete_user_pool_client
 - [ ] delete_user_pool_client_secret
 - [X] delete_user_pool_domain
+- [ ] delete_user_pool_replica
 - [ ] delete_web_authn_credential
 - [X] describe_identity_provider
 - [ ] describe_managed_login_branding
@@ -98,6 +101,7 @@ Otherwise you get semi-random garbage and HTTP 200 OK, for example:
 - [X] get_group
 - [ ] get_identity_provider_by_identifier
 - [ ] get_log_delivery_configuration
+- [ ] get_provisioned_limit
 - [ ] get_signing_certificate
 - [ ] get_tokens_from_refresh_token
 - [ ] get_ui_customization
@@ -116,6 +120,7 @@ Otherwise you get semi-random garbage and HTTP 200 OK, for example:
 - [ ] list_user_import_jobs
 - [ ] list_user_pool_client_secrets
 - [X] list_user_pool_clients
+- [ ] list_user_pool_replicas
 - [X] list_user_pools
 - [X] list_users
 - [X] list_users_in_group
@@ -140,6 +145,7 @@ Otherwise you get semi-random garbage and HTTP 200 OK, for example:
 - [X] update_group
 - [X] update_identity_provider
 - [ ] update_managed_login_branding
+- [ ] update_provisioned_limit
 - [ ] update_resource_server
 - [ ] update_terms
 - [X] update_user_attributes
@@ -150,6 +156,7 @@ The parameter ClientMetadata has not yet been implemented. No CodeDeliveryDetail
 - [X] update_user_pool
 - [X] update_user_pool_client
 - [X] update_user_pool_domain
+- [ ] update_user_pool_replica
 - [X] verify_software_token
 - [ ] verify_user_attribute
 

@@ -7,6 +7,7 @@ import boto3
 import pytest
 from boto3.dynamodb.conditions import Attr, Key
 from boto3.dynamodb.types import Binary
+from botocore.config import Config
 from botocore.exceptions import ClientError
 from freezegun import freeze_time
 
@@ -1402,6 +1403,30 @@ def test_filter_expression():
         "Id BETWEEN :v0 AND :v1", {}, {":v0": {"N": "0"}, ":v1": {"N": "10"}}
     )
     assert filter_expr.expr(row1) is True
+
+    # BETWEEN test where the attribute itself is exactly 0 -- regression test.
+    # 0 is a valid Decimal value and must not be treated as "no value" via
+    # bare truthiness (bool(Decimal("0")) is False), the same way start/end
+    # already correctly special-case 0. Item with Id=0 must be included in
+    # a BETWEEN 0 AND 10 (and BETWEEN -5 AND 10) range.
+    row_zero = moto.dynamodb.models.Item(
+        hash_key=None,
+        range_key=None,
+        attrs={"Id": {"N": "0"}},
+    )
+    filter_expr = moto.dynamodb.comparisons.get_filter_expression(
+        "Id BETWEEN :v0 AND :v1", {}, {":v0": {"N": "0"}, ":v1": {"N": "10"}}
+    )
+    assert filter_expr.expr(row_zero) is True
+    filter_expr = moto.dynamodb.comparisons.get_filter_expression(
+        "Id BETWEEN :v0 AND :v1", {}, {":v0": {"N": "-5"}, ":v1": {"N": "10"}}
+    )
+    assert filter_expr.expr(row_zero) is True
+    # And it must still correctly exclude 0 when it falls outside the range.
+    filter_expr = moto.dynamodb.comparisons.get_filter_expression(
+        "Id BETWEEN :v0 AND :v1", {}, {":v0": {"N": "1"}, ":v1": {"N": "10"}}
+    )
+    assert filter_expr.expr(row_zero) is False
 
     # PAREN test
     filter_expr = moto.dynamodb.comparisons.get_filter_expression(
@@ -3423,6 +3448,44 @@ def test_update_item_with_attribute_in_right_hand_side_and_operation():
 
 
 @mock_aws
+def test_update_item_arithmetic_preserves_decimal_precision():
+    # DynamoDB numbers are arbitrary-precision decimals. Both `+` and `-` in an
+    # update expression must preserve full precision - `-` used to coerce values
+    # to float(), which lost precision (0.3 - 0.1 -> 0.19999999999999998) and
+    # emitted scientific notation for large numbers.
+    dynamodb, table_name = create_simple_table_and_return_client()
+
+    dynamodb.put_item(
+        TableName=table_name,
+        Item={
+            "id": {"S": "1"},
+            "bal": {"N": "0.3"},
+            "big": {"N": "100000000000000000000.00000001"},
+        },
+    )
+
+    # 0.3 - 0.1 must be exactly 0.2, matching `+`
+    dynamodb.update_item(
+        TableName=table_name,
+        Key={"id": {"S": "1"}},
+        UpdateExpression="SET bal = bal - :val",
+        ExpressionAttributeValues={":val": {"N": "0.1"}},
+    )
+    result = dynamodb.get_item(TableName=table_name, Key={"id": {"S": "1"}})
+    assert result["Item"]["bal"]["N"] == "0.2"
+
+    # Large-magnitude subtraction must not lose precision or emit "1e+20"
+    dynamodb.update_item(
+        TableName=table_name,
+        Key={"id": {"S": "1"}},
+        UpdateExpression="SET big = big - :val",
+        ExpressionAttributeValues={":val": {"N": "1"}},
+    )
+    result = dynamodb.get_item(TableName=table_name, Key={"id": {"S": "1"}})
+    assert result["Item"]["big"]["N"] == "99999999999999999999.00000001"
+
+
+@mock_aws
 def test_non_existing_attribute_should_raise_exception():
     """
     Does error message get correctly raised if attribute is referenced but it does not exist for the item.
@@ -4001,28 +4064,23 @@ def test_error_when_providing_expression_and_nonexpression_params():
     )
 
 
-@mock_aws
-def test_error_when_providing_empty_update_expression():
-    client = boto3.client("dynamodb", "eu-central-1")
-    table_name = f"T{uuid4()}"
-    client.create_table(
-        TableName=table_name,
-        KeySchema=[{"AttributeName": "pkey", "KeyType": "HASH"}],
-        AttributeDefinitions=[{"AttributeName": "pkey", "AttributeType": "S"}],
-        BillingMode="PAY_PER_REQUEST",
-    )
+@pytest.mark.aws_verified
+@dynamodb_aws_verified()
+def test_error_when_providing_empty_update_expression(table_name=None):
+    client = boto3.client("dynamodb", "us-east-1")
 
     with pytest.raises(ClientError) as ex:
         client.update_item(
             TableName=table_name,
-            Key={"pkey": {"S": "testrecord"}},
+            Key={"pk": {"S": "testrecord"}},
             UpdateExpression="",
             ExpressionAttributeValues={":order": {"SS": ["item"]}},
         )
     err = ex.value.response["Error"]
     assert err["Code"] == "ValidationException"
     assert (
-        err["Message"] == "Invalid UpdateExpression: The expression can not be empty;"
+        err["Message"]
+        == "1 validation error detected: Invalid UpdateExpression: The expression can not be empty;"
     )
 
 
@@ -5175,3 +5233,26 @@ def test_update_item_with_list_of_bytes(table_name=None):
 
     get = table.get_item(Key={"pk": "clientA"})
     assert get["Item"] == {"pk": "clientA", "items": [Binary(b1), Binary(b2)]}
+
+
+@pytest.mark.aws_verified
+@dynamodb_aws_verified()
+def test_between_function_operands_cannot_be_null(table_name=None):
+    bypass_param_validation = Config(parameter_validation=True)
+    client = boto3.client(
+        "dynamodb", region_name="us-east-1", config=bypass_param_validation
+    )
+    for expression_attribute_values in [
+        {":lo": {"NULL": True}, ":hi": {"N": "100"}},
+        {":lo": {"N": "1"}, ":hi": {"NULL": True}},
+    ]:
+        with pytest.raises(
+            ClientError,
+            match="Incorrect operand type for operator or function; operator or function: BETWEEN, operand type: NULL",
+        ) as exc:
+            client.scan(
+                TableName=table_name,
+                FilterExpression="price BETWEEN :lo AND :hi",
+                ExpressionAttributeValues=expression_attribute_values,
+            )
+        assert exc.value.response["Error"]["Code"] == "ValidationException"

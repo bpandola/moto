@@ -192,8 +192,11 @@ class AmiBackend:
             # we are assuming the default loaded amis are owned by amazon
             # owner_alias is required for terraform owner filters
             ami["owner_alias"] = "amazon"
-            if ami.get("creation_date"):
-                ami["creation_date"] = parse_timestamp(ami["creation_date"])
+            # Parse the create_date into a datetime, in case this hasn't happened before
+            if (create_date := ami.get("creation_date")) and isinstance(
+                create_date, str
+            ):
+                ami["creation_date"] = parse_timestamp(create_date)
             self.amis[ami_id] = Ami(self, **ami)
         if "MOTO_AMIS_PATH" not in environ:
             for path in ["latest_amis", "ecs/optimized_amis"]:
@@ -391,3 +394,17 @@ class AmiBackend:
 
     def describe_image_attribute(self, ami_id: str, attribute_name: str) -> Any:
         return self.amis[ami_id].__getattribute__(attribute_name)
+
+    def disable_image(self, ami_id: str) -> None:
+        if ami_id in self.deleted_amis:
+            raise UnvailableAMIIdError(ami_id)
+        if ami_id not in self.amis:
+            raise InvalidAMIIdError(ami_id)
+        self.amis[ami_id].state = "disabled"
+
+    def enable_image(self, ami_id: str) -> None:
+        if ami_id in self.deleted_amis:
+            raise UnvailableAMIIdError(ami_id)
+        if ami_id not in self.amis:
+            raise InvalidAMIIdError(ami_id)
+        self.amis[ami_id].state = "available"

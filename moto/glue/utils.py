@@ -515,7 +515,7 @@ class _PartitionFilterExpressionCache:
         ).set_name("cond")
 
         # conditions can be joined using 2-ary AND and/or OR
-        expr = infix_notation(
+        expr = infix_notation(  # type: ignore[no-untyped-call]
             cond,
             [
                 (and_, 2, OpAssoc.LEFT, _BoolAnd),
@@ -527,7 +527,12 @@ class _PartitionFilterExpressionCache:
         self._cache: dict[str, _Expr] = {}
 
     def get(self, expression: str | None) -> _Expr | None:
-        if expression is None:
+        # Real AWS Glue treats an empty/blank Expression as "no filter" (returns every
+        # partition), and the SDK-v1 Hive metastore Glue client sends Expression='' when
+        # Spark lists all partitions without a predicate. Upstream moto only special-cases
+        # None and lets '' hit the grammar, which fails to parse and raises
+        # InvalidInputException. Mirror AWS by handling blank the same as None.
+        if expression is None or not expression.strip():
             return None
 
         if expression not in self._cache:

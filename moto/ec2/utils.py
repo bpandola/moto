@@ -57,6 +57,7 @@ EC2_RESOURCE_TO_PREFIX = {
     "subnet-ipv6-cidr-block-association": "subnet-cidr-assoc",
     "reservation": "r",
     "traffic-mirror-filter": "traf-mir-fil",
+    "traffic-mirror-session": "tms",
     "traffic-mirror-target": "traf-mir-tar",
     "volume": "vol",
     "vpc": "vpc",
@@ -234,6 +235,10 @@ def random_traffic_mirror_target_id() -> str:
     return random_id(prefix=EC2_RESOURCE_TO_PREFIX["traffic-mirror-target"])
 
 
+def random_traffic_mirror_session_id() -> str:
+    return random_id(prefix=EC2_RESOURCE_TO_PREFIX["traffic-mirror-session"])
+
+
 def random_transit_gateway_route_table_id() -> str:
     return random_id(prefix=EC2_RESOURCE_TO_PREFIX["transit-gateway-route-table"])
 
@@ -348,10 +353,7 @@ def get_object_value(obj: Any, attr: str) -> Any:
         elif isinstance(val, dict):
             val = val[key]
         elif isinstance(val, list):
-            for item in val:
-                item_val = get_object_value(item, key)
-                if item_val:
-                    return item_val
+            val = [get_object_value(item, key) for item in val]
         elif key == "owner_id" and hasattr(val, "account_id"):
             val = val.account_id
         else:
@@ -423,7 +425,7 @@ filter_dict_attribute_mapping = {
     "instance-type": "instance_type",
     "private-ip-address": "private_ip",
     "ip-address": "public_ip",
-    "availability-zone": "placement",
+    "availability-zone": "placement.zone",
     "architecture": "architecture",
     "image-id": "image_id",
     "network-interface.private-dns-name": "private_dns_name",

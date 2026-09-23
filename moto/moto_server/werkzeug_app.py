@@ -45,11 +45,11 @@ UNSIGNED_ACTIONS = {
 
 # Some services have v4 signing names that differ from the backend service name/id.
 SIGNING_ALIASES = {
-    "bedrock-agentcore": "bedrock-agentcore-control",
     "eventbridge": "events",
     "execute-api": "iot",
     "iotdata": "data.iot",
     "mobiletargeting": "pinpoint",
+    "payment-cryptography": "controlplane.payment-cryptography",
 }
 
 # Some services are only recognizable by the version
@@ -143,6 +143,8 @@ class DomainDispatcherApplication:
             # All MediaStore API calls have a target header
             # If no target is set, assume we're trying to reach the mediastore-data service
             host = f"data.{service}.{region}.amazonaws.com"
+        elif service == "aidevops":
+            host = f"{service}.{region}.api.aws"
         elif service == "dsql":
             host = f"{service}.{region}.api.aws"
         elif service == "dynamodb":
@@ -199,6 +201,27 @@ class DomainDispatcherApplication:
             host = "sesv2"
         elif service == "memorydb":
             host = f"memory-db.{region}.amazonaws.com"
+        elif service == "bedrock-agentcore":
+            from moto.bedrockagentcore.responses import BedrockAgentCoreResponse
+            from moto.bedrockagentcorecontrol.responses import (
+                BedrockAgentCoreControlResponse,
+            )
+
+            service_to_response = {
+                "bedrock-agentcore": BedrockAgentCoreResponse,
+                "bedrock-agentcore-control": BedrockAgentCoreControlResponse,
+            }
+            for service_name, response_class in service_to_response.items():
+                resp = response_class()
+                resp.region = region
+                action = resp._get_action_from_method_and_request_uri(
+                    method=environ["REQUEST_METHOD"],
+                    request_uri=environ["PATH_INFO"],
+                )
+                if action:
+                    service = service_name
+                    break
+            host = f"{service}.{region}.amazonaws.com"
         elif service == "bedrock":
             # Multiple Bedrock services use the same signing name (bedrock).
             # This is obviously a hack, but it automatically differentiates

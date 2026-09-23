@@ -92,6 +92,7 @@ sesv2
 - [ ] list_tenants
 - [ ] put_account_dedicated_ip_warmup_attributes
 - [ ] put_account_details
+- [ ] put_account_pricing_attributes
 - [ ] put_account_sending_attributes
 - [ ] put_account_suppression_attributes
 - [ ] put_account_vdm_attributes
@@ -112,6 +113,7 @@ sesv2
 - [ ] put_email_identity_feedback_attributes
 - [ ] put_email_identity_mail_from_attributes
 - [ ] put_suppressed_destination
+- [ ] put_tenant_suppression_attributes
 - [ ] send_bulk_email
 - [ ] send_custom_verification_email
 - [X] send_email
@@ -126,3 +128,4 @@ sesv2
 - [ ] update_email_template
 - [ ] update_reputation_entity_customer_managed_status
 - [ ] update_reputation_entity_policy
+
