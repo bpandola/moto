@@ -201,29 +201,8 @@ class DomainDispatcherApplication:
             host = "sesv2"
         elif service == "memorydb":
             host = f"memory-db.{region}.amazonaws.com"
-        elif service == "bedrock-agentcore":
-            from moto.bedrockagentcore.responses import BedrockAgentCoreResponse
-            from moto.bedrockagentcorecontrol.responses import (
-                BedrockAgentCoreControlResponse,
-            )
-
-            service_to_response = {
-                "bedrock-agentcore": BedrockAgentCoreResponse,
-                "bedrock-agentcore-control": BedrockAgentCoreControlResponse,
-            }
-            for service_name, response_class in service_to_response.items():
-                resp = response_class()
-                resp.region = region
-                action = resp._get_action_from_method_and_request_uri(
-                    method=environ["REQUEST_METHOD"],
-                    request_uri=environ["PATH_INFO"],
-                )
-                if action:
-                    service = service_name
-                    break
-            host = f"{service}.{region}.amazonaws.com"
-        elif service == "bedrock":
-            # Multiple Bedrock services use the same signing name (bedrock).
+        elif service in ["bedrock", "bedrock-agentcore"]:
+            # Multiple Bedrock services use the same signing name.
             # This is obviously a hack, but it automatically differentiates
             # between the various Bedrock services without having to manually
             # add every path to `moto/bedrock/urls.py`.
@@ -235,6 +214,8 @@ class DomainDispatcherApplication:
                 "bedrock",
                 "bedrock-agent",
                 "bedrock-runtime",
+                "bedrock-agentcore",
+                "bedrock-agentcore-control",
             ]
             for service_name in possible_services:
                 router = ServiceOperationRouter(get_service_model(service_name))
