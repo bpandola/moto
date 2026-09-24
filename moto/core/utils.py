@@ -124,7 +124,9 @@ class convert_to_flask_response:
         try:
             request = normalize_request(flask_request)
             recorder._record_request(request)
-            result = self.callback(request, request.url, dict(request.headers))
+            # raw_url, so that every mode hands the callback the same URL -
+            # request.url has been percent-decoded by werkzeug
+            result = self.callback(request, request.raw_url, dict(request.headers))
         except ClientError as exc:
             result = 400, {}, exc.response["Error"]["Message"]
         # result is a status, headers, response tuple

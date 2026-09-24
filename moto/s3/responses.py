@@ -12,6 +12,7 @@ import xmltodict
 from moto import settings
 from moto.core.common_types import TYPE_RESPONSE
 from moto.core.mime_types import APP_XML
+from moto.core.request import Request
 from moto.core.responses import ActionResult, BaseResponse, EmptyResult
 from moto.core.utils import (
     ALT_DOMAIN_SUFFIXES,
@@ -190,6 +191,8 @@ def parse_key_name(pth: str) -> str:
 
 
 class S3Response(BaseResponse):
+    use_raw_body = True
+
     def __init__(self) -> None:
         super().__init__(service_name="s3")
         # Whatever format requests come in, we should never touch them
@@ -198,8 +201,11 @@ class S3Response(BaseResponse):
         # Taking the naive approach to never decompress anything from S3 for now
         self.allow_request_decompression = False
 
-    def setup_class(self, request: Any, full_url: str, headers: Any) -> None:  # type: ignore[override]
-        super().setup_class(request, full_url, headers, use_raw_body=True)
+    def setup_class(  # type: ignore[override]
+        self, request: Request, full_url: str | None = None, headers: Any = None
+    ) -> None:
+        super().setup_class(request, full_url, headers)
+        full_url = request.raw_url if full_url is None else full_url
         self.region = parse_region_from_url(full_url, use_default_region=False)
         if self.region is None:
             self.region = (
@@ -389,7 +395,7 @@ class S3Response(BaseResponse):
     def bucket_response(
         self, request: Any, full_url: str, headers: Any
     ) -> TYPE_RESPONSE:
-        self.setup_class(request, full_url, headers)
+        self.setup_class(request)
         bucket_name = self.parse_bucket_name_from_url(request, full_url)
         self.backend.log_incoming_request(request, bucket_name)
         try:
@@ -1855,7 +1861,7 @@ class S3Response(BaseResponse):
         self, request: Any, full_url: str, headers: dict[str, Any]
     ) -> TYPE_RESPONSE:
         # Key and Control are lumped in because splitting out the regex is too much of a pain :/
-        self.setup_class(request, full_url, headers)
+        self.setup_class(request)
         bucket_name = self.parse_bucket_name_from_url(request, full_url)
         self.backend.log_incoming_request(request, bucket_name)
 

@@ -27,7 +27,7 @@ from moto.core.common_types import TYPE_IF_NONE, TYPE_RESPONSE
 from moto.core.exceptions import ServiceException
 from moto.core.model import OperationModel, ServiceModel
 from moto.core.parse import PROTOCOL_PARSERS, XFormedDict
-from moto.core.request import Request, determine_request_protocol, normalize_request
+from moto.core.request import Request, determine_request_protocol
 from moto.core.serialize import (
     ResponseSerializer,
     XFormedAttributePicker,
@@ -200,6 +200,9 @@ class BaseResponse(ActionAuthenticatorMixin):
         r"AWS.*(?P<access_key>(?<![A-Z0-9])[A-Z0-9]{20}(?![A-Z0-9]))[:/]"
     )
 
+    #: Keep the incoming body as bytes, instead of decoding it to a string
+    use_raw_body = False
+
     def __init__(self, service_name: str | None = None):
         super().__init__()
         self.service_name = service_name
@@ -216,56 +219,49 @@ class BaseResponse(ActionAuthenticatorMixin):
     def dispatch(cls, *args: Any, **kwargs: Any) -> Any:  # type: ignore[misc]
         return cls()._dispatch(*args, **kwargs)
 
-    def normalize_request(self, request: Any) -> Request:
-        normalized_request = normalize_request(request)
+    def decompress_request_body(self, request: Request) -> None:
         # https://github.com/getmoto/moto/issues/6692
         # Content coming from SDK's can be GZipped for performance reasons
-        if (
-            normalized_request.content_encoding == "gzip"
-            and self.allow_request_decompression
-        ):
-            normalized_request.stream = gzip.GzipFile(fileobj=normalized_request.stream)  # type: ignore[assignment]
-            normalized_request.get_data(parse_form_data=True)
-        return normalized_request
+        if request.content_encoding == "gzip" and self.allow_request_decompression:
+            request.stream = gzip.GzipFile(fileobj=request.stream)  # type: ignore[assignment]
+            request.get_data(parse_form_data=True)
 
     def setup_class(
-        self, request: Any, full_url: str, headers: Any, use_raw_body: bool = False
+        self,
+        request: Request,
+        full_url: str | None = None,
+        headers: Any = None,
+        use_raw_body: bool | None = None,
     ) -> None:
         """
-        use_raw_body: Use incoming bytes if True, encode to string otherwise
+        full_url and headers are carried by the request itself.  They remain
+        parameters for the callers that deliberately pass something else - see
+        CloudFormationResponse.process_cfn_response, which appends an Action.
+
+        use_raw_body overrides the class-level default for a single call.
         """
-        assert isinstance(request, Request)
+        use_raw_body = self.use_raw_body if use_raw_body is None else use_raw_body
         # Only a real WSGI server supplies its own Date header - in every other
         # mode moto is the entire stack and has to supply it itself.  This used
         # to be inferred from the type name, which stopped working once every
         # mode started handing us the same normalized Request.
         self.is_werkzeug_request = request.from_wsgi_server
-        request = self.normalize_request(request)
+        full_url = request.raw_url if full_url is None else full_url
+        headers = request.headers if headers is None else headers
+        self.decompress_request_body(request)
         self.normalized_request = request
         self.parsed_url = urlparse(full_url)
         querystring: dict[str, Any] = OrderedDict()
-        if hasattr(request, "body"):
-            # Boto
-            self.body = request.body
-        else:
-            # Flask server
-
-            # FIXME: At least in Flask==0.10.1, request.data is an empty string
-            # and the information we want is in request.form. Keeping self.body
-            # definition for back-compatibility
-            self.body = request.data
+        self.body: Any = request.data
 
         # self.form_data is only used by s3 in one place and can be replaced
-        # with self.normalized_rquest.values
-        if hasattr(request, "form"):
-            self.form_data = request.form
-            for key, value in request.form.items():
-                querystring[key] = [value]
-        else:
-            self.form_data = {}
+        # with self.normalized_request.values
+        self.form_data = request.form
+        for key, value in request.form.items():
+            querystring[key] = [value]
 
         # This is all s3 only and can be removed and fixed in s3
-        if hasattr(request, "form") and "key" in request.form:
+        if "key" in request.form:
             if "file" in request.form:
                 self.body = request.form["file"]
             else:
@@ -274,12 +270,12 @@ class BaseResponse(ActionAuthenticatorMixin):
                 form = request.form
                 for k, _ in form.items():
                     self.body = k
-        if hasattr(request, "files") and request.files:
-            for _, value in request.files.items():
-                self.body = value.stream.read()
-                value.stream.close()
+        if request.files:
+            for _, uploaded in request.files.items():
+                self.body = uploaded.stream.read()
+                uploaded.stream.close()
             if querystring.get("key"):
-                filename = os.path.basename(request.files["file"].filename)
+                filename = os.path.basename(request.files["file"].filename or "")
                 querystring["key"] = [
                     querystring["key"][0].replace("${filename}", filename)
                 ]
@@ -317,12 +313,6 @@ class BaseResponse(ActionAuthenticatorMixin):
         self.uri = full_url
 
         self.path = self.parsed_url.path
-        # if hasattr(request, "environ") and "RAW_URI" in request.environ:
-        #     self.raw_path = urlparse(request.raw_url).path
-        #     if self.raw_path and not self.raw_path.startswith("/"):
-        #         self.raw_path = f"/{self.raw_path}"
-        # else:
-        #     self.raw_path = self.path
         self.raw_path = request.raw_path
 
         self.querystring = querystring
@@ -336,7 +326,9 @@ class BaseResponse(ActionAuthenticatorMixin):
             # request.headers is an immutable view over the WSGI environ, so the
             # fallback has to be written to the environ itself.
             request.environ["HTTP_HOST"] = self.parsed_url.netloc
-        self.headers = request.headers
+        # Typed loosely on purpose: services reach into this for arbitrary
+        # x-amz-* values, and tightening it is a change of its own.
+        self.headers: Any = request.headers
         self.response_headers = {
             "server": "amazon.com",
         }
@@ -405,7 +397,9 @@ class BaseResponse(ActionAuthenticatorMixin):
 
         return get_account_id_from(self.get_access_key())
 
-    def _dispatch(self, request: Any, full_url: str, headers: Any) -> TYPE_RESPONSE:
+    def _dispatch(
+        self, request: Request, full_url: str | None = None, headers: Any = None
+    ) -> TYPE_RESPONSE:
         self.setup_class(request, full_url, headers)
         return self.call_action()
 
@@ -482,26 +476,19 @@ class BaseResponse(ActionAuthenticatorMixin):
         # get action from method and uri
         return self._get_action_from_method_and_request_uri(self.method, self.raw_path)
 
-    def parse_parameters(self, request: Any) -> None:
-        from botocore.awsrequest import AWSPreparedRequest
-        from werkzeug import Request
-
-        assert isinstance(request, (AWSPreparedRequest, Request)), str(request)
-        normalized_request = normalize_request(request)
+    def parse_parameters(self, request: Request) -> None:
         service_model = get_service_model(self.boto3_service_name)
         operation_model = service_model.operation_model(self._get_action())
-        protocol = determine_request_protocol(
-            service_model, normalized_request.content_type
-        )
+        protocol = determine_request_protocol(service_model, request.content_type)
         parser_cls = PROTOCOL_PARSERS[protocol]
         parser = parser_cls(operation_model, map_type=self.PROTOCOL_PARSER_MAP_TYPE)
         parsed = parser.parse(
             {
-                "method": normalized_request.method,
-                "values": normalized_request.values,
-                "headers": normalized_request.headers,
-                "body": normalized_request.data,
-                "url_path": normalized_request.path,
+                "method": request.method,
+                "values": request.values,
+                "headers": request.headers,
+                "body": request.data,
+                "url_path": request.path,
                 "url_params": self.uri_match.groupdict() if self.uri_match else {},
             }
         )

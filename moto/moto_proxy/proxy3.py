@@ -77,9 +77,8 @@ class MotoRequestHandler:
         handler = self.get_handler_for_host(host=host, path=path)
         if handler is None:
             return 404, {}, b"AWS Service not recognized or supported"
-        full_url = host + path
-        request = Request.from_primitives(method, full_url, headers, body)
-        return handler(request, full_url, headers)
+        request = Request.from_primitives(method, host + path, headers, body)
+        return handler(request, request.raw_url, request.headers)
 
 
 class ProxyRequestHandler(BaseHTTPRequestHandler):

@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import urlparse
 
-from botocore.awsrequest import AWSPreparedRequest
 from botocore.httpchecksum import AwsChunkedWrapper
 from werkzeug.local import LocalProxy
 from werkzeug.wrappers import Request as WerkzeugRequest
@@ -12,7 +11,15 @@ from moto.settings import MAX_FORM_MEMORY_SIZE
 from moto.utilities.constants import APPLICATION_JSON, JSON_TYPES
 
 if TYPE_CHECKING:
+    from botocore.awsrequest import AWSPreparedRequest
+
     from moto.core.model import ServiceModel
+
+# Headers that describe how the body arrived on the wire, rather than the body we
+# hand on.  The proxy de-chunks before we ever see the request and an
+# AwsChunkedWrapper is read out in full, so Transfer-Encoding no longer applies.
+# Compared case-insensitively - the casing is the client's choice, not ours.
+TRANSPORT_HEADERS = frozenset({"transfer-encoding"})
 
 
 class Request(WerkzeugRequest):
@@ -23,57 +30,73 @@ class Request(WerkzeugRequest):
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
+        # Assigned rather than declared as a class attribute: flask.Request
+        # exposes this as a config-backed property, and a class attribute here
+        # would shadow it for BackendRequest, which inherits from both.
         self.max_form_memory_size = MAX_FORM_MEMORY_SIZE
 
     @classmethod
     def from_primitives(
-        cls, method: str, url: str, headers: Any, body: str | bytes | None = None
+        cls, method: str, url: str, headers: Any, body: Any = None
     ) -> Request:
-        # TODO: do a from values here instead of using AWS intermediary
-        wrapper = AWSPreparedRequest(method, url, headers, body, stream_output=False)
-        return normalize_request(wrapper)
-
-    @classmethod
-    def from_values(cls, *args: Any, **kwargs: Any) -> Request:
-        req = super().from_values(*args, **kwargs)
-        return Request(req.environ.copy())
+        """Build a request out of the parts an HTTP message is made of."""
+        if isinstance(body, AwsChunkedWrapper):
+            body = body.read()
+        parsed_url = urlparse(url)
+        request = cast(
+            Request,
+            cls.from_values(
+                method=method,
+                base_url=f"{parsed_url.scheme}://{parsed_url.netloc}",
+                path=parsed_url.path,
+                query_string=parsed_url.query,
+                data=body if body is not None else b"",
+                headers=[
+                    (key, value.decode("utf-8") if isinstance(value, bytes) else value)
+                    for key, value in headers.items()
+                    if key.lower() not in TRANSPORT_HEADERS
+                ],
+            ),
+        )
+        # werkzeug's EnvironBuilder discards a `Content-Length: 0` header instead
+        # of writing it to the environ, so a bodiless request would arrive without
+        # any Content-Length at all - unlike the same request over a real WSGI
+        # server, where the client's header is preserved.  S3 returns 411 when
+        # that header is missing (see _bucket_response_put/_bucket_response_post).
+        request.environ.setdefault("CONTENT_LENGTH", "0")
+        return request
 
     @property
     def raw_path(self) -> str:
-        raw_uri: str = self.environ.get("RAW_URI", "")
-        # If RAW_URI starts with a double slash, werkzeug will fail to parse it correctly and
-        # Request.path will be invalid.  This can occur with Amazon S3 Virtual-Hosted requests,
-        # where the bucket name is part of the domain name, combined with an object key that
-        # begins with a slash (e.g., bucket-name.s3.amazonaws.com//object-key).
-        revert_quote = False
-        if raw_uri.startswith("//"):
-            raw_uri = "/%2F" + raw_uri[2:]
-            revert_quote = True
-        # We have to parse because RAW_URI can contain a full URL.
-        to_parse = raw_uri or self.path
-        raw_path = urlparse(to_parse).path
-        if revert_quote:
-            raw_path = raw_path.replace("%2F", "/", 1)
-        if raw_path and not raw_path.startswith("/"):
-            raw_path = f"/{raw_path}"
+        """The path as it arrived, before werkzeug percent-decoded it.
+
+        S3 keys routinely contain characters - an encoded slash, most awkwardly -
+        that `path` decodes away, and moto matches backend URLs against the
+        encoded form.
+        """
+        # RAW_URI holds either a path or a full URL, depending on the server.  A
+        # path may begin with a double slash, which urlparse would read as the
+        # start of a netloc, so only parse when there is really a scheme to strip.
+        raw_uri: str = self.environ.get("RAW_URI", "") or self.path
+        parsed = urlparse(raw_uri)
+        raw_path = parsed.path if parsed.scheme else raw_uri.split("?", 1)[0]
         if not raw_path:
-            raw_path = "/"
-        return raw_path
+            return "/"
+        return raw_path if raw_path.startswith("/") else f"/{raw_path}"
 
     @property
     def raw_url(self) -> str:
-        url_root = self.url_root.rstrip("/")
-        raw_url = f"{url_root}{self.raw_path}"
+        """The full URL as it arrived.  See `raw_path`."""
+        raw_url = f"{self.url_root.rstrip('/')}{self.raw_path}"
         if self.query_string:
-            qs = f"{self.query_string.decode()}"
-            # qs = qs.replace("%2F", "/")
-            raw_url += f"?{qs}"
+            raw_url += f"?{self.query_string.decode()}"
         return raw_url
 
 
 def normalize_request(
     request: AWSPreparedRequest | WerkzeugRequest | Request,
 ) -> Request:
+    """Turn however this request reached us into the one type the core acts on."""
     if isinstance(request, LocalProxy):
         # Flask hands out a proxy bound to the active request context.  It only
         # looks like a Request because LocalProxy forwards __class__, and it goes
@@ -84,48 +107,10 @@ def normalize_request(
         return request
     if isinstance(request, WerkzeugRequest):
         return Request(request.environ.copy())
-    if isinstance(request.body, AwsChunkedWrapper):
-        body = request.body.read()
-    else:
-        body = request.body if request.body is not None else b""
-    # The proxy de-chunks the body before handing it over, and AwsChunkedWrapper
-    # has already been read out in full above, so any Transfer-Encoding header
-    # left on the incoming request no longer describes the body we are passing on.
-    # Header names are compared case-insensitively - the casing we receive
-    # depends on the client, not on us.
-    headers_to_strip = {"transfer-encoding"}
-    headers = [
-        (key, value.decode("utf-8") if isinstance(value, bytes) else value)
-        for key, value in request.headers.items()
-        if key.lower() not in headers_to_strip
-    ]
-    parsed_url = urlparse(request.url)
-    # If path starts with a double slash, werkzeug will fail to parse it correctly and
-    # Request.path will be invalid.  This can occur with Amazon S3 Virtual-Hosted requests,
-    # where the bucket name is part of the domain name, combined with an object key that
-    # begins with a slash (e.g., bucket-name.s3.amazonaws.com//object-key).
-    # path = (
-    #     "/%2F" + parsed_url.path[2:]
-    #     if parsed_url.path.startswith("//")
-    #     else parsed_url.path
-    # )
-    path = parsed_url.path
-    normalized_request = Request.from_values(
-        method=request.method,
-        base_url=f"{parsed_url.scheme}://{parsed_url.netloc}",
-        path=path,
-        query_string=parsed_url.query,
-        data=body,
-        headers=headers,
+    # Anything else is a prepared request from botocore or from `responses`
+    return Request.from_primitives(
+        request.method, request.url, request.headers, request.body
     )
-    # werkzeug's EnvironBuilder discards a `Content-Length: 0` header instead of
-    # writing it to the environ, so a bodiless request would arrive without any
-    # Content-Length at all - unlike the same request over a real WSGI server,
-    # where the client's header is preserved.  S3 returns 411 when that header is
-    # missing (see _bucket_response_put/_bucket_response_post), so restore it.
-    if "CONTENT_LENGTH" not in normalized_request.environ:
-        normalized_request.environ["CONTENT_LENGTH"] = "0"
-    return normalized_request
 
 
 def determine_request_protocol(

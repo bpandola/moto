@@ -15,18 +15,7 @@ HTTPHeaders = dict
 def mock_request(
     method: str, url: str, headers: dict[str, str], body: bytes | None
 ) -> Request:
-    from urllib.parse import urlparse
-
-    parsed_url = urlparse(url)
-    request = Request.from_values(
-        method=method,
-        base_url=f"{parsed_url.scheme}://{parsed_url.netloc}",
-        path=parsed_url.path,
-        query_string=parsed_url.query,
-        data=body,
-        headers=headers,
-    )
-    return request
+    return Request.from_primitives(method, url, headers, body)
 
 
 def test_parse_qs_unicode_decode_error() -> None:

@@ -147,6 +147,21 @@ class TestModeParity:
         assert self._in_process("/bucket/key").from_wsgi_server is False
         assert self._proxy("/bucket/key").from_wsgi_server is False
 
+    @pytest.mark.parametrize("path", PATHS)
+    def test_setup_class_falls_back_to_the_request(self, path: str) -> None:
+        # Every entry point now hands the dispatcher request.raw_url, so a
+        # response that is given nothing but the request must end up in the same
+        # place as one that is handed the url and headers explicitly.
+        for request in (self._in_process(path), self._proxy(path), self._server(path)):
+            derived, explicit = BaseResponse(), BaseResponse()
+            derived.setup_class(request)
+            explicit.setup_class(request, request.raw_url, request.headers)
+
+            assert derived.uri == explicit.uri == request.raw_url
+            assert derived.path == explicit.path
+            assert derived.raw_path == explicit.raw_path == request.raw_path
+            assert derived.querystring == explicit.querystring
+
     def test_date_header_is_supplied_only_when_no_wsgi_server_will(self) -> None:
         def response_for(request: Request) -> BaseResponse:
             response = BaseResponse()

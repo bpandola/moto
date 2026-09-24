@@ -31,6 +31,16 @@ from .utilities import AWSTestHelper, RegexConverter
 HTTP_METHODS = ["GET", "POST", "PUT", "DELETE", "HEAD", "PATCH", "OPTIONS"]
 
 
+class BackendRequest(Request, FlaskRequest):
+    """The request class every backend app is served through.
+
+    Requests therefore arrive already normalized, rather than being rebuilt from
+    a prepared request the way the in-process mocks and the proxy have to.
+    """
+
+    from_wsgi_server = True
+
+
 DEFAULT_SERVICE_REGION = ("s3", "us-east-1")
 
 # Map of unsigned calls to service-region as per AWS API docs
@@ -353,9 +363,6 @@ def create_backend_app(service: backends.SERVICE_NAMES) -> Flask:
     backend_app.debug = True
     backend_app.service = service  # type: ignore[attr-defined]
     backend_app.config["MAX_FORM_MEMORY_SIZE"] = MAX_FORM_MEMORY_SIZE
-
-    class BackendRequest(Request, FlaskRequest):
-        from_wsgi_server = True
 
     backend_app.request_class = BackendRequest
 

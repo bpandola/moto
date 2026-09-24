@@ -13,7 +13,7 @@ class PrometheusServiceResponse(BaseResponse):
     """Handler for PrometheusService requests and responses."""
 
     def tags(self, request: Any, full_url: str, headers: Any) -> str:  # type: ignore[return]
-        self.setup_class(request, full_url, headers)
+        self.setup_class(request)
         if request.method == "GET":
             return self.list_tags_for_resource()
         if request.method == "POST":
