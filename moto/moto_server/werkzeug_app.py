@@ -210,18 +210,23 @@ class DomainDispatcherApplication:
             from moto.core.routing import NotFound, ServiceOperationRouter
             from moto.core.utils import get_service_model
 
-            possible_services = [
-                "bedrock",
-                "bedrock-agent",
-                "bedrock-runtime",
-                "bedrock-agentcore",
-                "bedrock-agentcore-control",
-            ]
-            for service_name in possible_services:
+            signing_key_to_possible_services = {
+                "bedrock": [
+                    "bedrock",
+                    "bedrock-agent",
+                    "bedrock-runtime",
+                ],
+                "bedrock-agentcore": [
+                    "bedrock-agentcore",
+                    "bedrock-agentcore-control",
+                ],
+            }
+            for service_name in signing_key_to_possible_services.get(service, []):
                 router = ServiceOperationRouter(get_service_model(service_name))
                 request = Request.from_values(
                     method=environ["REQUEST_METHOD"],
                     path=environ["PATH_INFO"],
+                    query_string=environ["QUERY_STRING"],
                 )
                 try:
                     op, _ = router.match(request)

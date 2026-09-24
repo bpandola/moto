@@ -72,6 +72,11 @@ def to_werkzeug_rule_string(smithy_uri: str) -> str:
         if uri_label.endswith("+"):
             uri_label = uri_label.strip("+")
             prefix = f"{GreedyLabelConverter.NAME}:"
+        # HACK: for bedrockagentcore tag/untag (and possibly others)
+        # Maybe we make all labels at end of uri greedy?
+        # Or fix directly in Moto model extras by adding +?
+        if "resourceArn" in uri_label:
+            prefix = f"{GreedyLabelConverter.NAME}:"
         variable_name = uri_label.translate(URI_LABEL_TO_RULE_VAR_TRANSLATION_TABLE)
         rule_variable = f"<{prefix}{variable_name}>"
         return rule_variable
