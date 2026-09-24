@@ -278,9 +278,19 @@ def _create_service_map(service: ServiceModel) -> dict[str, Map]:
                     subdomain = None
                     if op.endpoint:
                         subdomain = op.endpoint.get("hostPrefix")  # type: ignore[attr-defined]
-                        subdomain = (
-                            f"<{subdomain[1:-2]}>" if subdomain is not None else None
-                        )
+                        if subdomain is not None:
+                            if subdomain.startswith("<") or subdomain.startswith("{"):
+                                subdomain = (
+                                    f"<{subdomain[1:-2]}>"
+                                    if subdomain is not None
+                                    else None
+                                )
+                            else:
+                                subdomain = (
+                                    f"<{subdomain[0:-1]}>"
+                                    if subdomain is not None
+                                    else None
+                                )
                         assert subdomain != "<Bucket>"
                     rules.append(
                         SmithyRule(
