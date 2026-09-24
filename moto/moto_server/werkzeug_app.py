@@ -355,7 +355,7 @@ def create_backend_app(service: backends.SERVICE_NAMES) -> Flask:
     backend_app.config["MAX_FORM_MEMORY_SIZE"] = MAX_FORM_MEMORY_SIZE
 
     class BackendRequest(Request, FlaskRequest):
-        pass
+        from_wsgi_server = True
 
     backend_app.request_class = BackendRequest
 

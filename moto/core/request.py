@@ -5,6 +5,7 @@ from urllib.parse import urlparse
 
 from botocore.awsrequest import AWSPreparedRequest
 from botocore.httpchecksum import AwsChunkedWrapper
+from werkzeug.local import LocalProxy
 from werkzeug.wrappers import Request as WerkzeugRequest
 
 from moto.settings import MAX_FORM_MEMORY_SIZE
@@ -15,6 +16,11 @@ if TYPE_CHECKING:
 
 
 class Request(WerkzeugRequest):
+    #: True when this request was received by a real WSGI server (moto_server),
+    #: which supplies its own Date header.  False for the in-process mocks and
+    #: the proxy, where moto is the entire stack and has to supply it itself.
+    from_wsgi_server = False
+
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self.max_form_memory_size = MAX_FORM_MEMORY_SIZE
@@ -68,6 +74,12 @@ class Request(WerkzeugRequest):
 def normalize_request(
     request: AWSPreparedRequest | WerkzeugRequest | Request,
 ) -> Request:
+    if isinstance(request, LocalProxy):
+        # Flask hands out a proxy bound to the active request context.  It only
+        # looks like a Request because LocalProxy forwards __class__, and it goes
+        # unbound the moment that context ends - unwrap it so callers get the
+        # real object.
+        request = request._get_current_object()
     if isinstance(request, Request):
         return request
     if isinstance(request, WerkzeugRequest):
@@ -76,11 +88,17 @@ def normalize_request(
         body = request.body.read()
     else:
         body = request.body if request.body is not None else b""
-    for header, value in request.headers.items():
-        if isinstance(value, bytes):
-            request.headers[header] = value.decode("utf-8")
-
-    headers_to_strip: list[str] = ["Transfer-Encoding"]
+    # The proxy de-chunks the body before handing it over, and AwsChunkedWrapper
+    # has already been read out in full above, so any Transfer-Encoding header
+    # left on the incoming request no longer describes the body we are passing on.
+    # Header names are compared case-insensitively - the casing we receive
+    # depends on the client, not on us.
+    headers_to_strip = {"transfer-encoding"}
+    headers = [
+        (key, value.decode("utf-8") if isinstance(value, bytes) else value)
+        for key, value in request.headers.items()
+        if key.lower() not in headers_to_strip
+    ]
     parsed_url = urlparse(request.url)
     # If path starts with a double slash, werkzeug will fail to parse it correctly and
     # Request.path will be invalid.  This can occur with Amazon S3 Virtual-Hosted requests,
@@ -98,11 +116,13 @@ def normalize_request(
         path=path,
         query_string=parsed_url.query,
         data=body,
-        headers=[
-            (k, v) for k, v in request.headers.items() if k not in headers_to_strip
-        ],
+        headers=headers,
     )
-    # There are some S3 checks that fail when CONTENT_LENGTH not set.
+    # werkzeug's EnvironBuilder discards a `Content-Length: 0` header instead of
+    # writing it to the environ, so a bodiless request would arrive without any
+    # Content-Length at all - unlike the same request over a real WSGI server,
+    # where the client's header is preserved.  S3 returns 411 when that header is
+    # missing (see _bucket_response_put/_bucket_response_post), so restore it.
     if "CONTENT_LENGTH" not in normalized_request.environ:
         normalized_request.environ["CONTENT_LENGTH"] = "0"
     return normalized_request

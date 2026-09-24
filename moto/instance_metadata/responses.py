@@ -84,15 +84,7 @@ class InstanceMetadataResponse(BaseResponse):
             raise NotImplementedError(
                 f"The {path} metadata path has not been implemented"
             )
-        try:
-            from werkzeug.datastructures.headers import EnvironHeaders
-
-            if isinstance(headers, EnvironHeaders):
-                # We should be returning a generic dict here, not werkzeug-specific classes
-                headers = dict(headers)
-        except ImportError:
-            pass
-        # This became an issue when I attempted to fix the S3 issue with Content-Length: 0
-        if headers.get("Content-Length") is not None:
-            headers.pop("Content-Length", None)
-        return 200, headers, result
+        # The response gets its own headers - echoing the request's back used to
+        # happen here, which meant the caller's Content-Length described the
+        # request body rather than the payload we are about to return.
+        return 200, {}, result

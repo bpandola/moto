@@ -235,7 +235,11 @@ class BaseResponse(ActionAuthenticatorMixin):
         use_raw_body: Use incoming bytes if True, encode to string otherwise
         """
         assert isinstance(request, Request)
-        self.is_werkzeug_request = "werkzeug" in str(type(request))
+        # Only a real WSGI server supplies its own Date header - in every other
+        # mode moto is the entire stack and has to supply it itself.  This used
+        # to be inferred from the type name, which stopped working once every
+        # mode started handing us the same normalized Request.
+        self.is_werkzeug_request = request.from_wsgi_server
         request = self.normalize_request(request)
         self.normalized_request = request
         self.parsed_url = urlparse(full_url)
@@ -328,9 +332,11 @@ class BaseResponse(ActionAuthenticatorMixin):
         self.partition = get_partition(self.region)
         self.uri_match: re.Match[str] | None = None
 
+        if "host" not in request.headers:
+            # request.headers is an immutable view over the WSGI environ, so the
+            # fallback has to be written to the environ itself.
+            request.environ["HTTP_HOST"] = self.parsed_url.netloc
         self.headers = request.headers
-        if "host" not in self.headers:
-            self.headers["host"] = self.parsed_url.netloc
         self.response_headers = {
             "server": "amazon.com",
         }

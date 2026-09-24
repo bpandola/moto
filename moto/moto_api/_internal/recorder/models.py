@@ -23,13 +23,16 @@ class Recorder:
         if not self._user_enabled:
             return
 
-        if urlparse(request.url).path.startswith("/moto-api/recorder/"):
+        if request.raw_path.startswith("/moto-api/recorder/"):
             return
 
         entry: dict[str, Any] = {
             "headers": dict(request.headers),
             "method": request.method,
-            "url": request.url,
+            # raw_url, not url - werkzeug's url is percent-decoded, which would
+            # corrupt any request whose path contains encoded characters (an S3
+            # key containing a literal '/', for example) when it is replayed.
+            "url": request.raw_url,
         }
 
         if body is None:
