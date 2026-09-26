@@ -2,12 +2,12 @@
 
 import uuid
 from collections.abc import Iterator
-from datetime import datetime
 from typing import Any
 
 from moto.core.base_backend import BackendDict, BaseBackend
 from moto.core.common_models import BaseModel
 from moto.core.resource_tagging import TaggableResourcesMixin, TaggedResource
+from moto.core.utils import utcnow
 from moto.kafka.exceptions import BadRequestException, NotFoundException
 from moto.utilities.utils import get_partition
 
@@ -47,7 +47,7 @@ class FakeKafkaCluster(BaseModel):
         self.cluster_type = cluster_type
         self.tags = tags or {}
         self.state = state
-        self.creation_time = datetime.now().isoformat()
+        self.creation_time = utcnow()
         self.current_version = current_version
         self.active_operation_arn = active_operation_arn
         self.arn = self._generate_arn()
@@ -94,13 +94,13 @@ class KafkaBackend(BaseBackend, TaggableResourcesMixin):
         tags: dict[str, str] | None,
         provisioned: dict[str, Any] | None,
         serverless: dict[str, Any] | None,
-    ) -> tuple[str, str, str, str]:
+    ) -> FakeKafkaCluster:
         if provisioned:
             cluster_type = "PROVISIONED"
-            broker_node_group_info = provisioned.get("brokerNodeGroupInfo")
-            kafka_version = provisioned.get("kafkaVersion", "default-kafka-version")
-            number_of_broker_nodes = int(provisioned.get("numberOfBrokerNodes", 1))
-            storage_mode = provisioned.get("storageMode", "LOCAL")
+            broker_node_group_info = provisioned.get("BrokerNodeGroupInfo")
+            kafka_version = provisioned.get("KafkaVersion", "default-kafka-version")
+            number_of_broker_nodes = int(provisioned.get("NumberOfBrokerNodes", 1))
+            storage_mode = provisioned.get("StorageMode", "LOCAL")
             serverless_config = None
         elif serverless:
             cluster_type = "SERVERLESS"
@@ -130,86 +130,18 @@ class KafkaBackend(BaseBackend, TaggableResourcesMixin):
         if tags:
             self.tag_resource(new_cluster.arn, tags)
 
-        return (
-            new_cluster.arn,
-            new_cluster.cluster_name,
-            new_cluster.state,
-            new_cluster.cluster_type,
-        )
+        return new_cluster
 
-    def describe_cluster_v2(self, cluster_arn: str) -> dict[str, Any]:
-        cluster = self.clusters[cluster_arn]
-
-        cluster_info: dict[str, Any] = {
-            "activeOperationArn": "arn:aws:kafka:region:account-id:operation/active-operation",
-            "clusterArn": cluster.arn,
-            "clusterName": cluster.cluster_name,
-            "clusterType": cluster.cluster_type,
-            "creationTime": cluster.creation_time,
-            "currentVersion": cluster.current_version,
-            "state": cluster.state,
-            "stateInfo": {
-                "code": "string",
-                "message": "Cluster state details.",
-            },
-            "tags": self.list_tags_for_resource(cluster.arn),
-        }
-
-        if cluster.cluster_type == "PROVISIONED":
-            cluster_info.update(
-                {
-                    "provisioned": {
-                        "brokerNodeGroupInfo": cluster.broker_node_group_info or {},
-                        "clientAuthentication": cluster.client_authentication or {},
-                        "currentBrokerSoftwareInfo": {
-                            "configurationArn": (cluster.configuration_info or {}).get(
-                                "arn", "string"
-                            ),
-                            "configurationRevision": (
-                                cluster.configuration_info or {}
-                            ).get("revision", 1),
-                            "kafkaVersion": cluster.kafka_version,
-                        },
-                        "encryptionInfo": cluster.encryption_info or {},
-                        "enhancedMonitoring": cluster.enhanced_monitoring,
-                        "openMonitoring": cluster.open_monitoring or {},
-                        "loggingInfo": cluster.logging_info or {},
-                        "numberOfBrokerNodes": cluster.number_of_broker_nodes or 0,
-                        "zookeeperConnectString": cluster.zookeeper_connect_string
-                        or "zookeeper.example.com:2181",
-                        "zookeeperConnectStringTls": cluster.zookeeper_connect_string_tls
-                        or "zookeeper.example.com:2181",
-                        "storageMode": cluster.storage_mode,
-                        "customerActionStatus": "NONE",
-                    }
-                }
-            )
-
-        elif cluster.cluster_type == "SERVERLESS":
-            cluster_info.update(
-                {
-                    "serverless": {
-                        "vpcConfigs": cluster.serverless_config.get("vpcConfigs", [])
-                        if cluster.serverless_config
-                        else [],
-                        "clientAuthentication": cluster.serverless_config.get(
-                            "clientAuthentication", {}
-                        )
-                        if cluster.serverless_config
-                        else {},
-                    }
-                }
-            )
-
-        return cluster_info
+    def describe_cluster_v2(self, cluster_arn: str) -> FakeKafkaCluster:
+        return self.clusters[cluster_arn]
 
     def list_clusters_v2(
         self,
         cluster_name_filter: str | None,
         cluster_type_filter: str | None,
-    ) -> list[dict[str, Any]]:
+    ) -> list[FakeKafkaCluster]:
         cluster_info_list = []
-        for cluster_arn, cluster in self.clusters.items():
+        for cluster in self.clusters.values():
             if cluster_name_filter and not cluster.cluster_name.startswith(
                 cluster_name_filter
             ):
@@ -220,7 +152,7 @@ class KafkaBackend(BaseBackend, TaggableResourcesMixin):
                 and cluster.cluster_type != cluster_type_filter.upper()
             ):
                 continue
-            cluster_info_list.append(self.describe_cluster_v2(cluster_arn))
+            cluster_info_list.append(cluster)
 
         return cluster_info_list
 
@@ -238,7 +170,7 @@ class KafkaBackend(BaseBackend, TaggableResourcesMixin):
         number_of_broker_nodes: int = 1,
         tags: dict[str, str] | None = None,
         storage_mode: str = "LOCAL",
-    ) -> tuple[str, str, str]:
+    ) -> FakeKafkaCluster:
         new_cluster = FakeKafkaCluster(
             cluster_name=cluster_name,
             account_id=self.account_id,
@@ -261,67 +193,24 @@ class KafkaBackend(BaseBackend, TaggableResourcesMixin):
         if tags:
             self.tag_resource(new_cluster.arn, tags)
 
-        return new_cluster.arn, new_cluster.cluster_name, new_cluster.state
+        return new_cluster
 
-    def describe_cluster(self, cluster_arn: str) -> dict[str, Any]:
-        cluster = self.clusters[cluster_arn]
+    def describe_cluster(self, cluster_arn: str) -> FakeKafkaCluster:
+        return self.clusters[cluster_arn]
 
-        return {
-            "activeOperationArn": "arn:aws:kafka:region:account-id:operation/active-operation",
-            "brokerNodeGroupInfo": cluster.broker_node_group_info or {},
-            "clientAuthentication": cluster.client_authentication or {},
-            "clusterArn": cluster.arn,
-            "clusterName": cluster.cluster_name,
-            "creationTime": cluster.creation_time,
-            "currentBrokerSoftwareInfo": {
-                "configurationArn": (cluster.configuration_info or {}).get(
-                    "arn", "string"
-                ),
-                "configurationRevision": (cluster.configuration_info or {}).get(
-                    "revision", 1
-                ),
-                "kafkaVersion": cluster.kafka_version,
-            },
-            "currentVersion": cluster.current_version,
-            "encryptionInfo": cluster.encryption_info or {},
-            "enhancedMonitoring": cluster.enhanced_monitoring,
-            "openMonitoring": cluster.open_monitoring or {},
-            "loggingInfo": cluster.logging_info or {},
-            "numberOfBrokerNodes": cluster.number_of_broker_nodes or 0,
-            "state": cluster.state,
-            "stateInfo": {
-                "code": "string",
-                "message": "Cluster state details.",
-            },
-            "tags": self.list_tags_for_resource(cluster.arn),
-            "zookeeperConnectString": cluster.zookeeper_connect_string
-            or "zookeeper.example.com:2181",
-            "zookeeperConnectStringTls": cluster.zookeeper_connect_string_tls
-            or "zookeeper.example.com:2181",
-            "storageMode": cluster.storage_mode,
-            "customerActionStatus": "NONE",
-        }
-
-    def list_clusters(self, cluster_name_filter: str | None) -> list[dict[str, Any]]:
-        cluster_info_list = [
-            {
-                "clusterArn": cluster.arn,
-                "clusterName": cluster.cluster_name,
-                "state": cluster.state,
-                "creationTime": cluster.creation_time,
-                "clusterType": cluster.cluster_type,
-            }
+    def list_clusters(self, cluster_name_filter: str | None) -> list[FakeKafkaCluster]:
+        return [
+            cluster
             for cluster in self.clusters.values()
             # Matched on the start of the name, the way AWS documents it.
             if not cluster_name_filter
             or cluster.cluster_name.startswith(cluster_name_filter)
         ]
 
-        return cluster_info_list
-
-    def delete_cluster(self, cluster_arn: str, current_version: str) -> tuple[str, str]:
-        cluster = self.clusters.pop(cluster_arn)
-        return cluster_arn, cluster.state
+    def delete_cluster(
+        self, cluster_arn: str, current_version: str | None
+    ) -> FakeKafkaCluster:
+        return self.clusters.pop(cluster_arn)
 
     def put_cluster_policy(
         self,
