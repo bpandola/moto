@@ -112,7 +112,6 @@ backend_url_patterns = [
     ("fsx", re.compile("https?://fsx\\.(.+)\\.amazonaws\\.com")),
     ("glacier", re.compile("https?://glacier\\.(.+)\\.amazonaws.com")),
     ("glue", re.compile("https?://glue\\.(.+)\\.amazonaws\\.com")),
-    ("greengrass", re.compile("https?://greengrass\\.(.+)\\.amazonaws.com")),
     ("guardduty", re.compile("https?://guardduty\\.(.+)\\.amazonaws\\.com")),
     ("iam", re.compile("https?://iam\\.(.*\\.)?amazonaws\\.com")),
     ("identitystore", re.compile("https?://identitystore\\.(.+)\\.amazonaws\\.com")),

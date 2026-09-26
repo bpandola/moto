@@ -406,7 +406,7 @@ class BaseResponse(ActionAuthenticatorMixin):
         def _convert(elem: str) -> str:
             if not re.match("^{.*}$", elem):
                 # URL-parts sometimes contain a $
-                # Like Greengrass: /../deployments/$reset
+                # Like /../deployments/$reset
                 # We don't want to our regex to think this marks an end-of-line, so let's escape it
                 return elem.replace("$", r"\$")
 

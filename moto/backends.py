@@ -81,7 +81,6 @@ if TYPE_CHECKING:
     from moto.fsx.models import FSxBackend
     from moto.glacier.models import GlacierBackend
     from moto.glue.models import GlueBackend
-    from moto.greengrass.models import GreengrassBackend
     from moto.guardduty.models import GuardDutyBackend
     from moto.iam.models import IAMBackend
     from moto.identitystore.models import IdentityStoreBackend
@@ -276,7 +275,6 @@ SERVICE_NAMES = Union[
     "Literal['fsx']",
     "Literal['glacier']",
     "Literal['glue']",
-    "Literal['greengrass']",
     "Literal['guardduty']",
     "Literal['iam']",
     "Literal['identitystore']",
@@ -569,8 +567,6 @@ def get_backend(name: "Literal['fsx']") -> "BackendDict[FSxBackend]": ...
 def get_backend(name: "Literal['glacier']") -> "BackendDict[GlacierBackend]": ...
 @overload
 def get_backend(name: "Literal['glue']") -> "BackendDict[GlueBackend]": ...
-@overload
-def get_backend(name: "Literal['greengrass']") -> "BackendDict[GreengrassBackend]": ...
 @overload
 def get_backend(name: "Literal['guardduty']") -> "BackendDict[GuardDutyBackend]": ...
 @overload
