@@ -37,7 +37,7 @@ def test_create_group():
     assert "LatestVersion" in create_grp_res
     assert "LatestVersionArn" in create_grp_res
     assert create_grp_res["Name"] == grp_name
-    assert create_grp_res["ResponseMetadata"]["HTTPStatusCode"] == 201
+    assert create_grp_res["ResponseMetadata"]["HTTPStatusCode"] == 200
 
     if not TEST_SERVER_MODE:
         assert create_grp_res["CreationTimestamp"] == "2022-06-01T12:00:00.000Z"

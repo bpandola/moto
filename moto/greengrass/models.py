@@ -7,7 +7,7 @@ from typing import Any
 
 from moto.core.base_backend import BackendDict, BaseBackend
 from moto.core.common_models import BaseModel
-from moto.core.utils import iso_8601_datetime_with_milliseconds, utcnow
+from moto.core.utils import utcnow
 from moto.moto_api._internal import mock_random
 from moto.utilities.utils import get_partition
 
@@ -29,23 +29,9 @@ class FakeCoreDefinition(BaseModel):
         self.id = str(mock_random.uuid4())
         self.arn = f"arn:{get_partition(region_name)}:greengrass:{region_name}:{account_id}:greengrass/definition/cores/{self.id}"
         self.created_at_datetime = utcnow()
+        self.update_at_datetime = self.created_at_datetime
         self.latest_version = ""
         self.latest_version_arn = ""
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "Arn": self.arn,
-            "CreationTimestamp": iso_8601_datetime_with_milliseconds(
-                self.created_at_datetime
-            ),
-            "Id": self.id,
-            "LastUpdatedTimestamp": iso_8601_datetime_with_milliseconds(
-                self.created_at_datetime
-            ),
-            "LatestVersion": self.latest_version,
-            "LatestVersionArn": self.latest_version_arn,
-            "Name": self.name,
-        }
 
 
 class FakeCoreDefinitionVersion(BaseModel):
@@ -62,21 +48,6 @@ class FakeCoreDefinitionVersion(BaseModel):
         self.version = str(mock_random.uuid4())
         self.arn = f"arn:{get_partition(region_name)}:greengrass:{region_name}:{account_id}:greengrass/definition/cores/{self.core_definition_id}/versions/{self.version}"
         self.created_at_datetime = utcnow()
-
-    def to_dict(self, include_detail: bool = False) -> dict[str, Any]:
-        obj: dict[str, Any] = {
-            "Arn": self.arn,
-            "CreationTimestamp": iso_8601_datetime_with_milliseconds(
-                self.created_at_datetime
-            ),
-            "Id": self.core_definition_id,
-            "Version": self.version,
-        }
-
-        if include_detail:
-            obj["Definition"] = self.definition
-
-        return obj
 
 
 class FakeDeviceDefinition(BaseModel):
@@ -97,23 +68,6 @@ class FakeDeviceDefinition(BaseModel):
         self.name = name
         self.initial_version = initial_version
 
-    def to_dict(self) -> dict[str, Any]:
-        res = {
-            "Arn": self.arn,
-            "CreationTimestamp": iso_8601_datetime_with_milliseconds(
-                self.created_at_datetime
-            ),
-            "Id": self.id,
-            "LastUpdatedTimestamp": iso_8601_datetime_with_milliseconds(
-                self.update_at_datetime
-            ),
-            "LatestVersion": self.latest_version,
-            "LatestVersionArn": self.latest_version_arn,
-        }
-        if self.name is not None:
-            res["Name"] = self.name
-        return res
-
 
 class FakeDeviceDefinitionVersion(BaseModel):
     def __init__(
@@ -129,21 +83,6 @@ class FakeDeviceDefinitionVersion(BaseModel):
         self.version = str(mock_random.uuid4())
         self.arn = f"arn:{get_partition(region_name)}:greengrass:{region_name}:{account_id}:greengrass/definition/devices/{self.device_definition_id}/versions/{self.version}"
         self.created_at_datetime = utcnow()
-
-    def to_dict(self, include_detail: bool = False) -> dict[str, Any]:
-        obj: dict[str, Any] = {
-            "Arn": self.arn,
-            "CreationTimestamp": iso_8601_datetime_with_milliseconds(
-                self.created_at_datetime
-            ),
-            "Id": self.device_definition_id,
-            "Version": self.version,
-        }
-
-        if include_detail:
-            obj["Definition"] = {"Devices": self.devices}
-
-        return obj
 
 
 class FakeResourceDefinition(BaseModel):
@@ -164,21 +103,6 @@ class FakeResourceDefinition(BaseModel):
         self.name = name
         self.initial_version = initial_version
 
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "Arn": self.arn,
-            "CreationTimestamp": iso_8601_datetime_with_milliseconds(
-                self.created_at_datetime
-            ),
-            "Id": self.id,
-            "LastUpdatedTimestamp": iso_8601_datetime_with_milliseconds(
-                self.update_at_datetime
-            ),
-            "LatestVersion": self.latest_version,
-            "LatestVersionArn": self.latest_version_arn,
-            "Name": self.name,
-        }
-
 
 class FakeResourceDefinitionVersion(BaseModel):
     def __init__(
@@ -194,17 +118,6 @@ class FakeResourceDefinitionVersion(BaseModel):
         self.version = str(mock_random.uuid4())
         self.arn = f"arn:{get_partition(region_name)}:greengrass:{region_name}:{account_id}:greengrass/definition/resources/{self.resource_definition_id}/versions/{self.version}"
         self.created_at_datetime = utcnow()
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "Arn": self.arn,
-            "CreationTimestamp": iso_8601_datetime_with_milliseconds(
-                self.created_at_datetime
-            ),
-            "Definition": {"Resources": self.resources},
-            "Id": self.resource_definition_id,
-            "Version": self.version,
-        }
 
 
 class FakeFunctionDefinition(BaseModel):
@@ -225,23 +138,6 @@ class FakeFunctionDefinition(BaseModel):
         self.name = name
         self.initial_version = initial_version
 
-    def to_dict(self) -> dict[str, Any]:
-        res = {
-            "Arn": self.arn,
-            "CreationTimestamp": iso_8601_datetime_with_milliseconds(
-                self.created_at_datetime
-            ),
-            "Id": self.id,
-            "LastUpdatedTimestamp": iso_8601_datetime_with_milliseconds(
-                self.update_at_datetime
-            ),
-            "LatestVersion": self.latest_version,
-            "LatestVersionArn": self.latest_version_arn,
-        }
-        if self.name is not None:
-            res["Name"] = self.name
-        return res
-
 
 class FakeFunctionDefinitionVersion(BaseModel):
     def __init__(
@@ -259,17 +155,6 @@ class FakeFunctionDefinitionVersion(BaseModel):
         self.version = str(mock_random.uuid4())
         self.arn = f"arn:{get_partition(self.region_name)}:greengrass:{self.region_name}:{account_id}:greengrass/definition/functions/{self.function_definition_id}/versions/{self.version}"
         self.created_at_datetime = utcnow()
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "Arn": self.arn,
-            "CreationTimestamp": iso_8601_datetime_with_milliseconds(
-                self.created_at_datetime
-            ),
-            "Definition": {"Functions": self.functions},
-            "Id": self.function_definition_id,
-            "Version": self.version,
-        }
 
 
 class FakeSubscriptionDefinition(BaseModel):
@@ -290,21 +175,6 @@ class FakeSubscriptionDefinition(BaseModel):
         self.name = name
         self.initial_version = initial_version
 
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "Arn": self.arn,
-            "CreationTimestamp": iso_8601_datetime_with_milliseconds(
-                self.created_at_datetime
-            ),
-            "Id": self.id,
-            "LastUpdatedTimestamp": iso_8601_datetime_with_milliseconds(
-                self.update_at_datetime
-            ),
-            "LatestVersion": self.latest_version,
-            "LatestVersionArn": self.latest_version_arn,
-            "Name": self.name,
-        }
-
 
 class FakeSubscriptionDefinitionVersion(BaseModel):
     def __init__(
@@ -321,17 +191,6 @@ class FakeSubscriptionDefinitionVersion(BaseModel):
         self.arn = f"arn:{get_partition(self.region_name)}:greengrass:{self.region_name}:{account_id}:greengrass/definition/subscriptions/{self.subscription_definition_id}/versions/{self.version}"
         self.created_at_datetime = utcnow()
 
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "Arn": self.arn,
-            "CreationTimestamp": iso_8601_datetime_with_milliseconds(
-                self.created_at_datetime
-            ),
-            "Definition": {"Subscriptions": self.subscriptions},
-            "Id": self.subscription_definition_id,
-            "Version": self.version,
-        }
-
 
 class FakeGroup(BaseModel):
     def __init__(self, account_id: str, region_name: str, name: str):
@@ -343,22 +202,6 @@ class FakeGroup(BaseModel):
         self.last_updated_datetime = utcnow()
         self.latest_version = ""
         self.latest_version_arn = ""
-
-    def to_dict(self) -> dict[str, Any]:
-        obj = {
-            "Arn": self.arn,
-            "CreationTimestamp": iso_8601_datetime_with_milliseconds(
-                self.created_at_datetime
-            ),
-            "Id": self.group_id,
-            "LastUpdatedTimestamp": iso_8601_datetime_with_milliseconds(
-                self.last_updated_datetime
-            ),
-            "LatestVersion": self.latest_version,
-            "LatestVersionArn": self.latest_version_arn,
-            "Name": self.name,
-        }
-        return obj
 
 
 class FakeGroupVersion(BaseModel):
@@ -384,45 +227,6 @@ class FakeGroupVersion(BaseModel):
         self.resource_definition_version_arn = resource_definition_version_arn
         self.subscription_definition_version_arn = subscription_definition_version_arn
 
-    def to_dict(self, include_detail: bool = False) -> dict[str, Any]:
-        definition = {}
-        if self.core_definition_version_arn:
-            definition["CoreDefinitionVersionArn"] = self.core_definition_version_arn
-
-        if self.device_definition_version_arn:
-            definition["DeviceDefinitionVersionArn"] = (
-                self.device_definition_version_arn
-            )
-
-        if self.function_definition_version_arn:
-            definition["FunctionDefinitionVersionArn"] = (
-                self.function_definition_version_arn
-            )
-
-        if self.resource_definition_version_arn:
-            definition["ResourceDefinitionVersionArn"] = (
-                self.resource_definition_version_arn
-            )
-
-        if self.subscription_definition_version_arn:
-            definition["SubscriptionDefinitionVersionArn"] = (
-                self.subscription_definition_version_arn
-            )
-
-        obj: dict[str, Any] = {
-            "Arn": self.arn,
-            "CreationTimestamp": iso_8601_datetime_with_milliseconds(
-                self.created_at_datetime
-            ),
-            "Id": self.group_id,
-            "Version": self.version,
-        }
-
-        if include_detail:
-            obj["Definition"] = definition
-
-        return obj
-
 
 class FakeDeployment(BaseModel):
     def __init__(
@@ -443,30 +247,11 @@ class FakeDeployment(BaseModel):
         self.deployment_type = deployment_type
         self.arn = f"arn:{get_partition(self.region_name)}:greengrass:{self.region_name}:{account_id}:/greengrass/groups/{self.group_id}/deployments/{self.id}"
 
-    def to_dict(self, include_detail: bool = False) -> dict[str, Any]:
-        obj = {"DeploymentId": self.id, "DeploymentArn": self.arn}
-
-        if include_detail:
-            obj["CreatedAt"] = iso_8601_datetime_with_milliseconds(
-                self.created_at_datetime
-            )
-            obj["DeploymentType"] = self.deployment_type
-            obj["GroupArn"] = self.group_arn
-
-        return obj
-
 
 class FakeAssociatedRole(BaseModel):
     def __init__(self, role_arn: str):
         self.role_arn = role_arn
         self.associated_at = utcnow()
-
-    def to_dict(self, include_detail: bool = False) -> dict[str, Any]:
-        obj = {"AssociatedAt": iso_8601_datetime_with_milliseconds(self.associated_at)}
-        if include_detail:
-            obj["RoleArn"] = self.role_arn
-
-        return obj
 
 
 class FakeDeploymentStatus(BaseModel):
@@ -479,13 +264,6 @@ class FakeDeploymentStatus(BaseModel):
         self.deployment_type = deployment_type
         self.update_at_datetime = updated_at
         self.deployment_status = deployment_status
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "DeploymentStatus": self.deployment_status,
-            "DeploymentType": self.deployment_type,
-            "UpdatedAt": iso_8601_datetime_with_milliseconds(self.update_at_datetime),
-        }
 
 
 class GreengrassBackend(BaseBackend):
@@ -1079,10 +857,10 @@ class GreengrassBackend(BaseBackend):
     def list_groups(self) -> list[FakeGroup]:
         return list(self.groups.values())
 
-    def get_group(self, group_id: str) -> FakeGroup | None:
+    def get_group(self, group_id: str) -> FakeGroup:
         if group_id not in self.groups:
             raise IdNotFoundException("That Group Definition does not exist.")
-        return self.groups.get(group_id)
+        return self.groups[group_id]
 
     def delete_group(self, group_id: str) -> None:
         if group_id not in self.groups:

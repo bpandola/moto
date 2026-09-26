@@ -39,7 +39,7 @@ def test_create_subscription_definition(target):
     assert "LatestVersion" in res
     assert "LatestVersionArn" in res
     assert res["Name"] == subscription_name
-    assert res["ResponseMetadata"]["HTTPStatusCode"] == 201
+    assert res["ResponseMetadata"]["HTTPStatusCode"] == 200
 
     if not TEST_SERVER_MODE:
         assert res["CreationTimestamp"] == "2022-06-01T12:00:00.000Z"

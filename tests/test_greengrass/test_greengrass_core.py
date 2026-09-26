@@ -31,7 +31,7 @@ def test_create_core_definition():
         assert res["LastUpdatedTimestamp"] == "2022-06-01T12:00:00.000Z"
     assert "LatestVersionArn" in res
     assert res["Name"] == core_name
-    assert res["ResponseMetadata"]["HTTPStatusCode"] == 201
+    assert res["ResponseMetadata"]["HTTPStatusCode"] == 200
 
 
 @freezegun.freeze_time("2022-06-01 12:00:00")
