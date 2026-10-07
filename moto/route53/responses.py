@@ -1,6 +1,6 @@
 """Handles Route53 API requests, invokes method and returns response."""
 
-from moto.core.responses import ActionResult, BaseResponse, EmptyResult
+from moto.core.responses import ActionResult, BaseResponse, EmptyResult, PaginatedResult
 from moto.core.utils import utcnow
 from moto.route53.exceptions import InvalidChangeBatch, InvalidInput
 from moto.route53.models import Route53Backend, route53_backends
@@ -61,18 +61,12 @@ class Route53(BaseResponse):
 
     def list_hosted_zones(self) -> ActionResult:
         max_items = self._get_int_param("MaxItems", 100)
-        marker = self._get_param("Marker")
-        zone_page, next_marker = self.backend.list_hosted_zones(
-            marker=marker, max_size=max_items
-        )
+        zone_page = self.backend.list_hosted_zones()
         result = {
             "HostedZones": zone_page,
-            "Marker": marker,
-            "IsTruncated": True if next_marker else False,
-            "NextMarker": next_marker,
             "MaxItems": max_items,
         }
-        return ActionResult(result)
+        return PaginatedResult(result)
 
     def list_hosted_zones_by_name(self) -> ActionResult:
         dnsname = self._get_param("DNSName")
@@ -195,25 +189,16 @@ class Route53(BaseResponse):
         if start_type and not start_name:
             raise InvalidInput("The input is not valid")
 
-        (
-            record_sets,
-            next_name,
-            next_type,
-            is_truncated,
-        ) = self.backend.list_resource_record_sets(
+        record_sets = self.backend.list_resource_record_sets(
             zoneid,
             start_type=start_type,  # type: ignore
             start_name=start_name,  # type: ignore
-            max_items=max_items,
         )
         result = {
             "ResourceRecordSets": record_sets,
-            "IsTruncated": is_truncated,
-            "NextRecordName": next_name if is_truncated else None,
-            "NextRecordType": next_type if is_truncated else None,
             "MaxItems": max_items,
         }
-        return ActionResult(result)
+        return PaginatedResult(result)
 
     def create_health_check(self) -> ActionResult:
         caller_reference = self._get_param("CallerReference")
@@ -353,15 +338,11 @@ class Route53(BaseResponse):
 
     def list_query_logging_configs(self) -> ActionResult:
         hosted_zone_id = self._get_param("HostedZoneId")
-        next_token = self._get_param("NextToken")
-        max_results = self._get_int_param("MaxResults", 100)
-        all_configs, next_token = self.backend.list_query_logging_configs(
-            hosted_zone_id=hosted_zone_id,
-            next_token=next_token,
-            max_results=max_results,
+        all_configs = self.backend.list_query_logging_configs(
+            hosted_zone_id=hosted_zone_id
         )
-        result = {"QueryLoggingConfigs": all_configs, "NextToken": next_token}
-        return ActionResult(result)
+        result = {"QueryLoggingConfigs": all_configs}
+        return PaginatedResult(result)
 
     def get_query_logging_config(self) -> ActionResult:
         query_logging_config_id = self._get_param("Id")
