@@ -9,8 +9,8 @@ s3_response = S3Response()
 def test_op_router() -> None:
     model = get_service_model("mq")
     router = ServiceOperationRouter(model)
-    req = Request.from_values(
-        method="POST", path="/v1/brokers/broker-id-test/users/username-test"
+    req = Request.from_primitives(
+        "POST", "/v1/brokers/broker-id-test/users/username-test", {}
     )
     op, args = router.match(req)
 
@@ -22,11 +22,11 @@ def test_op_router() -> None:
 def test_same_path_different_query_args() -> None:
     model = get_service_model("s3")
     router = ServiceOperationRouter(model)
-    req = Request.from_values(method="GET", path="/my-bucket-name")
+    req = Request.from_primitives("GET", "/my-bucket-name", {})
     op, args = router.match(req)
     assert op.name == "ListObjects"
     assert args["Bucket"] == "my-bucket-name"
-    req = Request.from_values(method="GET", path="/my-bucket-name?list-type=2")
+    req = Request.from_primitives("GET", "/my-bucket-name?list-type=2", {})
     op, args = router.match(req)
     assert op.name == "ListObjectsV2"
     assert args["Bucket"] == "my-bucket-name"
@@ -35,9 +35,9 @@ def test_same_path_different_query_args() -> None:
 def test_s3_router() -> None:
     model = get_service_model("s3")
     router = ServiceOperationRouter(model)
-    req = Request.from_values(method="GET", path="/my-bucket-name?list-type=2")
+    req = Request.from_primitives("GET", "/my-bucket-name?list-type=2", {})
     # Alternative url
-    # req = Request.from_values(method="GET", base_url="https://my-bucket-name.localhost", path="/?list-type=2")
+    # req = Request.from_primitives(method="GET", base_url="https://my-bucket-name.localhost", path="/?list-type=2")
     op, args = router.match(req)
 
     assert op.name == "ListObjectsV2"
@@ -47,9 +47,7 @@ def test_s3_router() -> None:
 def test_s3_localhost_router() -> None:
     model = get_service_model("s3")
     router = ServiceOperationRouter(model)
-    req = Request.from_values(
-        method="GET", base_url="https://foobaz.localhost:5000", path="/"
-    )
+    req = Request.from_primitives("GET", "https://foobaz.localhost:5000/", {})
     op, args = router.match(req, s3_response)
 
     assert op.name == "ListObjects"
@@ -59,11 +57,10 @@ def test_s3_localhost_router() -> None:
 def test_s3_full_url() -> None:
     model = get_service_model("s3")
     router = ServiceOperationRouter(model)
-    req = Request.from_values(
-        method="GET",
-        base_url="https://b7525d4a-4973-4207-9f07-a73b4ec3ff65.s3.amazonaws.com",
-        path="/",
-        query_string="tagging",
+    req = Request.from_primitives(
+        "GET",
+        "https://b7525d4a-4973-4207-9f07-a73b4ec3ff65.s3.amazonaws.com/?tagging",
+        {},
     )
     op, args = router.match(req, s3_response)
 
@@ -74,11 +71,10 @@ def test_s3_full_url() -> None:
 def test_s3_control_full_url() -> None:
     model = get_service_model("s3control")
     router = ServiceOperationRouter(model)
-    req = Request.from_values(
-        method="GET",
-        base_url="https://123456789012.s3-control.us-east-1.amazonaws.com",
-        path="/v20180820/tags/arn%3Aaws%3As3%3A%3A%3Abd054ad3-6778-4f25-91a5-c7c84db350e2",
-        headers={"x-amz-account-id": "0123456789012"},
+    req = Request.from_primitives(
+        "GET",
+        "https://123456789012.s3-control.us-east-1.amazonaws.com/v20180820/tags/arn%3Aaws%3As3%3A%3A%3Abd054ad3-6778-4f25-91a5-c7c84db350e2",
+        {"x-amz-account-id": "0123456789012"},
     )
     op, args = router.match(req)
 
@@ -89,10 +85,10 @@ def test_s3_control_full_url() -> None:
 def test_op_args() -> None:
     model = get_service_model("route53")
     router = ServiceOperationRouter(model)
-    req = Request.from_values(
-        method="POST",
-        base_url="https://route53.us-east-1.amazon.com",
-        path="/2013-04-01/keysigningkey/HostedZoneId/Name/activate",
+    req = Request.from_primitives(
+        "POST",
+        "https://route53.us-east-1.amazon.com/2013-04-01/keysigningkey/HostedZoneId/Name/activate",
+        {},
     )
     op, args = router.match(req)
     assert op.name == "ActivateKeySigningKey"
