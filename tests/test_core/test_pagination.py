@@ -163,6 +163,8 @@ def test_s3_list_objects_v2_opaque_merged() -> None:
 
 
 def test_route53_three_part_token_at_next() -> None:
+    # TODO: Real Route53 specially sorts the ListResourceRecordSets result
+    # Not sure this test is valid. Maybe find a different service/operation.
     records: list[dict[str, str]] = []
     for name in ["a.example.com.", "b.example.com.", "c.example.com."]:
         for rtype in ["A", "AAAA", "TXT"]:
