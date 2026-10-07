@@ -39,7 +39,6 @@ from moto.core.utils import (
     get_service_model,
     get_value,
     method_names_from_class,
-    set_value,
     utcnow,
 )
 from moto.utilities.aws_headers import gen_amzn_requestid_long
@@ -107,14 +106,13 @@ class PaginatedResult(ActionResult):
         if isinstance(kwargs, XFormedDict):
             kwargs = kwargs.original_dict()
 
-        def get_result_to_paginate(**_: Any) -> Any:
-            return get_value(self._result, paging_config["result_key"])
+        from .paginate import ServerPaginationConfig, ServerPaginator
 
-        get_result_to_paginate.__name__ = operation_name
-        paginator = paginate(pagination_model)(get_result_to_paginate)
-        paginated_results, next_token = paginator(**kwargs)
-        set_value(self._result, paging_config["result_key"], paginated_results)
-        set_value(self._result, paging_config["output_token"], next_token)
+        config = ServerPaginationConfig.from_botocore(
+            operation_name, paging_config, paging_config, context.operation_model
+        )
+        paginator = ServerPaginator(config)
+        self._result = paginator.paginate(self._result, kwargs)
         return super().execute_result(context)
 
 
@@ -389,6 +387,8 @@ class BaseResponse(ActionAuthenticatorMixin):
         context = ActionContext(service_model, operation_model, serializer_cls, self)
         status_code, headers, body = action_result.execute_result(context)
         headers.update(self.response_headers)
+        # HACK for downstream enrich/transform response calls
+        headers.update({"status": status_code})
         return status_code, headers, body
 
     def call_action(self) -> TYPE_RESPONSE:
@@ -414,6 +414,8 @@ class BaseResponse(ActionAuthenticatorMixin):
             method = getattr(self, action)
             try:
                 response = method()
+                if isinstance(response, ActionResult):
+                    response = self.serialized(response)  # type: ignore[assignment]
             except ServiceException as e:
                 se_status, se_headers, se_body = self.serialized(ActionResult(e))
                 se_headers["status"] = se_status
@@ -425,9 +427,7 @@ class BaseResponse(ActionAuthenticatorMixin):
                 response_headers["status"] = http_error.code  # type: ignore[assignment]
                 response = http_error.description, response_headers  # type: ignore[assignment]
 
-            if isinstance(response, ActionResult):
-                status, headers, body = self.serialized(response)
-            elif isinstance(response, str):
+            if isinstance(response, str):
                 status = 200
                 body = response
             else:
