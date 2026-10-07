@@ -6,7 +6,8 @@ from threading import Lock
 from typing import Any
 
 try:
-    from flask import Flask, Request
+    from flask import Flask
+    from flask import Request as FlaskRequest
     from flask_cors import CORS
 except ImportError:
     import warnings
@@ -21,13 +22,19 @@ import moto.backend_index as backend_index
 import moto.backends as backends
 from moto.core import DEFAULT_ACCOUNT_ID
 from moto.core.base_backend import BackendDict
-from moto.core.request import Request as MotoRequest
+from moto.core.request import Request
 from moto.core.utils import convert_to_flask_response
-from moto.settings import DISABLE_GLOBAL_CORS, MAX_FORM_MEMORY_SIZE
+from moto.settings import DISABLE_GLOBAL_CORS
 
 from .utilities import AWSTestHelper, RegexConverter
 
 HTTP_METHODS = ["GET", "POST", "PUT", "DELETE", "HEAD", "PATCH", "OPTIONS"]
+
+
+class BackendRequest(Request, FlaskRequest):
+    """Set as the Moto Flask app's request class to ensure that server mode requests arrive already normalized."""
+
+    from_wsgi_server = True
 
 
 DEFAULT_SERVICE_REGION = ("s3", "us-east-1")
@@ -167,30 +174,7 @@ class DomainDispatcherApplication:
             else:
                 host = f"api.{service}.{region}.amazonaws.com"
         elif service == "timestream":
-            from moto.core.request import Request
-            from moto.core.routing import NotFound, ServiceOperationRouter
-            from moto.core.utils import get_service_model
-
-            possible_services = [
-                "timestream-write",
-                "timestream-query",
-            ]
-            for service_name in possible_services:
-                router = ServiceOperationRouter(get_service_model(service_name))
-                request = Request(environ)
-                try:
-                    op, _ = router.match(request)
-                except NotFound:
-                    continue
-                else:
-                    service = service_name
-                    break
-            endpoint_prefix = (
-                "query.timestream"
-                if service == "timestream-query"
-                else "ingest.timestream"
-            )
-            host = f"{endpoint_prefix}.{region}.amazonaws.com"
+            host = f"ingest.{service}.{region}.amazonaws.com"
         elif service == "s3" and (
             path.startswith("/v20180820/") or "s3-control" in environ["HTTP_HOST"]
         ):
@@ -201,38 +185,49 @@ class DomainDispatcherApplication:
             host = "sesv2"
         elif service == "memorydb":
             host = f"memory-db.{region}.amazonaws.com"
-        elif service in ["bedrock", "bedrock-agentcore"]:
-            # Multiple Bedrock services use the same signing name.
+        elif service == "bedrock-agentcore":
+            from moto.bedrockagentcore.responses import BedrockAgentCoreResponse
+            from moto.bedrockagentcorecontrol.responses import (
+                BedrockAgentCoreControlResponse,
+            )
+
+            service_to_response = {
+                "bedrock-agentcore": BedrockAgentCoreResponse,
+                "bedrock-agentcore-control": BedrockAgentCoreControlResponse,
+            }
+            for service_name, response_class in service_to_response.items():
+                resp = response_class()
+                resp.region = region
+                action = resp._get_action_from_method_and_request_uri(
+                    method=environ["REQUEST_METHOD"],
+                    request_uri=environ["PATH_INFO"],
+                )
+                if action:
+                    service = service_name
+                    break
+            host = f"{service}.{region}.amazonaws.com"
+        elif service == "bedrock":
+            # Multiple Bedrock services use the same signing name (bedrock).
             # This is obviously a hack, but it automatically differentiates
             # between the various Bedrock services without having to manually
             # add every path to `moto/bedrock/urls.py`.
-            from moto.core.request import Request
-            from moto.core.routing import NotFound, ServiceOperationRouter
-            from moto.core.utils import get_service_model
+            from moto.bedrock.responses import BedrockResponse
+            from moto.bedrockagent.responses import AgentsforBedrockResponse
+            from moto.bedrockruntime.responses import BedrockRuntimeResponse
 
-            signing_key_to_possible_services = {
-                "bedrock": [
-                    "bedrock",
-                    "bedrock-agent",
-                    "bedrock-runtime",
-                ],
-                "bedrock-agentcore": [
-                    "bedrock-agentcore",
-                    "bedrock-agentcore-control",
-                ],
+            service_to_response = {
+                "bedrock": BedrockResponse,
+                "bedrock-agent": AgentsforBedrockResponse,
+                "bedrock-runtime": BedrockRuntimeResponse,
             }
-            for service_name in signing_key_to_possible_services.get(service, []):
-                router = ServiceOperationRouter(get_service_model(service_name))
-                request = Request.from_values(
+            for service_name, response_class in service_to_response.items():
+                resp = response_class()
+                resp.region = region
+                action = resp._get_action_from_method_and_request_uri(
                     method=environ["REQUEST_METHOD"],
-                    path=environ["PATH_INFO"],
-                    query_string=environ["QUERY_STRING"],
+                    request_uri=environ["PATH_INFO"],
                 )
-                try:
-                    op, _ = router.match(request)
-                except NotFound:
-                    continue
-                else:
+                if action:
                     service = service_name
                     break
             host = f"{service}.{region}.amazonaws.com"
@@ -363,10 +358,6 @@ def create_backend_app(service: backends.SERVICE_NAMES) -> Flask:
     backend_app = Flask("moto", template_folder=template_dir)
     backend_app.debug = True
     backend_app.service = service  # type: ignore[attr-defined]
-    backend_app.config["MAX_FORM_MEMORY_SIZE"] = MAX_FORM_MEMORY_SIZE
-
-    class BackendRequest(MotoRequest, Request):
-        pass
 
     backend_app.request_class = BackendRequest
 
