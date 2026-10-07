@@ -28,11 +28,10 @@ from moto.route53.exceptions import (
     QueryLoggingConfigAlreadyExists,
     ResourceRecordAlreadyExists,
 )
-from moto.utilities.paginator import paginate
 from moto.utilities.utils import PARTITION_NAMES, get_partition
 
 from ..utilities.id_generator import ExistingIds, ResourceIdentifier, Tags, moto_id
-from .utils import PAGINATION_MODEL, validate_domain_name
+from .utils import validate_domain_name
 
 ROUTE53_ID_CHOICE = string.ascii_uppercase + string.digits
 LOGS_GROUP_REGION = "us-east-1"
@@ -673,21 +672,16 @@ class Route53Backend(BaseBackend):
         return resources
 
     def list_resource_record_sets(
-        self, zone_id: str, start_type: str, start_name: str, max_items: int
-    ) -> tuple[list[RecordSet], str | None, str | None, bool]:
+        self, zone_id: str, start_type: str, start_name: str
+    ) -> list[RecordSet]:
         """
         The StartRecordIdentifier-parameter is not yet implemented
         """
         if start_name:
             validate_domain_name(start_name)
         the_zone = self.get_hosted_zone(zone_id)
-        all_records = list(the_zone.get_record_sets(start_type, start_name))
-        records = all_records[0:max_items]
-        next_record = all_records[max_items] if len(all_records) > max_items else None
-        next_start_name = next_record.name if next_record else None
-        next_start_type = next_record.type if next_record else None
-        is_truncated = next_record is not None
-        return records, next_start_name, next_start_type, is_truncated
+        records = list(the_zone.get_record_sets(start_type, start_name))
+        return records
 
     def change_resource_record_sets(
         self, zoneid: str, change_list: list[dict[str, Any]]
@@ -754,7 +748,6 @@ class Route53Backend(BaseBackend):
                     the_zone.delete_rrset(record_set)
             the_zone.rr_changes.append(original_change)
 
-    @paginate(pagination_model=PAGINATION_MODEL)
     def list_hosted_zones(self) -> list[FakeZone]:
         """
         The parameters DelegationSetId and HostedZoneType are not yet implemented
@@ -956,7 +949,6 @@ class Route53Backend(BaseBackend):
             raise NoSuchQueryLoggingConfig()
         return self.query_logging_configs[query_logging_config_id]
 
-    @paginate(pagination_model=PAGINATION_MODEL)
     def list_query_logging_configs(
         self, hosted_zone_id: str | None = None
     ) -> list[QueryLoggingConfig]:

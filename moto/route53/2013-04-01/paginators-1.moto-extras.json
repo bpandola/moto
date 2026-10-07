@@ -1,0 +1,25 @@
+{
+  "version": 1.0,
+  "merge": {
+    "pagination": {
+      "ListHostedZones": {
+        "default_page_size": 100,
+        "echo_params": ["MaxItems","Marker"],
+        "token_attributes": ["id"]
+    },
+    "ListQueryLoggingConfigs": {
+        "invalid_token_error": {"code":"InvalidPaginationToken","message": "Route 53 can't get the next page of query logging configurations because the specified value for NextToken is invalid."},
+        "limit_default": 100,
+        "token_attributes": ["hosted_zone_id"]
+    },
+      "ListResourceRecordSets": {
+        "default_page_size": 300,
+        "echo_params": ["MaxItems"],
+        "marker_match": "opaque",
+        "token_strategy": "marker",
+        "token_attributes": ["name", "type", "set_identifier"],
+        "token_position": "after_at"
+      }
+    }
+  }
+}
