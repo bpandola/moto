@@ -21,7 +21,7 @@ import re
 from collections import defaultdict
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import unquote
 
 from werkzeug.datastructures import MultiDict
@@ -318,22 +318,16 @@ def _create_service_map(service: ServiceModel) -> dict[str, Map]:
                     # if there is only a single operation for a (path, method) combination,
                     # the default Werkzeug rule can be used directly (this is the case for most rules)
                     op = ops[0]
-                    subdomain = None
-                    if op.endpoint:
-                        host_prefix = op.endpoint.get("hostPrefix")  # type: ignore[attr-defined]
-                        # Only labeled host prefixes (e.g. "{AccountId}.") carry
-                        # request data.  Literal prefixes (e.g. "cp.") are ignored,
-                        # since Moto doesn't receive requests on those hosts.
-                        if host_prefix and host_prefix.startswith("{"):
-                            subdomain = f"<{host_prefix[1:-2]}>"
+                    # Host prefixes (e.g. "{AccountId}.") aren't used for matching, since
+                    # requests don't always arrive on those hosts (e.g. in server mode).
+                    # Host labels are extracted after matching; see get_host_labels().
                     rules.append(
                         SmithyRule(
                             string=rule_string,
                             operations=[op],
                             methods=[method],
-                            subdomain=subdomain,
                         )
-                    )  # type: ignore
+                    )
                     if add_s3_subdomain():
                         if op.http_trait.path.startswith("/{Bucket}"):
                             new_path = op.http_trait.path.replace("/{Bucket}", "", 1)
@@ -432,6 +426,42 @@ def to_uri_params(arguments: Mapping[str, Any]) -> dict[str, Any]:
     return uri_params
 
 
+@functools.lru_cache
+def _host_prefix_regex(host_prefix: str, endpoint_prefix: str) -> re.Pattern[str]:
+    """Builds a regex that extracts the labels of a host prefix from a request host.
+
+    Example:
+        ("{AccountId}.", "s3-control") -> ^(?P<AccountId>[^.]+)\\.s3\\-control\\.
+    """
+    parts = []
+    for part in URI_LABEL_REGEX.split(host_prefix):
+        if URI_LABEL_REGEX.fullmatch(part):
+            parts.append(f"(?P<{part[1:-1]}>[^.]+)")
+        else:
+            parts.append(re.escape(part))
+    # Require the endpoint prefix after the host prefix, so that hosts which don't
+    # have the host prefix (e.g. localhost or 127.0.0.1 in server mode) don't match.
+    return re.compile(f"^{''.join(parts)}{re.escape(endpoint_prefix)}\\.", re.I)
+
+
+def get_host_labels(operation: OperationModel, host: str) -> dict[str, str]:
+    """Extracts host label values (https://smithy.io/2.0/spec/endpoint-traits.html#hostlabel-trait)
+    from the request host, if the host has them.
+
+    Example:
+        "{AccountId}." + "123456789012.s3-control.us-east-1.amazonaws.com" -> {"AccountId": "123456789012"}
+        "{AccountId}." + "localhost:5000" -> {}
+    """
+    # botocore's stubs type `endpoint` as a str, but it's the endpoint trait dict.
+    endpoint = cast(dict[str, str], operation.endpoint or {})
+    host_prefix = endpoint.get("hostPrefix", "")
+    endpoint_prefix = operation.service_model.endpoint_prefix
+    if "{" not in host_prefix or not endpoint_prefix:
+        return {}
+    match = _host_prefix_regex(host_prefix, endpoint_prefix).match(host)
+    return match.groupdict() if match else {}
+
+
 class ServiceOperationRouter:
     """
     A router implementation which abstracts the (quite complex) routing of incoming HTTP requests to a specific
@@ -459,10 +489,7 @@ class ServiceOperationRouter:
         matcher: MapAdapter = protocol_map.bind(
             request.host,
             subdomain=request.host.split(".", 1)[0]
-            if (
-                s3_response is not None and s3_response.subdomain_based_buckets(request)
-            )
-            or ".s3-control" in request.host
+            if s3_response is not None and s3_response.subdomain_based_buckets(request)
             else None,
         )
 
@@ -478,7 +505,11 @@ class ServiceOperationRouter:
         if operation is None:
             raise NotFound()
 
-        return operation, to_uri_params(arguments)
+        # Host labels are included with the uri params, but not used for matching,
+        # since requests don't always arrive on the prefixed host (e.g. in server mode).
+        params = to_uri_params(arguments)
+        params.update(get_host_labels(operation, request.host))
+        return operation, params
 
     @staticmethod
     def _match_path(

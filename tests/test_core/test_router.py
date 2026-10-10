@@ -1,7 +1,10 @@
+import pytest
+
 from moto.core.request import Request
 from moto.core.routing import ServiceOperationRouter
 from moto.core.utils import get_service_model
 from moto.s3.responses import S3Response
+from moto.s3control.responses import S3ControlResponse
 
 s3_response = S3Response()
 
@@ -79,7 +82,48 @@ def test_s3_control_full_url() -> None:
     op, args = router.match(req)
 
     assert op.name == "ListTagsForResource"
-    assert args["AccountId"] == "123456789012"
+    # AccountId comes from the host prefix, when the host has it.
+    assert args == {
+        "resourceArn": "arn:aws:s3:::bd054ad3-6778-4f25-91a5-c7c84db350e2",
+        "AccountId": "123456789012",
+    }
+
+
+def test_s3_control_server_mode_url() -> None:
+    router = ServiceOperationRouter(get_service_model("s3control"))
+    req = Request.from_primitives(
+        "GET",
+        "http://localhost:5000/v20180820/accesspoint/my-access-point",
+        {"x-amz-account-id": "123456789012"},
+    )
+    op, args = router.match(req)
+
+    assert op.name == "GetAccessPoint"
+    # No host prefix, so no AccountId (the parser falls back to the header).
+    assert args == {"name": "my-access-point"}
+
+
+@pytest.mark.parametrize(
+    "url,expected_account_id",
+    [
+        pytest.param(
+            "https://111111111111.s3-control.us-east-1.amazonaws.com",
+            "111111111111",
+            id="host prefix",
+        ),
+        pytest.param("http://localhost:5000", "222222222222", id="header fallback"),
+    ],
+)
+def test_s3_control_account_id_host_label(url: str, expected_account_id: str) -> None:
+    response = S3ControlResponse()
+    req = Request.from_primitives(
+        "GET",
+        f"{url}/v20180820/accesspoint/my-access-point",
+        {"x-amz-account-id": "222222222222"},
+    )
+    response.setup_class(req, req.url)
+    assert response._get_param("AccountId") == expected_account_id
+    assert response._get_param("Name") == "my-access-point"
 
 
 def test_op_args() -> None:
