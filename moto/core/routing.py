@@ -24,6 +24,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 from urllib.parse import unquote
 
+from werkzeug.datastructures import MultiDict
 from werkzeug.exceptions import MethodNotAllowed, NotFound
 from werkzeug.routing import BaseConverter, Map, MapAdapter, Rule
 
@@ -124,17 +125,32 @@ class ActionConstraint:
 
 
 class RequiredArg(ActionConstraint):
+    """Requires a query string argument (REST protocols).
+
+    Only the query string is checked, so matching never parses the request body.
+    """
+
     def __init__(self, name: str, value: str | None = None):
         self.name = name
         self.value = value
 
+    def _get_values(self, context: ActionConstraintContext) -> MultiDict[str, str]:
+        return context.request.args
+
     def accept(self, context: ActionConstraintContext) -> bool:
-        values = context.request.values
+        values = self._get_values(context)
         if self.name not in values:
             return False
         if self.value is not None:
             return values.get(self.name) == self.value
         return True
+
+
+class RequiredParam(RequiredArg):
+    """Requires a query string or form body parameter (Query/EC2 protocols)."""
+
+    def _get_values(self, context: ActionConstraintContext) -> MultiDict[str, str]:
+        return context.request.values
 
 
 class RequiredHeader(ActionConstraint):
@@ -248,7 +264,7 @@ class QueryProtocolRule(SmithyRule):
         )
         for candidate in self.candidates:
             operation = candidate.operation
-            candidate.add_constraint(RequiredArg("Action", operation.name))
+            candidate.add_constraint(RequiredParam("Action", operation.name))
 
 
 class JsonProtocolRule(SmithyRule):

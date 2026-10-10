@@ -142,3 +142,19 @@ def test_s3_virtual_host_key_with_leading_slash() -> None:
     op, args = router.match(req, s3_response)
     assert op.name == "PutObject"
     assert args == {"Bucket": "bucket", "Key": "/key"}
+
+
+def test_rest_query_arg_constraints_ignore_form_body() -> None:
+    router = ServiceOperationRouter(get_service_model("s3"))
+    body = b"delete="
+    req = Request.from_primitives(
+        "POST",
+        "https://s3.amazonaws.com/bucket",
+        {"Content-Type": "application/x-www-form-urlencoded"},
+        body,
+    )
+    op, _ = router.match(req)
+    # The form body doesn't satisfy DeleteObjects' `?delete` query literal...
+    assert op.name == "PostObject"
+    # ...and matching didn't consume the request body.
+    assert req.get_data() == body
