@@ -134,3 +134,11 @@ def test_implicitly_greedy_label_excludes_trailing_slash() -> None:
     op, args = router.match(req)
     assert op.name == "GetBucketTagging"
     assert args == {"Bucket": "bucket"}
+
+
+def test_s3_virtual_host_key_with_leading_slash() -> None:
+    router = ServiceOperationRouter(get_service_model("s3"))
+    req = Request.from_primitives("PUT", "https://bucket.s3.amazonaws.com//key", {})
+    op, args = router.match(req, s3_response)
+    assert op.name == "PutObject"
+    assert args == {"Bucket": "bucket", "Key": "/key"}

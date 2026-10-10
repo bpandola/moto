@@ -22,7 +22,7 @@ from collections import defaultdict
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
-from urllib.parse import unquote, urlparse
+from urllib.parse import unquote
 
 from werkzeug.exceptions import MethodNotAllowed, NotFound
 from werkzeug.routing import BaseConverter, Map, MapAdapter, Rule
@@ -485,16 +485,12 @@ class ServiceOperationRouter:
 
     @staticmethod
     def _get_path_info_for_matching(request: Request) -> str:
-        raw_uri: str = request.environ.get("RAW_URI", "")
-        # If RAW_URI starts with a double slash, werkzeug will fail to parse it correctly and
-        # Request.path will be invalid.  This can occur with Amazon S3 Virtual-Hosted requests,
-        # where the bucket name is part of the domain name, combined with an object key that
-        # begins with a slash (e.g., bucket-name.s3.amazonaws.com//object-key).
-        if raw_uri.startswith("//"):
-            raw_uri = "/%2F" + raw_uri[2:]
-        # We have to parse because RAW_URI can contain a full URL.
-        to_parse = raw_uri or request.path
-        path_info = urlparse(to_parse).path
+        path_info = request.raw_path
+        # Werkzeug's MapAdapter.match strips leading slashes, which loses the leading
+        # slash of an S3 key in a virtual-hosted request (e.g. bucket.s3.amazonaws.com//key),
+        # so encode it to keep it in the matched label.
+        if path_info.startswith("//"):
+            path_info = "/%2F" + path_info[2:]
         return path_info
 
 
