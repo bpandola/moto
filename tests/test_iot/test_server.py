@@ -21,7 +21,6 @@ def test_iot_list():
     assert res.status_code == 200
 
 
-@pytest.mark.skip(reason="Not sure if this is a valid test case.")
 @pytest.mark.parametrize(
     "url_encode_arn",
     [
