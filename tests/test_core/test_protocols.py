@@ -18,6 +18,7 @@ from moto.core.model import OperationModel, ServiceModel
 from moto.core.parse import PROTOCOL_PARSERS
 from moto.core.routing import (
     GreedyLabelConverter,
+    ImplicitGreedyLabelConverter,
     to_uri_params,
     to_werkzeug_rule_string,
 )
@@ -104,7 +105,10 @@ def _match_uri_params(uri_template, url_path):
         [Rule(to_werkzeug_rule_string(uri_template))],
         strict_slashes=False,
         merge_slashes=False,
-        converters={GreedyLabelConverter.NAME: GreedyLabelConverter},
+        converters={
+            GreedyLabelConverter.NAME: GreedyLabelConverter,
+            ImplicitGreedyLabelConverter.NAME: ImplicitGreedyLabelConverter,
+        },
     )
     adapter = rule_map.bind("localhost")
     try:

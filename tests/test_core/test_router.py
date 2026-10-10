@@ -117,3 +117,20 @@ def test_uri_params_are_decoded_once() -> None:
     req = Request.from_primitives("PUT", "https://s3.amazonaws.com/bucket/a%2525b", {})
     _, args = router.match(req)
     assert args["Key"] == "a%25b"
+
+
+def test_last_label_is_implicitly_greedy() -> None:
+    router = ServiceOperationRouter(get_service_model("bedrock-agentcore-control"))
+    arn = "arn:aws:bedrock-agentcore:us-east-1:123456789012:runtime/abc"
+    req = Request.from_primitives("GET", f"https://localhost/tags/{arn}", {})
+    op, args = router.match(req)
+    assert op.name == "ListTagsForResource"
+    assert args["resourceArn"] == arn
+
+
+def test_implicitly_greedy_label_excludes_trailing_slash() -> None:
+    router = ServiceOperationRouter(get_service_model("s3"))
+    req = Request.from_primitives("GET", "https://s3.amazonaws.com/bucket/?tagging", {})
+    op, args = router.match(req)
+    assert op.name == "GetBucketTagging"
+    assert args == {"Bucket": "bucket"}

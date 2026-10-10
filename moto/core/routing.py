@@ -58,12 +58,29 @@ class GreedyLabelConverter(BaseConverter):
     part_isolating = False
 
 
+class ImplicitGreedyLabelConverter(GreedyLabelConverter):
+    """Converter for a last label that isn't modeled as greedy (see `to_werkzeug_rule_string`).
+
+    Unlike explicit greedy labels (e.g. an S3 key like `folder/`), these labels
+    can't end in a slash, so e.g. `PUT /bucket/` still matches `/{Bucket}`
+    with `Bucket=bucket` (via the trailing slash fallback in the router).
+    """
+
+    NAME = "implicit_greedy_label"
+
+    regex = ".*?[^/]"
+
+
 def to_werkzeug_rule_string(smithy_uri: str) -> str:
     """Converts a Smithy uri into a Werkzeug rule string.
 
+    The last label in a uri is always treated as greedy, even without a `+`.
+    Some services model labels that can contain slashes (e.g. ARNs) as
+    non-greedy, but clients don't always encode those slashes.
+
     Examples:
-        "/resources/{resource_id}/methods/{http_method}" -> "/resources/<resource_id>/methods/<http_method>"
-        "/v20180820/tags/{resourceArn+}" -> "/v20180820/tags/<converter:resourceArn>"
+        "/resources/{resource_id}/methods/{http_method}" -> "/resources/<resource_id>/methods/<implicit_greedy_label:http_method>"
+        "/v20180820/tags/{resourceArn+}" -> "/v20180820/tags/<greedy_label:resourceArn>"
     """
 
     def to_rule_variable(match: re.Match[str]) -> str:
@@ -72,15 +89,16 @@ def to_werkzeug_rule_string(smithy_uri: str) -> str:
         # Strip curly braces.
         uri_label = uri_label[1:-1]
         # Add converter prefix for greedy labels.
+        # NOTE: Instead of defaulting the last label to greedy, we could add
+        # a `+` to the affected labels in the service-2.moto-extras.json files.
+        # That is more precise, but has to be done for each operation as needed.
         prefix = ""
+        is_last_label = match.end() == len(smithy_uri.rstrip("/"))
         if uri_label.endswith("+"):
-            uri_label = uri_label.strip("+")
+            uri_label = uri_label.rstrip("+")
             prefix = f"{GreedyLabelConverter.NAME}:"
-        # HACK: for bedrockagentcore tag/untag (and possibly others)
-        # Maybe we make all labels at end of uri greedy?
-        # Or fix directly in Moto model extras by adding +?
-        if "resourceArn" in uri_label:
-            prefix = f"{GreedyLabelConverter.NAME}:"
+        elif is_last_label:
+            prefix = f"{ImplicitGreedyLabelConverter.NAME}:"
         variable_name = uri_label.translate(URI_LABEL_TO_RULE_VAR_TRANSLATION_TABLE)
         rule_variable = f"<{prefix}{variable_name}>"
         return rule_variable
@@ -286,21 +304,12 @@ def _create_service_map(service: ServiceModel) -> dict[str, Map]:
                     op = ops[0]
                     subdomain = None
                     if op.endpoint:
-                        subdomain = op.endpoint.get("hostPrefix")  # type: ignore[attr-defined]
-                        if subdomain is not None:
-                            if subdomain.startswith("<") or subdomain.startswith("{"):
-                                subdomain = (
-                                    f"<{subdomain[1:-2]}>"
-                                    if subdomain is not None
-                                    else None
-                                )
-                            else:
-                                subdomain = (
-                                    f"<{subdomain[0:-1]}>"
-                                    if subdomain is not None
-                                    else None
-                                )
-                        assert subdomain != "<Bucket>"
+                        host_prefix = op.endpoint.get("hostPrefix")  # type: ignore[attr-defined]
+                        # Only labeled host prefixes (e.g. "{AccountId}.") carry
+                        # request data.  Literal prefixes (e.g. "cp.") are ignored,
+                        # since Moto doesn't receive requests on those hosts.
+                        if host_prefix and host_prefix.startswith("{"):
+                            subdomain = f"<{host_prefix[1:-2]}>"
                     rules.append(
                         SmithyRule(
                             string=rule_string,
@@ -383,8 +392,11 @@ def _create_service_map(service: ServiceModel) -> dict[str, Map]:
             # we can't really use werkzeug's merge-slashes since it uses HTTP redirects to solve it
             merge_slashes=False,
             # get service-specific converters
-            converters={GreedyLabelConverter.NAME: GreedyLabelConverter},
-            default_subdomain="default" if add_s3_subdomain() else "",
+            converters={
+                GreedyLabelConverter.NAME: GreedyLabelConverter,
+                ImplicitGreedyLabelConverter.NAME: ImplicitGreedyLabelConverter,
+            },
+            default_subdomain="",
         )
     return protocol_to_rules
 
