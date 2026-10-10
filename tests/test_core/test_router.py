@@ -94,3 +94,26 @@ def test_op_args() -> None:
     assert op.name == "ActivateKeySigningKey"
     assert args["HostedZoneId"] == "HostedZoneId"
     assert args["Name"] == "Name"
+
+
+def test_s3_key_trailing_slash_is_preserved() -> None:
+    router = ServiceOperationRouter(get_service_model("s3"))
+    req = Request.from_primitives("PUT", "https://s3.amazonaws.com/bucket/dir/", {})
+    op, args = router.match(req)
+    assert op.name == "PutObject"
+    assert args["Key"] == "dir/"
+
+
+def test_s3_bucket_trailing_slash_is_optional() -> None:
+    router = ServiceOperationRouter(get_service_model("s3"))
+    for url in ["https://s3.amazonaws.com/bucket", "https://s3.amazonaws.com/bucket/"]:
+        op, args = router.match(Request.from_primitives("PUT", url, {}))
+        assert op.name == "CreateBucket"
+        assert args == {"Bucket": "bucket"}
+
+
+def test_uri_params_are_decoded_once() -> None:
+    router = ServiceOperationRouter(get_service_model("s3"))
+    req = Request.from_primitives("PUT", "https://s3.amazonaws.com/bucket/a%2525b", {})
+    _, args = router.match(req)
+    assert args["Key"] == "a%25b"

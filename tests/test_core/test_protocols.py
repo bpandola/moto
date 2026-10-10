@@ -3,7 +3,6 @@ import base64
 import copy
 import json
 import os
-import re
 from calendar import timegm
 from enum import Enum
 from urllib.parse import parse_qs, urlparse
@@ -12,10 +11,16 @@ import pytest
 from botocore.utils import parse_timestamp
 from dateutil.tz import tzutc
 from werkzeug.datastructures import Headers, MultiDict
+from werkzeug.exceptions import NotFound
+from werkzeug.routing import Map, Rule
 
 from moto.core.model import OperationModel, ServiceModel
 from moto.core.parse import PROTOCOL_PARSERS
-from moto.core.responses import BaseResponse
+from moto.core.routing import (
+    GreedyLabelConverter,
+    to_uri_params,
+    to_werkzeug_rule_string,
+)
 from moto.core.serialize import SERIALIZERS
 
 TEST_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "protocols")
@@ -93,6 +98,22 @@ def _build_query_params(query_string, body, headers):
     return query_params
 
 
+def _match_uri_params(uri_template, url_path):
+    """Extract uri params the same way the router does (percent-decoded)."""
+    rule_map = Map(
+        [Rule(to_werkzeug_rule_string(uri_template))],
+        strict_slashes=False,
+        merge_slashes=False,
+        converters={GreedyLabelConverter.NAME: GreedyLabelConverter},
+    )
+    adapter = rule_map.bind("localhost")
+    try:
+        _, arguments = adapter.match(url_path)
+    except NotFound:
+        return {}
+    return to_uri_params(arguments)
+
+
 def _create_request_dict(given, serialized):
     method = serialized.get("method", given.get("http", {}).get("method", "POST"))
     # We need the headers to be case-insensitive
@@ -104,9 +125,7 @@ def _create_request_dict(given, serialized):
     body = serialized["body"]
     values = _build_query_params(query_string, serialized["body"], headers)
     uri_template = given.get("http", {}).get("requestUri", "/")
-    uri_regex = BaseResponse.uri_to_regexp(uri_template)
-    uri_match = re.match(uri_regex, url_path)
-    uri_params = uri_match.groupdict() if uri_match else {}
+    uri_params = _match_uri_params(uri_template.split("?", 1)[0], url_path)
     request_dict = {
         "method": method,
         "body": body,

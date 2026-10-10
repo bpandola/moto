@@ -45,11 +45,15 @@ URI_LABEL_TO_RULE_VAR_TRANSLATION_TABLE = str.maketrans(
 
 
 class GreedyLabelConverter(BaseConverter):
-    """Like Werkzeug's PathConverter, but also matches leading slashes."""
+    """Like Werkzeug's PathConverter, but also matches leading slashes.
+
+    Greedy labels must still match at least one character, otherwise
+    e.g. `PUT /bucket/` would match `/{Bucket}/{Key+}` with an empty Key.
+    """
 
     NAME = "greedy_label"
 
-    regex = ".*?"
+    regex = ".+?"
     weight = 200
     part_isolating = False
 
@@ -437,7 +441,7 @@ class ServiceOperationRouter:
         method = request.method
         path_info = self._get_path_info_for_matching(request)
         try:
-            rule, arguments = matcher.match(path_info, method, return_rule=True)
+            rule, arguments = self._match_path(matcher, path_info, method)
         except MethodNotAllowed as e:
             raise NotFound() from e
 
@@ -447,6 +451,25 @@ class ServiceOperationRouter:
             raise NotFound()
 
         return operation, to_uri_params(arguments)
+
+    @staticmethod
+    def _match_path(
+        matcher: MapAdapter, path_info: str, method: str
+    ) -> tuple[Rule, Mapping[str, Any]]:
+        """Match the path as-is, falling back to the path without trailing slashes.
+
+        Trailing slashes are optional in Smithy matching, but they can also be
+        significant, e.g. an S3 key like `folder/`, so they are only stripped if
+        the path doesn't match otherwise:
+        https://smithy.io/2.0/spec/http-bindings.html#literal-character-sequences
+        """
+        try:
+            return matcher.match(path_info, method, return_rule=True)  # type: ignore[return-value]
+        except (NotFound, MethodNotAllowed):
+            stripped = path_info.rstrip("/") or "/"
+            if stripped == path_info:
+                raise
+            return matcher.match(stripped, method, return_rule=True)  # type: ignore[return-value]
 
     @staticmethod
     def _get_path_info_for_matching(request: Request) -> str:
@@ -460,10 +483,6 @@ class ServiceOperationRouter:
         # We have to parse because RAW_URI can contain a full URL.
         to_parse = raw_uri or request.path
         path_info = urlparse(to_parse).path
-        # Trailing slashes are always optional in Smithy matching:
-        # https://smithy.io/2.0/spec/http-bindings.html#literal-character-sequences
-        if len(path_info) > 1:
-            path_info = path_info.rstrip("/")
         return path_info
 
 

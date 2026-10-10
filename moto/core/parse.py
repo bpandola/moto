@@ -10,7 +10,6 @@ from collections import OrderedDict
 from collections.abc import MutableMapping
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, TypedDict
-from urllib.parse import unquote
 from xml.etree import ElementTree as ETree
 from xml.etree.ElementTree import ParseError as XMLParseError
 
@@ -431,8 +430,8 @@ class BaseRestParser(RequestParser):
             elif location == "uri":
                 member_name = member_shape.serialization.get("name", name)
                 uri_params = response["url_params"]
+                # Already percent-decoded by the router.
                 value = uri_params.get(member_name)
-                value = unquote(value)
                 final_parsed[name] = self._parse_shape(member_shape, value)
             elif location == "querystring":
                 qs = response["values"]
