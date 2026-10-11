@@ -1,4 +1,5 @@
 import pytest
+from werkzeug.exceptions import NotFound
 
 from moto.core.request import Request
 from moto.core.routing import ServiceOperationRouter
@@ -202,3 +203,97 @@ def test_rest_query_arg_constraints_ignore_form_body() -> None:
     assert op.name == "PostObject"
     # ...and matching didn't consume the request body.
     assert req.get_data() == body
+
+
+@pytest.mark.parametrize(
+    "method,url,body",
+    [
+        pytest.param(
+            "POST",
+            "https://sts.amazonaws.com/",
+            "Action=GetCallerIdentity",
+            id="form body",
+        ),
+        pytest.param(
+            "GET",
+            "https://sts.amazonaws.com/?Action=GetCallerIdentity",
+            None,
+            id="query string",
+        ),
+        pytest.param(
+            "POST",
+            "https://sts.amazonaws.com/any/path",
+            "Action=GetCallerIdentity",
+            id="path ignored",
+        ),
+    ],
+)
+def test_query_protocol_routes_by_action(
+    method: str, url: str, body: str | None
+) -> None:
+    router = ServiceOperationRouter(get_service_model("sts"))
+    headers = {"Content-Type": "application/x-www-form-urlencoded"}
+    op, args = router.match(Request.from_primitives(method, url, headers, body))
+    assert op.name == "GetCallerIdentity"
+    assert args == {}
+
+
+@pytest.mark.parametrize(
+    "service,headers,body",
+    [
+        pytest.param(
+            "sts",
+            {"Content-Type": "application/x-www-form-urlencoded"},
+            "Action=NotAnAction",
+            id="query unknown action",
+        ),
+        pytest.param(
+            "sts",
+            {"Content-Type": "application/x-www-form-urlencoded"},
+            "Version=2011-06-15",
+            id="query missing action",
+        ),
+        pytest.param(
+            "sqs",
+            {
+                "Content-Type": "application/x-amz-json-1.0",
+                "X-Amz-Target": "Wrong.SendMessage",
+            },
+            b"{}",
+            id="json wrong target prefix",
+        ),
+    ],
+)
+def test_query_and_json_protocol_not_found(
+    service: str, headers: dict[str, str], body: str | bytes
+) -> None:
+    router = ServiceOperationRouter(get_service_model(service))
+    req = Request.from_primitives("POST", "https://localhost:5000/", headers, body)
+    with pytest.raises(NotFound):
+        router.match(req)
+
+
+@pytest.mark.parametrize(
+    "headers,body",
+    [
+        pytest.param(
+            {
+                "Content-Type": "application/x-amz-json-1.0",
+                "X-Amz-Target": "AmazonSQS.SendMessage",
+            },
+            b"{}",
+            id="json",
+        ),
+        pytest.param(
+            {"Content-Type": "application/x-www-form-urlencoded"},
+            "Action=SendMessage",
+            id="query",
+        ),
+    ],
+)
+def test_sqs_queue_url_path_params(headers: dict[str, str], body: str | bytes) -> None:
+    router = ServiceOperationRouter(get_service_model("sqs"))
+    url = "https://sqs.us-east-1.amazonaws.com/123456789012/my-queue"
+    op, args = router.match(Request.from_primitives("POST", url, headers, body))
+    assert op.name == "SendMessage"
+    assert args == {"AccountId": "123456789012", "QueueName": "my-queue"}

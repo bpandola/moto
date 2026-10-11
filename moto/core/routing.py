@@ -24,7 +24,6 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import unquote
 
-from werkzeug.datastructures import MultiDict
 from werkzeug.exceptions import MethodNotAllowed, NotFound
 from werkzeug.routing import BaseConverter, Map, MapAdapter, Rule
 
@@ -134,23 +133,13 @@ class RequiredArg(ActionConstraint):
         self.name = name
         self.value = value
 
-    def _get_values(self, context: ActionConstraintContext) -> MultiDict[str, str]:
-        return context.request.args
-
     def accept(self, context: ActionConstraintContext) -> bool:
-        values = self._get_values(context)
+        values = context.request.args
         if self.name not in values:
             return False
         if self.value is not None:
             return values.get(self.name) == self.value
         return True
-
-
-class RequiredParam(RequiredArg):
-    """Requires a query string or form body parameter (Query/EC2 protocols)."""
-
-    def _get_values(self, context: ActionConstraintContext) -> MultiDict[str, str]:
-        return context.request.values
 
 
 class RequiredHeader(ActionConstraint):
@@ -251,51 +240,15 @@ class SmithyRule(Rule):
         return candidates
 
 
-class QueryProtocolRule(SmithyRule):
-    def __init__(
-        self,
-        string: str,
-        operations: list[OperationModel],
-        methods: list[str],
-        **kwargs: Any,
-    ) -> None:
-        super().__init__(
-            string=string, operations=operations, methods=methods, **kwargs
-        )
-        for candidate in self.candidates:
-            operation = candidate.operation
-            candidate.add_constraint(RequiredParam("Action", operation.name))
-
-
-class JsonProtocolRule(SmithyRule):
-    def __init__(
-        self,
-        string: str,
-        operations: list[OperationModel],
-        methods: list[str],
-        **kwargs: Any,
-    ) -> None:
-        super().__init__(
-            string=string, operations=operations, methods=methods, **kwargs
-        )
-        for candidate in self.candidates:
-            operation = candidate.operation
-            candidate.add_constraint(
-                RequiredHeader(
-                    "X-Amz-Target",
-                    f"{operation.service_model.metadata.get('targetPrefix')}.{operation.name}",
-                )
-            )
-
-
 def _create_service_map(service: ServiceModel) -> dict[str, Map]:
     """
     Creates a Werkzeug Map object with all rules necessary for the specific service.
+
+    Only REST protocols are routed with a Map; see ServiceOperationRouter for the others.
     :param service: botocore service model to create the rules for
-    :return: a Map instance which is used to perform the in-service operation routing
+    :return: a Map instance for each supported REST protocol, used to perform the in-service operation routing
     """
     ops = [service.operation_model(op_name) for op_name in service.operation_names]
-    # protocol = str(service.protocol)
 
     # group all operations by their path and method
     path_index: dict[tuple[str, str], list[OperationModel]] = defaultdict(list)
@@ -304,95 +257,65 @@ def _create_service_map(service: ServiceModel) -> dict[str, Map]:
         path_index[(http_op.path, http_op.method)].append(op)
 
     protocol_to_rules: dict[str, Map] = {}
-    protocol = str(service.protocol)
-    supported_protocols = service.metadata.get("protocols", [protocol])
+    supported_protocols = service.metadata.get("protocols", [str(service.protocol)])
     for protocol in supported_protocols:
+        if not protocol.startswith("rest"):
+            continue
         rules = []
         # create a matching rule for each (path, method) combination
-        for (path, method), ops in path_index.items():
+        for (path, method), path_ops in path_index.items():
             # translate the requestUri to a Werkzeug rule string
             rule_string = to_werkzeug_rule_string(path)
-            # for protocol in service.protocols:
-            if protocol.startswith("rest"):
-                if len(ops) == 1:
-                    # if there is only a single operation for a (path, method) combination,
-                    # the default Werkzeug rule can be used directly (this is the case for most rules)
-                    op = ops[0]
-                    # Host prefixes (e.g. "{AccountId}.") aren't used for matching, since
-                    # requests don't always arrive on those hosts (e.g. in server mode).
-                    # Host labels are extracted after matching; see get_host_labels().
-                    rules.append(
-                        SmithyRule(
-                            string=rule_string,
-                            operations=[op],
-                            methods=[method],
-                        )
+            if len(path_ops) == 1:
+                # if there is only a single operation for a (path, method) combination,
+                # the default Werkzeug rule can be used directly (this is the case for most rules)
+                op = path_ops[0]
+                # Host prefixes (e.g. "{AccountId}.") aren't used for matching, since
+                # requests don't always arrive on those hosts (e.g. in server mode).
+                # Host labels are extracted after matching; see get_host_labels().
+                rules.append(
+                    SmithyRule(
+                        string=rule_string,
+                        operations=[op],
+                        methods=[method],
                     )
-                    if add_s3_subdomain():
-                        if op.http_trait.path.startswith("/{Bucket}"):
-                            new_path = op.http_trait.path.replace("/{Bucket}", "", 1)
-                            if new_path == "":
-                                new_path = "/"
-                            rule_string = to_werkzeug_rule_string(new_path)
-                            rules.append(
-                                SmithyRule(
-                                    string=rule_string,
-                                    operations=ops,
-                                    methods=[method],
-                                    subdomain="<Bucket>",
-                                )
-                            )
-                else:
-                    # if there is an ambiguity with only the (path, method) combination,
-                    # a custom rule - which can use additional request metadata - needs to be used
-                    rules.append(
-                        SmithyRule(string=rule_string, methods=[method], operations=ops)
-                    )
-                    s3_ops = [
-                        op for op in ops if op.http_trait.path.startswith("/{Bucket}")
-                    ]
-                    if s3_ops and add_s3_subdomain():
-                        new_path = s3_ops[0].http_trait.path.replace("/{Bucket}", "", 1)
+                )
+                if add_s3_subdomain():
+                    if op.http_trait.path.startswith("/{Bucket}"):
+                        new_path = op.http_trait.path.replace("/{Bucket}", "", 1)
                         if new_path == "":
                             new_path = "/"
                         rule_string = to_werkzeug_rule_string(new_path)
                         rules.append(
                             SmithyRule(
                                 string=rule_string,
+                                operations=path_ops,
                                 methods=[method],
-                                operations=s3_ops,
                                 subdomain="<Bucket>",
                             )
                         )
-
-            elif protocol in ("query", "ec2"):
+            else:
+                # if there is an ambiguity with only the (path, method) combination,
+                # a custom rule - which can use additional request metadata - needs to be used
                 rules.append(
-                    QueryProtocolRule(
-                        string=rule_string, operations=ops, methods=["POST", "GET"]
+                    SmithyRule(
+                        string=rule_string, methods=[method], operations=path_ops
                     )
                 )
-                if service.service_name == "sqs":
-                    rule_string = to_werkzeug_rule_string("/{AccountId}/{QueueName}")
+                s3_ops = [
+                    op for op in path_ops if op.http_trait.path.startswith("/{Bucket}")
+                ]
+                if s3_ops and add_s3_subdomain():
+                    new_path = s3_ops[0].http_trait.path.replace("/{Bucket}", "", 1)
+                    if new_path == "":
+                        new_path = "/"
+                    rule_string = to_werkzeug_rule_string(new_path)
                     rules.append(
-                        QueryProtocolRule(
+                        SmithyRule(
                             string=rule_string,
-                            operations=ops,
-                            methods=["POST", "GET"],
-                        )
-                    )
-            elif protocol.startswith("json"):
-                rules.append(
-                    JsonProtocolRule(
-                        string=rule_string, operations=ops, methods=[method]
-                    )
-                )
-                if service.service_name == "sqs":
-                    rule_string = to_werkzeug_rule_string("/{AccountId}/{QueueName}")
-                    rules.append(
-                        JsonProtocolRule(
-                            string=rule_string,
-                            operations=ops,
-                            methods=["POST"],
+                            methods=[method],
+                            operations=s3_ops,
+                            subdomain="<Bucket>",
                         )
                     )
         protocol_to_rules[protocol] = Map(
@@ -462,10 +385,40 @@ def get_host_labels(operation: OperationModel, host: str) -> dict[str, str]:
     return match.groupdict() if match else {}
 
 
+# The request path doesn't identify the operation in the Query/EC2 and JSON protocols,
+# but for some services it identifies a resource.  E.g. SQS requests can be sent to the
+# queue url, which identifies the queue:
+# https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-queue-message-identifiers.html
+RPC_PROTOCOL_PATH_TEMPLATES: dict[str, list[str]] = {
+    "sqs": ["/{AccountId}/{QueueName}"],
+}
+
+
+def _create_rpc_path_map(service: ServiceModel) -> Map | None:
+    """Creates a Map for extracting resource identifiers from Query/EC2 or JSON request paths."""
+    templates = RPC_PROTOCOL_PATH_TEMPLATES.get(service.service_name)
+    if not templates:
+        return None
+    return Map(
+        rules=[Rule(to_werkzeug_rule_string(template)) for template in templates],
+        strict_slashes=False,
+        merge_slashes=False,
+        converters={
+            GreedyLabelConverter.NAME: GreedyLabelConverter,
+            ImplicitGreedyLabelConverter.NAME: ImplicitGreedyLabelConverter,
+        },
+    )
+
+
 class ServiceOperationRouter:
     """
-    A router implementation which abstracts the (quite complex) routing of incoming HTTP requests to a specific
-    operation within a "REST" service (rest-xml, rest-json).
+    A router implementation which abstracts the routing of incoming HTTP requests to a specific
+    operation within a service.
+
+    Query/EC2 and JSON protocol requests are routed with a simple lookup of the `Action`
+    parameter or `X-Amz-Target` header (the request path doesn't identify the operation,
+    but may identify a resource; see RPC_PROTOCOL_PATH_TEMPLATES).
+    REST protocol (rest-xml, rest-json) requests are routed with a Werkzeug Map.
     """
 
     _map: dict[str, Map]
@@ -473,6 +426,19 @@ class ServiceOperationRouter:
     def __init__(self, service: ServiceModel):
         self._service_model = service
         self._map = _create_service_map(service)
+        self._rpc_path_map = _create_rpc_path_map(service)
+        self._operations_by_name = {
+            name: service.operation_model(name) for name in service.operation_names
+        }
+        target_prefix = service.metadata.get("targetPrefix")
+        self._operations_by_target = (
+            {
+                f"{target_prefix}.{name}": operation
+                for name, operation in self._operations_by_name.items()
+            }
+            if target_prefix
+            else {}
+        )
 
     def match(
         self, request: Request, s3_response: S3Response | None = None
@@ -485,7 +451,40 @@ class ServiceOperationRouter:
         :raises: Werkzeug's NotFound exception in case the given request does not match any operation
         """
         protocol = determine_request_protocol(self._service_model, request.content_type)
-        protocol_map = self._map[protocol]
+        if protocol in ("query", "ec2"):
+            operation = self._operations_by_name.get(request.values.get("Action", ""))
+            params = self._get_rpc_path_params(request)
+        elif protocol == "json":
+            target = request.headers.get("X-Amz-Target", "")
+            operation = self._operations_by_target.get(target)
+            params = self._get_rpc_path_params(request)
+        else:
+            operation, params = self._match_rest(request, protocol, s3_response)
+        if operation is None:
+            raise NotFound()
+        # Host labels are included with the uri params, but not used for matching,
+        # since requests don't always arrive on the prefixed host (e.g. in server mode).
+        params.update(get_host_labels(operation, request.host))
+        return operation, params
+
+    def _get_rpc_path_params(self, request: Request) -> dict[str, Any]:
+        """Extracts resource identifiers from a Query/EC2 or JSON request path, if it has them."""
+        if self._rpc_path_map is None:
+            return {}
+        matcher = self._rpc_path_map.bind(request.host)
+        path_info = self._get_path_info_for_matching(request)
+        try:
+            _, arguments = self._match_path(matcher, path_info, request.method)
+        except (NotFound, MethodNotAllowed):
+            return {}
+        return to_uri_params(arguments)
+
+    def _match_rest(
+        self, request: Request, protocol: str, s3_response: S3Response | None
+    ) -> tuple[OperationModel | None, dict[str, Any]]:
+        protocol_map = self._map.get(protocol)
+        if protocol_map is None:
+            raise NotFound()
         matcher: MapAdapter = protocol_map.bind(
             request.host,
             subdomain=request.host.split(".", 1)[0]
@@ -501,15 +500,7 @@ class ServiceOperationRouter:
             raise NotFound() from e
 
         assert isinstance(rule, SmithyRule)
-        operation = rule.match_request(request)
-        if operation is None:
-            raise NotFound()
-
-        # Host labels are included with the uri params, but not used for matching,
-        # since requests don't always arrive on the prefixed host (e.g. in server mode).
-        params = to_uri_params(arguments)
-        params.update(get_host_labels(operation, request.host))
-        return operation, params
+        return rule.match_request(request), to_uri_params(arguments)
 
     @staticmethod
     def _match_path(
