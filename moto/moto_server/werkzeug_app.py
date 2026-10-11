@@ -174,16 +174,14 @@ class DomainDispatcherApplication:
             else:
                 host = f"api.{service}.{region}.amazonaws.com"
         elif service == "timestream":
-            from moto.core.request import Request
-            from moto.core.routing import NotFound, ServiceOperationRouter
-            from moto.core.utils import get_service_model
+            from moto.core.routing import NotFound, get_service_router
 
             possible_services = [
                 "timestream-write",
                 "timestream-query",
             ]
             for service_name in possible_services:
-                router = ServiceOperationRouter(get_service_model(service_name))
+                router = get_service_router(service_name)
                 request = Request(environ)
                 try:
                     op, _ = router.match(request)
@@ -213,9 +211,7 @@ class DomainDispatcherApplication:
             # This is obviously a hack, but it automatically differentiates
             # between the various Bedrock services without having to manually
             # add every path to `moto/bedrock/urls.py`.
-            from moto.core.request import Request
-            from moto.core.routing import NotFound, ServiceOperationRouter
-            from moto.core.utils import get_service_model
+            from moto.core.routing import NotFound, get_service_router
 
             signing_key_to_possible_services = {
                 "bedrock": [
@@ -229,7 +225,7 @@ class DomainDispatcherApplication:
                 ],
             }
             for service_name in signing_key_to_possible_services.get(service, []):
-                router = ServiceOperationRouter(get_service_model(service_name))
+                router = get_service_router(service_name)
                 request = Request(environ.copy())
                 try:
                     op, _ = router.match(request)
