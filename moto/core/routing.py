@@ -205,16 +205,15 @@ class SmithyRule(Rule):
         **kwargs: Any,
     ) -> None:
         super().__init__(string, methods=methods, **kwargs)
-        self.candidates = self._initialize_candidates(operations)
+        # Candidates are sorted by weight once, so constraints must not be added after this.
+        self._action_selector = ActionSelector(self._initialize_candidates(operations))
         # From Werkzeug: "If GET is present [...] and HEAD is not, HEAD is added automatically."
         # This behavior is undesirable for our use-case, so we reverse it.
         if self.methods and "HEAD" in self.methods and "HEAD" not in methods:
             self.methods = {method.upper() for method in methods}
 
     def match_request(self, request: Request) -> OperationModel | None:
-        action_selector = ActionSelector(self.candidates)
-        value = action_selector.select_action(request)
-        return value
+        return self._action_selector.select_action(request)
 
     @staticmethod
     def _initialize_candidates(
