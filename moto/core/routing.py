@@ -559,7 +559,7 @@ class ServiceOperationRouter:
         return self._routers[protocol]
 
 
-@functools.lru_cache(10)
+@functools.cache
 def get_service_router(service_name: str) -> ServiceOperationRouter:
     service_model = get_service_model(service_name)
     service_router = ServiceOperationRouter(service_model)
