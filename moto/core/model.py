@@ -155,7 +155,7 @@ class OperationModel(BotocoreOperationModel):
     def service_model(self) -> ServiceModel:
         return self._service_model
 
-    @property
+    @CachedProperty
     def http_trait(self) -> HTTPTrait:
         return HTTPTrait.from_model(self.http)
 
