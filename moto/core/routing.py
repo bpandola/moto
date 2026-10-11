@@ -27,7 +27,6 @@ from urllib.parse import unquote
 from werkzeug.exceptions import MethodNotAllowed, NotFound
 from werkzeug.routing import BaseConverter, Map, MapAdapter, Rule
 
-from moto import settings
 from moto.core.model import OperationModel, ServiceModel, StructureShape
 from moto.core.request import Request, determine_request_protocol
 from moto.core.utils import get_service_model
@@ -102,12 +101,6 @@ def to_werkzeug_rule_string(smithy_uri: str) -> str:
 
     rule_string = URI_LABEL_REGEX.sub(to_rule_variable, smithy_uri)
     return rule_string
-
-
-def add_s3_subdomain() -> bool:
-    if settings.S3_IGNORE_SUBDOMAIN_BUCKETNAME or settings.get_s3_custom_endpoints():
-        return False
-    return True
 
 
 @dataclass
@@ -298,18 +291,15 @@ def _create_map(rules: list[Rule]) -> Map:
             GreedyLabelConverter.NAME: GreedyLabelConverter,
             ImplicitGreedyLabelConverter.NAME: ImplicitGreedyLabelConverter,
         },
-        default_subdomain="",
     )
 
 
-def _get_path_info_for_matching(request: Request) -> str:
-    path_info = request.raw_path
-    # Werkzeug's MapAdapter.match strips leading slashes, which loses the leading
-    # slash of an S3 key in a virtual-hosted request (e.g. bucket.s3.amazonaws.com//key),
-    # so encode it to keep it in the matched label.
-    if path_info.startswith("//"):
-        path_info = "/%2F" + path_info[2:]
-    return path_info
+def _get_path_info_for_matching(path: str) -> str:
+    # Werkzeug's MapAdapter.match strips leading slashes, which would lose the leading
+    # slash of the first label, so encode it to keep it in the matched label.
+    if path.startswith("//"):
+        path = "/%2F" + path[2:]
+    return path
 
 
 def _match_path(
@@ -375,7 +365,7 @@ class RPCRouter(ProtocolRouter):
         if self._path_map is None:
             return {}
         matcher = self._path_map.bind(request.host)
-        path_info = _get_path_info_for_matching(request)
+        path_info = _get_path_info_for_matching(request.raw_path)
         try:
             _, arguments = _match_path(matcher, path_info, request.method)
         except (NotFound, MethodNotAllowed):
@@ -449,12 +439,13 @@ class RestRouter(ProtocolRouter):
         rule_string = to_werkzeug_rule_string(path)
         return [SmithyRule(string=rule_string, operations=operations, methods=[method])]
 
-    def _get_subdomain(self, request: Request) -> str | None:
-        return None
+    def _get_path(self, request: Request) -> str:
+        """The request path to match against the rules."""
+        return request.raw_path
 
     def _match(self, request: Request) -> tuple[OperationModel | None, dict[str, Any]]:
-        matcher = self._map.bind(request.host, subdomain=self._get_subdomain(request))
-        path_info = _get_path_info_for_matching(request)
+        matcher = self._map.bind(request.host)
+        path_info = _get_path_info_for_matching(self._get_path(request))
         try:
             rule, arguments = _match_path(matcher, path_info, request.method)
         except MethodNotAllowed as e:
@@ -464,31 +455,25 @@ class RestRouter(ProtocolRouter):
 
 
 class S3RestRouter(RestRouter):
-    """Also routes virtual-hosted-style requests, where the bucket is the subdomain."""
+    """Also routes virtual-hosted-style requests, where the bucket is in the host.
 
-    def _create_rules(
-        self, path: str, method: str, operations: list[OperationModel]
-    ) -> list[Rule]:
-        rules = super()._create_rules(path, method, operations)
-        if path.startswith("/{Bucket}") and add_s3_subdomain():
-            bucket_path = path.replace("/{Bucket}", "", 1) or "/"
-            rules.append(
-                SmithyRule(
-                    string=to_werkzeug_rule_string(bucket_path),
-                    operations=operations,
-                    methods=[method],
-                    subdomain="<Bucket>",
-                )
-            )
-        return rules
+    These are matched as path-style requests (e.g. bucket.s3.amazonaws.com/key is
+    matched as /bucket/key), so only the modeled path-style rules are needed.
+    """
 
-    def _get_subdomain(self, request: Request) -> str | None:
+    def _get_path(self, request: Request) -> str:
         # Imported here to avoid a circular import.
         from moto.s3.responses import S3Response
+        from moto.s3.utils import bucket_name_from_url
 
+        path = super()._get_path(request)
         if S3Response.subdomain_based_buckets(request):
-            return request.host.split(".", 1)[0]
-        return None
+            # Use the same bucket name parsing as S3Response, which handles
+            # bucket names with dots (e.g. my.bucket.s3.amazonaws.com).
+            bucket = bucket_name_from_url(request.url)
+            if bucket:
+                path = f"/{bucket}{path}"
+        return path
 
 
 # SQS requests can be sent to the queue url, which identifies the queue:

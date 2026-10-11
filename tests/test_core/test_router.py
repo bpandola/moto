@@ -294,3 +294,31 @@ def test_sqs_queue_url_path_params(headers: dict[str, str], body: str | bytes) -
     op, args = router.match(Request.from_primitives("POST", url, headers, body))
     assert op.name == "SendMessage"
     assert args == {"AccountId": "123456789012", "QueueName": "my-queue"}
+
+
+@pytest.mark.parametrize(
+    "method,url,expected_op,expected_args",
+    [
+        pytest.param(
+            "GET",
+            "https://my.dotted.bucket.s3.amazonaws.com/key",
+            "GetObject",
+            {"Bucket": "my.dotted.bucket", "Key": "key"},
+            id="object",
+        ),
+        pytest.param(
+            "GET",
+            "https://my.dotted.bucket.s3.us-west-2.amazonaws.com/?tagging",
+            "GetBucketTagging",
+            {"Bucket": "my.dotted.bucket"},
+            id="bucket",
+        ),
+    ],
+)
+def test_s3_virtual_host_dotted_bucket_name(
+    method: str, url: str, expected_op: str, expected_args: dict[str, str]
+) -> None:
+    router = ServiceOperationRouter(get_service_model("s3"))
+    op, args = router.match(Request.from_primitives(method, url, {}))
+    assert op.name == expected_op
+    assert args == expected_args
