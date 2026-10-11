@@ -4,10 +4,7 @@ from werkzeug.exceptions import NotFound
 from moto.core.request import Request
 from moto.core.routing import ServiceOperationRouter
 from moto.core.utils import get_service_model
-from moto.s3.responses import S3Response
 from moto.s3control.responses import S3ControlResponse
-
-s3_response = S3Response()
 
 
 def test_op_router() -> None:
@@ -52,7 +49,7 @@ def test_s3_localhost_router() -> None:
     model = get_service_model("s3")
     router = ServiceOperationRouter(model)
     req = Request.from_primitives("GET", "https://foobaz.localhost:5000/", {})
-    op, args = router.match(req, s3_response)
+    op, args = router.match(req)
 
     assert op.name == "ListObjects"
     assert args["Bucket"] == "foobaz"
@@ -66,7 +63,7 @@ def test_s3_full_url() -> None:
         "https://b7525d4a-4973-4207-9f07-a73b4ec3ff65.s3.amazonaws.com/?tagging",
         {},
     )
-    op, args = router.match(req, s3_response)
+    op, args = router.match(req)
 
     assert op.name == "GetBucketTagging"
     assert args["Bucket"] == "b7525d4a-4973-4207-9f07-a73b4ec3ff65"
@@ -184,7 +181,7 @@ def test_implicitly_greedy_label_excludes_trailing_slash() -> None:
 def test_s3_virtual_host_key_with_leading_slash() -> None:
     router = ServiceOperationRouter(get_service_model("s3"))
     req = Request.from_primitives("PUT", "https://bucket.s3.amazonaws.com//key", {})
-    op, args = router.match(req, s3_response)
+    op, args = router.match(req)
     assert op.name == "PutObject"
     assert args == {"Bucket": "bucket", "Key": "/key"}
 

@@ -302,11 +302,7 @@ class BaseResponse(ActionAuthenticatorMixin):
         try:
             service_model = get_service_model(self.boto3_service_name)
             service_router = get_service_router(self.boto3_service_name)
-            s3_response = self if self.service_name == "s3" else None
-            operation, uri_params = service_router.match(
-                request,
-                s3_response,  # type: ignore[arg-type]
-            )
+            operation, uri_params = service_router.match(request)
             self.operation = operation
             self.uri_params = uri_params
         except UnknownServiceError:

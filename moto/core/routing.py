@@ -21,7 +21,7 @@ import re
 from collections import defaultdict
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, cast
+from typing import Any, cast
 from urllib.parse import unquote
 
 from werkzeug.exceptions import MethodNotAllowed, NotFound
@@ -31,9 +31,6 @@ from moto import settings
 from moto.core.model import OperationModel, ServiceModel, StructureShape
 from moto.core.request import Request, determine_request_protocol
 from moto.core.utils import get_service_model
-
-if TYPE_CHECKING:
-    from moto.s3.responses import S3Response
 
 URI_LABEL_REGEX = re.compile(r"({.+?})")
 """https://smithy.io/2.0/spec/http-bindings.html#labels"""
@@ -344,10 +341,8 @@ class ProtocolRouter:
     def __init__(self, service_model: ServiceModel):
         self.service_model = service_model
 
-    def match(
-        self, request: Request, s3_response: S3Response | None = None
-    ) -> tuple[OperationModel, dict[str, Any]]:
-        operation, params = self._match(request, s3_response)
+    def match(self, request: Request) -> tuple[OperationModel, dict[str, Any]]:
+        operation, params = self._match(request)
         if operation is None:
             raise NotFound()
         # Host labels are included with the uri params, but not used for matching,
@@ -355,9 +350,7 @@ class ProtocolRouter:
         params.update(get_host_labels(operation, request.host))
         return operation, params
 
-    def _match(
-        self, request: Request, s3_response: S3Response | None
-    ) -> tuple[OperationModel | None, dict[str, Any]]:
+    def _match(self, request: Request) -> tuple[OperationModel | None, dict[str, Any]]:
         raise NotImplementedError
 
 
@@ -401,9 +394,7 @@ class QueryRouter(RPCRouter):
             for name in service_model.operation_names
         }
 
-    def _match(
-        self, request: Request, s3_response: S3Response | None
-    ) -> tuple[OperationModel | None, dict[str, Any]]:
+    def _match(self, request: Request) -> tuple[OperationModel | None, dict[str, Any]]:
         operation = self._operations_by_name.get(request.values.get("Action", ""))
         return operation, self._get_path_params(request)
 
@@ -423,9 +414,7 @@ class JSONRouter(RPCRouter):
             else {}
         )
 
-    def _match(
-        self, request: Request, s3_response: S3Response | None
-    ) -> tuple[OperationModel | None, dict[str, Any]]:
+    def _match(self, request: Request) -> tuple[OperationModel | None, dict[str, Any]]:
         target = request.headers.get("X-Amz-Target", "")
         operation = self._operations_by_target.get(target)
         return operation, self._get_path_params(request)
@@ -461,17 +450,11 @@ class RestRouter(ProtocolRouter):
         rule_string = to_werkzeug_rule_string(path)
         return [SmithyRule(string=rule_string, operations=operations, methods=[method])]
 
-    def _get_subdomain(
-        self, request: Request, s3_response: S3Response | None
-    ) -> str | None:
+    def _get_subdomain(self, request: Request) -> str | None:
         return None
 
-    def _match(
-        self, request: Request, s3_response: S3Response | None
-    ) -> tuple[OperationModel | None, dict[str, Any]]:
-        matcher = self._map.bind(
-            request.host, subdomain=self._get_subdomain(request, s3_response)
-        )
+    def _match(self, request: Request) -> tuple[OperationModel | None, dict[str, Any]]:
+        matcher = self._map.bind(request.host, subdomain=self._get_subdomain(request))
         path_info = _get_path_info_for_matching(request)
         try:
             rule, arguments = _match_path(matcher, path_info, request.method)
@@ -500,10 +483,11 @@ class S3RestRouter(RestRouter):
             )
         return rules
 
-    def _get_subdomain(
-        self, request: Request, s3_response: S3Response | None
-    ) -> str | None:
-        if s3_response is not None and s3_response.subdomain_based_buckets(request):
+    def _get_subdomain(self, request: Request) -> str | None:
+        # Imported here to avoid a circular import.
+        from moto.s3.responses import S3Response
+
+        if S3Response.subdomain_based_buckets(request):
             return request.host.split(".", 1)[0]
         return None
 
@@ -554,9 +538,7 @@ class ServiceOperationRouter:
         self._service_model = service
         self._routers: dict[str, ProtocolRouter] = {}
 
-    def match(
-        self, request: Request, s3_response: S3Response | None = None
-    ) -> tuple[OperationModel, dict[str, Any]]:
+    def match(self, request: Request) -> tuple[OperationModel, dict[str, Any]]:
         """
         Matches the given request to the operation it targets (or raises an exception if no operation matches).
 
@@ -565,7 +547,7 @@ class ServiceOperationRouter:
         :raises: Werkzeug's NotFound exception in case the given request does not match any operation
         """
         protocol = determine_request_protocol(self._service_model, request.content_type)
-        return self._get_router(protocol).match(request, s3_response)
+        return self._get_router(protocol).match(request)
 
     def _get_router(self, protocol: str) -> ProtocolRouter:
         if protocol not in self._routers:
