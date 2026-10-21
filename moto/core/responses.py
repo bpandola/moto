@@ -384,7 +384,7 @@ class BaseResponse(ActionAuthenticatorMixin):
             action = action[0]
         if action:
             return action
-        return self.operation.name if self.operation else ""
+        return self.operation.name if self.operation else None  # type: ignore[return-value]
 
     def parse_parameters(self, request: Request) -> None:
         service_model = get_service_model(self.boto3_service_name)
