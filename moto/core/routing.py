@@ -1,18 +1,17 @@
-# TODO:
-# RuleFactory for each protocol
-# Loop through service.protocols and add rules for each one
-# The localstack RequiredArgsRule can probably be done better with a Constraint(s)
-# Find a way to subclass mapadapter to automatically do match plus constraint
+# Routes a request to the operation it targets, using a ProtocolRouter for the
+# request's protocol (see PROTOCOL_ROUTERS and SERVICE_SPECIFIC_ROUTERS).
 #
-# The nice thing about this module is that none of the werkzeug stuff should leak outside of it
-# In other words, however it does the routing, it's only output is the Action and Arguments
+# None of the Werkzeug routing should leak outside of this module: whatever the
+# protocol, the only output is the operation and its uri params (or NotFound).
 #
-# If we need to pass args to a Rule subclass, see here for how to work with rule.empty()
+# If Rule subclasses ever need to be copied (e.g. by Map.bind_to_environ), see here
+# for how to work with rule.empty() when passing extra args to a Rule subclass:
 # https://github.com/pallets/werkzeug/blob/11c9fe9272e281b90abe89dc59f86e44ee453bab/src/werkzeug/routing/rules.py#L528
 #
-# Moto has MOTO_S3_CUSTOM_ENDPOINTS and S3_IGNORE_SUBDOMAIN_BUCKETNAME
-# Both of which are going to cause routing problems
-# Maybe we keep uses url_bases in urls.py but just get rid of all the url_paths?
+# TODO:
+# - Protocols without a router (e.g. smithy-rpc-v2-cbor) aren't routed yet.
+# - Now that operations are routed from the service models, maybe we keep the
+#   url_bases in urls.py but get rid of all the url_paths?
 
 from __future__ import annotations
 
