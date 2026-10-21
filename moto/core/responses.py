@@ -378,6 +378,7 @@ class BaseResponse(ActionAuthenticatorMixin):
         self.setup_class(request, full_url, headers)
         return self.call_action()
 
+    # TODO: Get rid of all overrides once new routing is working.
     def _get_action(self) -> str:
         action = self.querystring.get("Action")
         if action and isinstance(action, list):
