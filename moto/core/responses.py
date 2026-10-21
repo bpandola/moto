@@ -378,42 +378,6 @@ class BaseResponse(ActionAuthenticatorMixin):
         self.setup_class(request, full_url, headers)
         return self.call_action()
 
-    @staticmethod
-    def uri_to_regexp(uri: str) -> str:
-        """converts uri w/ placeholder to regexp
-          '/accounts/{AwsAccountId}/namespaces/{Namespace}/groups'
-        -> '^/accounts/(?P<AwsAccountId>[^/]+)/namespaces/(?P<Namespace>[^/]+)/groups$'
-
-          '/trustStores/{trustStoreArn+}'
-        -> '^/trustStores/(?P<trustStoreArn>.+)$'
-
-        """
-
-        def _convert(elem: str) -> str:
-            if not re.match("^{.*}$", elem):
-                # URL-parts sometimes contain a $
-                # Like Greengrass: /../deployments/$reset
-                # We don't want to our regex to think this marks an end-of-line, so let's escape it
-                return elem.replace("$", r"\$")
-
-            # In the Smithy specification, a plus sign indicates a greedy label, which
-            # allows the label to match multiple path segments, including forward slashes.
-            # If a label is the last segment of a uri, we default it to greedy as well.
-            greedy = elem.endswith("+}") or uri.endswith(elem)
-            name = (
-                elem.replace("{", "")
-                .replace("}", "")
-                .replace("+", "")
-                .replace("-", "_")
-            )
-            if greedy:
-                return f"(?P<{name}>.+)"
-            return f"(?P<{name}>[^/]+)"
-
-        elems = uri.split("/")
-        regexp = "/".join([_convert(elem) for elem in elems])
-        return f"^{regexp}$"
-
     def _get_action(self) -> str:
         action = self.querystring.get("Action")
         if action and isinstance(action, list):
