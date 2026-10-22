@@ -33,10 +33,10 @@ def test_404(test_client):
 
 def test_table_list(test_client):
     headers = {
-        "X-Amz-Target": "TestTable.ListTables",
+        "X-Amz-Target": "DynamoDB_20111205.ListTables",
         "Content-Type": "application/x-amz-json-1.0",
     }
-    res = test_client.get("/", headers=headers)
+    res = test_client.post("/", headers=headers)
     assert json.loads(res.data) == {"TableNames": []}
 
 
@@ -58,10 +58,10 @@ def test_create_table(test_client):
     }
 
     headers = {
-        "X-Amz-Target": "TestTable.ListTables",
+        "X-Amz-Target": "DynamoDB_20111205.ListTables",
         "Content-Type": "application/x-amz-json-1.0",
     }
-    res = test_client.get("/", headers=headers)
+    res = test_client.post("/", headers=headers)
     res = json.loads(res.data)
     assert res == {"TableNames": [TABLE_WITH_RANGE_NAME]}
 
@@ -83,10 +83,10 @@ def test_create_table_without_range_key(test_client):
     }
 
     headers = {
-        "X-Amz-Target": "TestTable.ListTables",
+        "X-Amz-Target": "DynamoDB_20111205.ListTables",
         "Content-Type": "application/x-amz-json-1.0",
     }
-    res = test_client.get("/", headers=headers)
+    res = test_client.post("/", headers=headers)
     res = json.loads(res.data)
     assert res == {"TableNames": [TABLE_NAME]}
 
@@ -97,10 +97,10 @@ def test_create_table_in_different_regions(test_client):
     create_table(test_client, name="Table2", region="us-west-2")
 
     headers = {
-        "X-Amz-Target": "TestTable.ListTables",
+        "X-Amz-Target": "DynamoDB_20111205.ListTables",
         "Content-Type": "application/x-amz-json-1.0",
     }
-    res = test_client.get("/", headers=headers)
+    res = test_client.post("/", headers=headers)
     res = json.loads(res.data)
     assert res == {"TableNames": [TABLE_WITH_RANGE_NAME, "Table2"]}
 
@@ -109,7 +109,6 @@ def test_update_item(test_client):
     create_table(test_client)
 
     headers, res = put_item(test_client)
-    headers["Content-Type"] = "application/x-amz-json-1.0"
 
     # UpdateItem
     headers["X-Amz-Target"] = "DynamoDB_20111205.UpdateItem"
@@ -467,7 +466,6 @@ def test_put_and_get_item_without_range_key(test_client):
     create_table(test_client, use_range_key=False)
 
     headers, res = put_item(test_client, use_range_key=False)
-    headers["Content-Type"] = "application/x-amz-json-1.0"
 
     assert res["ConsumedCapacityUnits"] == 1
     assert res["Attributes"] == {"hkey": "customer", "name": "myname"}
