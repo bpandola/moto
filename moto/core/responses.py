@@ -299,7 +299,7 @@ class BaseResponse(ActionAuthenticatorMixin):
         if not self.is_werkzeug_request:
             self.response_headers["date"] = http_date(utcnow())
 
-        if self.automated_parameter_parsing:
+        if self.automated_parameter_parsing and self._get_action():
             self.parse_parameters(request)
 
         # Register visit with IAM
@@ -413,7 +413,7 @@ class BaseResponse(ActionAuthenticatorMixin):
                 "url_params": self.uri_match,
             }
         )
-        self.params = cast(Any, parsed)
+        self.params = cast(Any, ChainMap(parsed, self.uri_match))
 
     def determine_response_protocol(self, service_model: ServiceModel) -> str:
         content_type = self.headers.get("Content-Type", "")
@@ -518,8 +518,7 @@ class BaseResponse(ActionAuthenticatorMixin):
 
     def _get_param(self, param_name: str, if_none: Any = None) -> Any:
         if self.automated_parameter_parsing:
-            params = ChainMap(self.params, self.uri_match)
-            return get_value(params, param_name, default=if_none)
+            return get_value(self.params, param_name, default=if_none)
 
         val = self.querystring.get(param_name)
         if val is not None:
