@@ -124,6 +124,13 @@ class CloudFormationResponse(BaseResponse):
     def cloudformation_backend(self) -> CloudFormationBackend:
         return cloudformation_backends[self.current_account][self.region]
 
+    def _get_action(self) -> str:
+        action = super()._get_action()
+        # HACK for ProcessCfnResponse.
+        if action is None and "Action" in self.querystring:
+            action = self.querystring["Action"][0]
+        return action
+
     @classmethod
     def cfnresponse(cls, *args: Any, **kwargs: Any) -> Any:  # type: ignore[misc]
         request, full_url, headers = args
