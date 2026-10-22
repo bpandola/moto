@@ -10,6 +10,13 @@ class TimestreamWriteResponse(BaseResponse):
     def __init__(self) -> None:
         super().__init__(service_name="timestream-write")
 
+    def _get_action(self) -> str:
+        action = super()._get_action()
+        # HACK for timestream-query service.
+        if action is None:
+            action = self.headers.get("x-amz-target", "").split(".")[-1]
+        return action
+
     @property
     def timestreamquery_backend(self) -> TimestreamQueryBackend:
         return timestreamquery_backends[self.current_account][self.region]

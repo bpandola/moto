@@ -216,28 +216,7 @@ class DomainDispatcherApplication:
             else:
                 host = f"api.{service}.{region}.amazonaws.com"
         elif service == "timestream":
-            from moto.core.routing import NotFound, get_service_router
-
-            possible_services = [
-                "timestream-write",
-                "timestream-query",
-            ]
-            for service_name in possible_services:
-                router = get_service_router(service_name)
-                request = Request(environ)
-                try:
-                    op, _ = router.match(request)
-                except NotFound:
-                    continue
-                else:
-                    service = service_name
-                    break
-            endpoint_prefix = (
-                "query.timestream"
-                if service == "timestream-query"
-                else "ingest.timestream"
-            )
-            host = f"{endpoint_prefix}.{region}.amazonaws.com"
+            host = f"ingest.{service}.{region}.amazonaws.com"
         elif service == "s3" and (
             path.startswith("/v20180820/") or "s3-control" in environ["HTTP_HOST"]
         ):
