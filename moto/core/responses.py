@@ -16,6 +16,7 @@ from typing import (
 from urllib.parse import parse_qs, parse_qsl, urlparse
 
 from botocore.exceptions import UnknownServiceError
+from botocore.model import OperationNotFoundError
 from werkzeug.exceptions import HTTPException
 from werkzeug.http import http_date
 
@@ -198,7 +199,8 @@ class BaseResponse(ActionAuthenticatorMixin):
     ) -> None:
         """
         full_url and headers are carried by the request itself.  They remain
-        parameters for the callers that deliberately pass something else.
+        parameters for the callers that deliberately pass something else - see
+        CloudFormationResponse.process_cfn_response, which appends an Action.
 
         use_raw_body overrides the class-level default for a single call.
         """
@@ -281,6 +283,7 @@ class BaseResponse(ActionAuthenticatorMixin):
         self.method = request.method
         self.region = self.get_region_from_url(request, full_url)
         self.partition = get_partition(self.region)
+        self.uri_match: dict[str, Any] = {}
 
         if "host" not in request.headers:
             # request.headers is an immutable view over the WSGI environ, so the
@@ -296,20 +299,7 @@ class BaseResponse(ActionAuthenticatorMixin):
         if not self.is_werkzeug_request:
             self.response_headers["date"] = http_date(utcnow())
 
-        self.operation: OperationModel | None = None
-        self.uri_params = {}
-        try:
-            service_model = get_service_model(self.boto3_service_name)
-            service_router = get_service_router(self.boto3_service_name)
-            operation, uri_params = service_router.match(request)
-            self.operation = operation
-            self.uri_params = uri_params
-        except UnknownServiceError:
-            pass
-        except (NotFound, NotImplementedError):
-            self.operation = OperationModel({}, service_model)
-            self.uri_params = {}
-        if self.automated_parameter_parsing and self.operation and self.operation.name:
+        if self.automated_parameter_parsing:
             self.parse_parameters(request)
 
         # Register visit with IAM
@@ -377,9 +367,35 @@ class BaseResponse(ActionAuthenticatorMixin):
         self.setup_class(request, full_url, headers)
         return self.call_action()
 
+    def _get_action_from_method_and_request_uri(
+        self, method: str, request_uri: str
+    ) -> str:
+        """Used for AWS restJson1 and restXml API protocols"""
+        try:
+            service_router = get_service_router(self.boto3_service_name)
+            operation, uri_params = service_router.match(self.normalized_request)
+            self.uri_match = uri_params
+            return operation.name
+        except UnknownServiceError:
+            pass
+        except (NotFound, NotImplementedError):
+            pass
+        return None  # type: ignore[return-value]
+
     # TODO: Get rid of all overrides once new routing is working.
     def _get_action(self) -> str:
-        return self.operation.name if self.operation else None  # type: ignore[return-value]
+        action = self.querystring.get("Action")
+        if action and isinstance(action, list):
+            action = action[0]
+        if action:
+            return action
+        # Some services use a header for the action
+        # Headers are case-insensitive. Probably a better way to do this.
+        match = self.headers.get("x-amz-target") or self.headers.get("X-Amz-Target")
+        if match:
+            return match.split(".")[-1]
+        # get action from method and uri
+        return self._get_action_from_method_and_request_uri(self.method, self.raw_path)
 
     def parse_parameters(self, request: Request) -> None:
         service_model = get_service_model(self.boto3_service_name)
@@ -394,7 +410,7 @@ class BaseResponse(ActionAuthenticatorMixin):
                 "headers": request.headers,
                 "body": request.data,
                 "url_path": request.path,
-                "url_params": self.uri_params,
+                "url_params": self.uri_match,
             }
         )
         self.params = cast(Any, parsed)
@@ -407,9 +423,12 @@ class BaseResponse(ActionAuthenticatorMixin):
         return protocol
 
     def serialized(self, action_result: ActionResult) -> TYPE_RESPONSE:
-        assert self.operation is not None
-        service_model = self.operation.service_model
-        operation_model = self.operation
+        service_model = get_service_model(self.boto3_service_name)
+        try:
+            operation_model = service_model.operation_model(self._get_action())
+        except OperationNotFoundError:
+            assert isinstance(action_result.result, Exception)
+            operation_model = OperationModel({}, service_model)
         protocol = self.determine_response_protocol(service_model)
         serializer_cls = get_serializer_class(service_model.service_name, protocol)
         context = ActionContext(service_model, operation_model, serializer_cls, self)
@@ -499,7 +518,7 @@ class BaseResponse(ActionAuthenticatorMixin):
 
     def _get_param(self, param_name: str, if_none: Any = None) -> Any:
         if self.automated_parameter_parsing:
-            params = ChainMap(self.params, self.uri_params)
+            params = ChainMap(self.params, self.uri_match)
             return get_value(params, param_name, default=if_none)
 
         val = self.querystring.get(param_name)
@@ -513,8 +532,13 @@ class BaseResponse(ActionAuthenticatorMixin):
             except (ValueError, KeyError, TypeError):
                 pass
         # try to get path parameter
-        if param_name in self.uri_params:
-            return self.uri_params[param_name]
+        if self.uri_match:
+            try:
+                val = self.uri_match[param_name]
+                return val
+            except KeyError:
+                # do nothing if param is not found
+                pass
         return if_none
 
     def _get_int_param(
