@@ -227,32 +227,47 @@ class DomainDispatcherApplication:
             host = "sesv2"
         elif service == "memorydb":
             host = f"memory-db.{region}.amazonaws.com"
-        elif service in ["bedrock", "bedrock-agentcore"]:
+        elif service == "bedrock-agentcore":
+            from moto.bedrockagentcore.responses import BedrockAgentCoreResponse
+            from moto.bedrockagentcorecontrol.responses import (
+                BedrockAgentCoreControlResponse,
+            )
+
+            service_to_response = {
+                "bedrock-agentcore": BedrockAgentCoreResponse,
+                "bedrock-agentcore-control": BedrockAgentCoreControlResponse,
+            }
+            for service_name, response_class in service_to_response.items():
+                resp = response_class()
+                resp.region = region
+                action = resp._get_action_from_method_and_request_uri(
+                    Request(environ.copy())
+                )
+                if action:
+                    service = service_name
+                    break
+            host = f"{service}.{region}.amazonaws.com"
+        elif service == "bedrock":
             # Multiple Bedrock services use the same signing name (bedrock).
             # This is obviously a hack, but it automatically differentiates
             # between the various Bedrock services without having to manually
             # add every path to `moto/bedrock/urls.py`.
-            from moto.core.routing import NotFound, get_service_router
+            from moto.bedrock.responses import BedrockResponse
+            from moto.bedrockagent.responses import AgentsforBedrockResponse
+            from moto.bedrockruntime.responses import BedrockRuntimeResponse
 
-            signing_key_to_possible_services = {
-                "bedrock": [
-                    "bedrock",
-                    "bedrock-agent",
-                    "bedrock-runtime",
-                ],
-                "bedrock-agentcore": [
-                    "bedrock-agentcore",
-                    "bedrock-agentcore-control",
-                ],
+            service_to_response = {
+                "bedrock": BedrockResponse,
+                "bedrock-agent": AgentsforBedrockResponse,
+                "bedrock-runtime": BedrockRuntimeResponse,
             }
-            for service_name in signing_key_to_possible_services.get(service, []):
-                router = get_service_router(service_name)
-                request = Request(environ.copy())
-                try:
-                    op, _ = router.match(request)
-                except NotFound:
-                    continue
-                else:
+            for service_name, response_class in service_to_response.items():
+                resp = response_class()
+                resp.region = region
+                action = resp._get_action_from_method_and_request_uri(
+                    Request(environ.copy())
+                )
+                if action:
                     service = service_name
                     break
             host = f"{service}.{region}.amazonaws.com"

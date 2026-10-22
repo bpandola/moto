@@ -367,13 +367,11 @@ class BaseResponse(ActionAuthenticatorMixin):
         self.setup_class(request, full_url, headers)
         return self.call_action()
 
-    def _get_action_from_method_and_request_uri(
-        self, method: str, request_uri: str
-    ) -> str:
+    def _get_action_from_method_and_request_uri(self, request: Request) -> str:
         """Used for AWS restJson1 and restXml API protocols"""
         try:
             service_router = get_service_router(self.boto3_service_name)
-            operation, uri_params = service_router.match(self.normalized_request)
+            operation, uri_params = service_router.match(request)
             self.uri_match = uri_params
             return operation.name
         except UnknownServiceError:
@@ -395,7 +393,7 @@ class BaseResponse(ActionAuthenticatorMixin):
         if match:
             return match.split(".")[-1]
         # get action from method and uri
-        return self._get_action_from_method_and_request_uri(self.method, self.raw_path)
+        return self._get_action_from_method_and_request_uri(self.normalized_request)
 
     def parse_parameters(self, request: Request) -> None:
         service_model = get_service_model(self.boto3_service_name)
