@@ -12,13 +12,11 @@ from botocore.utils import parse_timestamp
 from dateutil.tz import tzutc
 from werkzeug.datastructures import Headers, MultiDict
 from werkzeug.exceptions import NotFound
-from werkzeug.routing import Map, Rule
+from werkzeug.routing import Rule
 
 from moto.core.model import OperationModel, ServiceModel
 from moto.core.parse import PROTOCOL_PARSERS
 from moto.core.routing import (
-    GreedyLabelConverter,
-    ImplicitGreedyLabelConverter,
     to_uri_params,
     to_werkzeug_rule_string,
 )
@@ -99,17 +97,11 @@ def _build_query_params(query_string, body, headers):
     return query_params
 
 
-def _match_uri_params(uri_template, url_path):
+def _build_uri_params(uri_template, url_path):
     """Extract uri params the same way the router does (percent-decoded)."""
-    rule_map = Map(
-        [Rule(to_werkzeug_rule_string(uri_template))],
-        strict_slashes=False,
-        merge_slashes=False,
-        converters={
-            GreedyLabelConverter.NAME: GreedyLabelConverter,
-            ImplicitGreedyLabelConverter.NAME: ImplicitGreedyLabelConverter,
-        },
-    )
+    from moto.core.routing import _create_map
+
+    rule_map = _create_map([Rule(to_werkzeug_rule_string(uri_template))])
     adapter = rule_map.bind("localhost")
     try:
         _, arguments = adapter.match(url_path)
@@ -129,7 +121,7 @@ def _create_request_dict(given, serialized):
     body = serialized["body"]
     values = _build_query_params(query_string, serialized["body"], headers)
     uri_template = given.get("http", {}).get("requestUri", "/")
-    uri_params = _match_uri_params(uri_template.split("?", 1)[0], url_path)
+    uri_params = _build_uri_params(uri_template.split("?", 1)[0], url_path)
     request_dict = {
         "method": method,
         "body": body,
