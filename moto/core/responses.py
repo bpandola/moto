@@ -27,7 +27,11 @@ from moto.core.common_types import TYPE_IF_NONE, TYPE_RESPONSE
 from moto.core.exceptions import ServiceException
 from moto.core.model import OperationModel, ServiceModel
 from moto.core.parse import PROTOCOL_PARSERS, XFormedDict
-from moto.core.request import Request, determine_request_protocol
+from moto.core.request import (
+    SMITHY_RPC_V2_PATH_REGEX,
+    Request,
+    determine_request_protocol,
+)
 from moto.core.serialize import (
     ResponseSerializer,
     XFormedAttributePicker,
@@ -44,6 +48,7 @@ from moto.core.utils import (
     utcnow,
 )
 from moto.utilities.aws_headers import gen_amzn_requestid_long
+from moto.utilities.constants import APPLICATION_CBOR
 from moto.utilities.paginator import paginate
 from moto.utilities.utils import get_partition
 
@@ -241,6 +246,9 @@ class BaseResponse(ActionAuthenticatorMixin):
         use_raw_body overrides the class-level default for a single call.
         """
         use_raw_body = self.use_raw_body if use_raw_body is None else use_raw_body
+        if request.mimetype == APPLICATION_CBOR:
+            # Binary body, which must not be decoded or parsed as a querystring
+            use_raw_body = True
         # Only a real WSGI server supplies its own Date header - in every other
         # mode moto is the entire stack and has to supply it itself.  This used
         # to be inferred from the type name, which stopped working once every
@@ -473,13 +481,20 @@ class BaseResponse(ActionAuthenticatorMixin):
         match = self.headers.get("x-amz-target") or self.headers.get("X-Amz-Target")
         if match:
             return match.split(".")[-1]
+        # Smithy RPC v2 protocols put the operation in the path
+        if self.headers.get("smithy-protocol"):
+            match = SMITHY_RPC_V2_PATH_REGEX.search(self.raw_path)
+            if match:
+                return match.group("operation")
         # get action from method and uri
         return self._get_action_from_method_and_request_uri(self.method, self.raw_path)
 
     def parse_parameters(self, request: Request) -> None:
         service_model = get_service_model(self.boto3_service_name)
         operation_model = service_model.operation_model(self._get_action())
-        protocol = determine_request_protocol(service_model, request.content_type)
+        protocol = determine_request_protocol(
+            service_model, request.content_type, request.headers.get("smithy-protocol")
+        )
         parser_cls = PROTOCOL_PARSERS[protocol]
         parser = parser_cls(operation_model, map_type=self.PROTOCOL_PARSER_MAP_TYPE)
         parsed = parser.parse(
@@ -496,7 +511,9 @@ class BaseResponse(ActionAuthenticatorMixin):
 
     def determine_response_protocol(self, service_model: ServiceModel) -> str:
         content_type = self.headers.get("Content-Type", "")
-        protocol = determine_request_protocol(service_model, content_type)
+        protocol = determine_request_protocol(
+            service_model, content_type, self.headers.get("smithy-protocol")
+        )
         if protocol == "query" and self.request_json:
             protocol = "query-json"
         return protocol

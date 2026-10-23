@@ -5,8 +5,11 @@ from datetime import datetime, timezone
 from decimal import Decimal
 
 import pytest
+from botocore.session import get_session
 
 from moto.core import cbor
+from moto.core.model import ServiceModel
+from moto.core.request import determine_request_protocol
 
 
 @pytest.mark.parametrize(
@@ -134,3 +137,35 @@ def test_decode_invalid(encoded: str) -> None:
 def test_encode_unsupported_type() -> None:
     with pytest.raises(cbor.CBOREncodeError):
         cbor.dumps(object())
+
+
+@pytest.fixture(scope="module")
+def cloudwatch_model() -> ServiceModel:
+    model = (
+        get_session()
+        .get_component("data_loader")
+        .load_service_model("cloudwatch", "service-2")
+    )
+    return ServiceModel(model, "cloudwatch")
+
+
+@pytest.mark.parametrize(
+    "content_type,smithy_protocol,expected",
+    [
+        ("application/cbor", "rpc-v2-cbor", "smithy-rpc-v2-cbor"),
+        # Operations without input have no body, and therefore no Content-Type
+        (None, "rpc-v2-cbor", "smithy-rpc-v2-cbor"),
+        ("application/x-amz-json-1.0", None, "json"),
+        ("application/x-www-form-urlencoded; charset=utf-8", None, "query"),
+    ],
+)
+def test_determine_request_protocol(
+    cloudwatch_model: ServiceModel,
+    content_type: str | None,
+    smithy_protocol: str | None,
+    expected: str,
+) -> None:
+    protocol = determine_request_protocol(
+        cloudwatch_model, content_type, smithy_protocol
+    )
+    assert protocol == expected

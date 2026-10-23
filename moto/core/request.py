@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from collections.abc import Iterator
 from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import urlparse
@@ -19,7 +20,7 @@ from werkzeug.local import LocalProxy
 from werkzeug.wrappers import Request as WerkzeugRequest
 
 from moto.settings import MAX_FORM_MEMORY_SIZE
-from moto.utilities.constants import APPLICATION_JSON, JSON_TYPES
+from moto.utilities.constants import APPLICATION_CBOR, APPLICATION_JSON, JSON_TYPES
 
 if TYPE_CHECKING:
     from moto.core.model import ServiceModel
@@ -153,9 +154,25 @@ def normalize_request(
     raise TypeError(f"Cannot normalize request of type {type(request).__name__}")
 
 
+SMITHY_PROTOCOL_RPC_V2_CBOR = "rpc-v2-cbor"
+# https://smithy.io/2.0/additional-specs/protocols/smithy-rpc-v2-cbor.html#requests
+# Only the last four path segments are significant; anything before them is a prefix.
+SMITHY_RPC_V2_PATH_REGEX = re.compile(
+    r"/service/(?P<service>[^/]+)/operation/(?P<operation>[^/]+)$"
+)
+
+
 def determine_request_protocol(
-    service_model: ServiceModel, content_type: str | None = None
+    service_model: ServiceModel,
+    content_type: str | None = None,
+    smithy_protocol: str | None = None,
 ) -> str:
+    """
+    smithy_protocol is the value of the Smithy-Protocol header, which is
+    required for the Smithy RPC v2 protocols.  Operations without input
+    are sent without a body or Content-Type, so the header is the only
+    way to recognize them.
+    """
     protocol = str(service_model.protocol)
     # Short circuit protocol detection for S3 because the ContentType header
     # is often set based on the MIME type of the object data being uploaded.
@@ -163,7 +180,12 @@ def determine_request_protocol(
         return protocol
     supported_protocols = service_model.metadata.get("protocols", [protocol])
     content_type = content_type if content_type is not None else ""
-    if content_type in JSON_TYPES:
+    if (
+        smithy_protocol == SMITHY_PROTOCOL_RPC_V2_CBOR
+        or content_type == APPLICATION_CBOR
+    ):
+        protocol = "smithy-rpc-v2-cbor"
+    elif content_type in JSON_TYPES:
         protocol = "rest-json" if content_type == APPLICATION_JSON else "json"
     elif content_type.startswith("application/x-www-form-urlencoded"):
         protocol = "ec2" if "ec2" in supported_protocols else "query"
