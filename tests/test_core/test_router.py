@@ -1,8 +1,13 @@
 import pytest
 from werkzeug.exceptions import NotFound
 
+from moto.core.model import ServiceModel
 from moto.core.request import Request
-from moto.core.routing import ServiceOperationRouter
+from moto.core.routing import (
+    ActionConstraintContext,
+    RequiredHeader,
+    ServiceOperationRouter,
+)
 from moto.core.utils import get_service_model
 from moto.s3control.responses import S3ControlResponse
 
@@ -322,3 +327,127 @@ def test_s3_virtual_host_dotted_bucket_name(
     op, args = router.match(Request.from_primitives(method, url, {}))
     assert op.name == expected_op
     assert args == expected_args
+
+
+@pytest.mark.parametrize(
+    "url,expected_op",
+    [
+        pytest.param("/bucket/key?uploadId=abc", "ListParts", id="required arg"),
+        pytest.param("/bucket/key", "GetObject", id="missing required arg"),
+    ],
+)
+def test_rest_required_query_arg_constraint(url: str, expected_op: str) -> None:
+    router = ServiceOperationRouter(get_service_model("s3"))
+    op, _ = router.match(Request.from_primitives("GET", url, {}))
+    assert op.name == expected_op
+
+
+def test_rest_leading_slash_of_greedy_first_label_is_preserved() -> None:
+    router = ServiceOperationRouter(get_service_model("mediastore-data"))
+    op, args = router.match(
+        Request.from_primitives("GET", "http://localhost:5000//folder/file", {})
+    )
+    assert op.name == "GetObject"
+    assert args == {"Path": "/folder/file"}
+
+
+def test_rest_method_not_allowed_is_not_found() -> None:
+    router = ServiceOperationRouter(get_service_model("mq"))
+    req = Request.from_primitives("PATCH", "/v1/brokers/broker-id/users/username", {})
+    with pytest.raises(NotFound):
+        router.match(req)
+
+
+def test_protocol_without_router_is_not_found() -> None:
+    router = ServiceOperationRouter(get_service_model("cloudwatch"))
+    headers = {"Content-Type": "application/cbor", "Smithy-Protocol": "rpc-v2-cbor"}
+    req = Request.from_primitives(
+        "POST", "/service/GraniteServiceVersion20100801/operation/ListMetrics", headers
+    )
+    with pytest.raises(NotFound):
+        router.match(req)
+
+
+def _rest_json_model(operations: dict[str, dict]) -> ServiceModel:
+    return ServiceModel(
+        {
+            "metadata": {
+                "protocol": "rest-json",
+                "serviceId": "Test",
+                "endpointPrefix": "test",
+            },
+            "operations": {
+                name: {"name": name, "http": op["http"], "input": {"shape": name}}
+                for name, op in operations.items()
+            },
+            "shapes": {
+                **{
+                    name: {
+                        "type": "structure",
+                        "required": list(op["members"]),
+                        "members": op["members"],
+                    }
+                    for name, op in operations.items()
+                },
+                "String": {"type": "string"},
+            },
+        },
+        service_name="test",
+    )
+
+
+def test_rest_query_literal_that_is_also_a_required_member() -> None:
+    type_member = {"shape": "String", "location": "querystring", "locationName": "type"}
+    model = _rest_json_model(
+        {
+            "ListFoos": {
+                "http": {"method": "GET", "requestUri": "/things?type=foo"},
+                "members": {"Type": type_member},
+            },
+            "ListThings": {
+                "http": {"method": "GET", "requestUri": "/things"},
+                "members": {"Type": type_member},
+            },
+        }
+    )
+    router = ServiceOperationRouter(model)
+    # The literal value constrains ListFoos, rather than just requiring the arg.
+    op, _ = router.match(Request.from_primitives("GET", "/things?type=bar", {}))
+    assert op.name == "ListThings"
+    op, _ = router.match(Request.from_primitives("GET", "/things?type=foo", {}))
+    assert op.name == "ListFoos"
+
+
+def test_rest_no_candidate_accepts_request_is_not_found() -> None:
+    model = _rest_json_model(
+        {
+            "GetThing": {
+                "http": {"method": "GET", "requestUri": "/things"},
+                "members": {
+                    "Id": {
+                        "shape": "String",
+                        "location": "header",
+                        "locationName": "x-id",
+                    }
+                },
+            },
+        }
+    )
+    router = ServiceOperationRouter(model)
+    op, _ = router.match(Request.from_primitives("GET", "/things", {"x-id": "1"}))
+    assert op.name == "GetThing"
+    with pytest.raises(NotFound):
+        router.match(Request.from_primitives("GET", "/things", {}))
+
+
+@pytest.mark.parametrize(
+    "headers,accepted",
+    [
+        pytest.param({"x-mode": "fast"}, True, id="matching value"),
+        pytest.param({"x-mode": "slow"}, False, id="different value"),
+        pytest.param({}, False, id="missing header"),
+    ],
+)
+def test_required_header_with_value(headers: dict[str, str], accepted: bool) -> None:
+    context = ActionConstraintContext(Request.from_primitives("GET", "/", headers))
+    assert RequiredHeader("x-mode", "fast").accept(context) is accepted
