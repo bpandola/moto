@@ -386,10 +386,10 @@ class BaseRestParser(RequestParser):
 
     def _parse_host_labels(self, request_dict, member_shapes, final_parsed):
         # The router includes host label values (e.g. AccountId from
-        # {AccountId}.s3-control.<region>.amazonaws.com) in the url params when the
-        # request host has them.  They take precedence over the member's other
-        # location (e.g. the x-amz-account-id header), which is used as a fallback
-        # when the host doesn't have them (e.g. localhost in server mode).
+        # {AccountId}.s3-control.<region>.amazonaws.com) in `url_params` when the
+        # request host has them.  They take precedence over an alternate location
+        # (e.g. the x-amz-account-id header) when present, but fallback to the
+        # alternate location if the host doesn't have them (e.g. localhost/server mode).
         url_params = request_dict["url_params"]
         for name, member_shape in member_shapes.items():
             if member_shape.serialization.get("hostLabel") and name in url_params:
@@ -442,7 +442,6 @@ class BaseRestParser(RequestParser):
             elif location == "uri":
                 member_name = member_shape.serialization.get("name", name)
                 uri_params = response["url_params"]
-                # Already percent-decoded by the router.
                 value = uri_params.get(member_name)
                 final_parsed[name] = self._parse_shape(member_shape, value)
             elif location == "querystring":

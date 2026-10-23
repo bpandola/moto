@@ -1,17 +1,15 @@
-# Routes a request to the operation it targets, using a ProtocolRouter for the
-# request's protocol (see PROTOCOL_ROUTERS and SERVICE_SPECIFIC_ROUTERS).
-#
-# None of the Werkzeug routing should leak outside of this module: whatever the
-# protocol, the only output is the operation and its uri params (or NotFound).
-#
-# If Rule subclasses ever need to be copied (e.g. by Map.bind_to_environ), see here
-# for how to work with rule.empty() when passing extra args to a Rule subclass:
-# https://github.com/pallets/werkzeug/blob/11c9fe9272e281b90abe89dc59f86e44ee453bab/src/werkzeug/routing/rules.py#L528
-#
-# TODO:
-# - Protocols without a router (e.g. smithy-rpc-v2-cbor) aren't routed yet.
-# - Now that operations are routed from the service models, maybe we keep the
-#   url_bases in urls.py but get rid of all the url_paths?
+"""
+Request routers for the various AWS protocol specifications.
+
+Matches an incoming Request to its target Operation, utilizing
+Werkzeug's url routing along with information contained in the
+Botocore service definitions.
+
+Successful matches return a `moto.core.model.OperationModel`
+along with any uri parameters.
+
+Unsuccessful matches raise NotFound
+"""
 
 from __future__ import annotations
 
@@ -54,7 +52,7 @@ class GreedyLabelConverter(BaseConverter):
 
 
 class ImplicitGreedyLabelConverter(GreedyLabelConverter):
-    """Converter for a last label that isn't modeled as greedy (see `to_werkzeug_rule_string`).
+    """Converter for a final label that isn't modeled as greedy (see `to_werkzeug_rule_string`).
 
     Unlike explicit greedy labels (e.g. an S3 key like `folder/`), these labels
     can't end in a slash, so e.g. `PUT /bucket/` still matches `/{Bucket}`
@@ -113,9 +111,9 @@ class ActionConstraint:
 
 
 class RequiredArg(ActionConstraint):
-    """Requires a query string argument (REST protocols).
+    """Requires a particular named query string argument to be present in the Request.
 
-    Only the query string is checked, so matching never parses the request body.
+    Can be constrained by name or both name and value.
     """
 
     def __init__(self, name: str, value: str | None = None):
@@ -132,6 +130,11 @@ class RequiredArg(ActionConstraint):
 
 
 class RequiredHeader(ActionConstraint):
+    """Requires a particular named header to be present in the Request.
+
+    Can be constrained by name or both name and value.
+    """
+
     def __init__(self, name: str, value: str | None = None):
         self.name = name
         self.value = value
@@ -181,12 +184,13 @@ class ActionSelector:
 
 class SmithyRule(Rule):
     """
-    A Werkzeug Rule extension which initially acts as a normal rule (i.e. matches a path and method).
+    A rule extension that matches a path and method (as usual)
+    with additional constraints (query string or header values).
 
-    This rule matches if one of its sub-rules _might_ match.
-    It cannot be assumed that one of the fine-grained rules matches, just because this rule initially matches.
-    If this rule matches, the caller _must_ call `match_request` in order to find the actual fine-grained matching rule.
-    The result of `match_request` is only meaningful if this wrapping rule also matches.
+    This is required to disambiguate operations that share the same path:
+
+    S3 ListObjects:   "/{Bucket}"
+    S3 ListObjectsV2: "/{Bucket}?list-type=2"
     """
 
     def __init__(
@@ -269,7 +273,7 @@ def get_host_labels(operation: OperationModel, host: str) -> dict[str, str]:
         "{AccountId}." + "123456789012.s3-control.us-east-1.amazonaws.com" -> {"AccountId": "123456789012"}
         "{AccountId}." + "localhost:5000" -> {}
     """
-    # botocore's stubs type `endpoint` as a str, but it's the endpoint trait dict.
+    # botocore's stubs type `endpoint` as a str, but it's the endpoint trait dict...
     endpoint = cast(dict[str, str], operation.endpoint or {})
     host_prefix = endpoint.get("hostPrefix", "")
     endpoint_prefix = operation.service_model.endpoint_prefix
@@ -282,9 +286,7 @@ def get_host_labels(operation: OperationModel, host: str) -> dict[str, str]:
 def _create_map(rules: list[Rule]) -> Map:
     return Map(
         rules=rules,
-        # don't be strict about trailing slashes when matching
         strict_slashes=False,
-        # we can't really use werkzeug's merge-slashes since it uses HTTP redirects to solve it
         merge_slashes=False,
         converters={
             GreedyLabelConverter.NAME: GreedyLabelConverter,
@@ -345,9 +347,8 @@ class ProtocolRouter:
 class RPCRouter(ProtocolRouter):
     """Base router for the Query/EC2 and JSON protocols.
 
-    The request path doesn't identify the operation in these protocols, but it can
-    identify a resource.  Subclasses can set PATH_TEMPLATES to extract those
-    identifiers into the params.
+    The request path doesn't identify the operation in these protocols, but it can identify a resource.
+    Subclasses can set PATH_TEMPLATES to extract those identifiers into the params.
     """
 
     PATH_TEMPLATES: list[str] = []
@@ -383,7 +384,8 @@ class QueryRouter(RPCRouter):
         }
 
     def _match(self, request: Request) -> tuple[OperationModel | None, dict[str, Any]]:
-        operation = self._operations_by_name.get(request.values.get("Action", ""))
+        requested_action = request.values.get("Action", "")
+        operation = self._operations_by_name.get(requested_action)
         return operation, self._get_path_params(request)
 
 
@@ -525,7 +527,7 @@ class ServiceOperationRouter:
         """
         Matches the given request to the operation it targets (or raises an exception if no operation matches).
 
-        :param request: The request of which the targeting operation needs to be found
+        :param request: a `moto.core.models.Request` object
         :return: A tuple with the matched operation and the (already parsed) path params
         :raises: Werkzeug's NotFound exception in case the given request does not match any operation
         """
@@ -536,7 +538,6 @@ class ServiceOperationRouter:
         if protocol not in self._routers:
             router_cls = get_router_class(self._service_model.service_name, protocol)
             if router_cls is None:
-                # e.g. smithy-rpc-v2-cbor, which isn't supported yet.
                 raise NotFound()
             self._routers[protocol] = router_cls(self._service_model)
         return self._routers[protocol]
