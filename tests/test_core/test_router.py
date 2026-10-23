@@ -1,3 +1,5 @@
+from typing import Any
+
 import pytest
 from werkzeug.exceptions import NotFound
 
@@ -7,103 +9,112 @@ from moto.core.routing import (
     ActionConstraintContext,
     RequiredHeader,
     ServiceOperationRouter,
+    get_service_router,
 )
-from moto.core.utils import get_service_model
 from moto.s3control.responses import S3ControlResponse
 
 
-def test_op_router() -> None:
-    model = get_service_model("mq")
-    router = ServiceOperationRouter(model)
-    req = Request.from_primitives(
-        "POST", "/v1/brokers/broker-id-test/users/username-test", {}
-    )
+@pytest.mark.parametrize(
+    "service,method,url,expected_op,expected_args",
+    [
+        pytest.param(
+            "mq",
+            "POST",
+            "/v1/brokers/broker-id-test/users/username-test",
+            "CreateUser",
+            {"broker-id": "broker-id-test", "username": "username-test"},
+            id="mq",
+        ),
+        pytest.param(
+            "route53",
+            "POST",
+            "https://route53.us-east-1.amazon.com/2013-04-01/keysigningkey/HostedZoneId/Name/activate",
+            "ActivateKeySigningKey",
+            {"HostedZoneId": "HostedZoneId", "Name": "Name"},
+            id="route53",
+        ),
+    ],
+)
+def test_rest_uri_params(
+    service: str,
+    method: str,
+    url: str,
+    expected_op: str,
+    expected_args: dict[str, str],
+) -> None:
+    router = get_service_router(service)
+    op, args = router.match(Request.from_primitives(method, url, {}))
+    assert op.name == expected_op
+    assert args == expected_args
+
+
+@pytest.mark.parametrize(
+    "url,expected_op,expected_bucket",
+    [
+        pytest.param("/my-bucket-name", "ListObjects", "my-bucket-name", id="path"),
+        pytest.param(
+            "/my-bucket-name?list-type=2",
+            "ListObjectsV2",
+            "my-bucket-name",
+            id="path with query arg",
+        ),
+        pytest.param(
+            "https://my-bucket-name.localhost/?list-type=2",
+            "ListObjectsV2",
+            "my-bucket-name",
+            id="host prefix with query arg",
+        ),
+        pytest.param(
+            "https://foobaz.localhost:5000/",
+            "ListObjects",
+            "foobaz",
+            id="localhost with port",
+        ),
+        pytest.param(
+            "https://b7525d4a-4973-4207-9f07-a73b4ec3ff65.s3.amazonaws.com/?tagging",
+            "GetBucketTagging",
+            "b7525d4a-4973-4207-9f07-a73b4ec3ff65",
+            id="aws host",
+        ),
+    ],
+)
+def test_s3_bucket_routing(url: str, expected_op: str, expected_bucket: str) -> None:
+    router = get_service_router("s3")
+    op, args = router.match(Request.from_primitives("GET", url, {}))
+    assert op.name == expected_op
+    assert args == {"Bucket": expected_bucket}
+
+
+@pytest.mark.parametrize(
+    "url,expected_op,expected_args",
+    [
+        pytest.param(
+            "https://123456789012.s3-control.us-east-1.amazonaws.com/v20180820/tags/arn%3Aaws%3As3%3A%3A%3Abd054ad3-6778-4f25-91a5-c7c84db350e2",
+            "ListTagsForResource",
+            # AccountId comes from the host prefix, when the host has it.
+            {
+                "resourceArn": "arn:aws:s3:::bd054ad3-6778-4f25-91a5-c7c84db350e2",
+                "AccountId": "123456789012",
+            },
+            id="aws host",
+        ),
+        pytest.param(
+            "http://localhost:5000/v20180820/accesspoint/my-access-point",
+            "GetAccessPoint",
+            # No host prefix, so no AccountId (the parser falls back to the header).
+            {"name": "my-access-point"},
+            id="server mode",
+        ),
+    ],
+)
+def test_s3_control_routing(
+    url: str, expected_op: str, expected_args: dict[str, str]
+) -> None:
+    router = get_service_router("s3control")
+    req = Request.from_primitives("GET", url, {"x-amz-account-id": "0123456789012"})
     op, args = router.match(req)
-
-    assert op.name == "CreateUser"
-    assert args["broker-id"] == "broker-id-test"
-    assert args["username"] == "username-test"
-
-
-def test_same_path_different_query_args() -> None:
-    model = get_service_model("s3")
-    router = ServiceOperationRouter(model)
-    req = Request.from_primitives("GET", "/my-bucket-name", {})
-    op, args = router.match(req)
-    assert op.name == "ListObjects"
-    assert args["Bucket"] == "my-bucket-name"
-    req = Request.from_primitives("GET", "/my-bucket-name?list-type=2", {})
-    op, args = router.match(req)
-    assert op.name == "ListObjectsV2"
-    assert args["Bucket"] == "my-bucket-name"
-
-
-def test_s3_router() -> None:
-    model = get_service_model("s3")
-    router = ServiceOperationRouter(model)
-    req = Request.from_primitives("GET", "/my-bucket-name?list-type=2", {})
-    # Alternative url
-    # req = Request.from_primitives(method="GET", base_url="https://my-bucket-name.localhost", path="/?list-type=2")
-    op, args = router.match(req)
-
-    assert op.name == "ListObjectsV2"
-    assert args["Bucket"] == "my-bucket-name"
-
-
-def test_s3_localhost_router() -> None:
-    model = get_service_model("s3")
-    router = ServiceOperationRouter(model)
-    req = Request.from_primitives("GET", "https://foobaz.localhost:5000/", {})
-    op, args = router.match(req)
-
-    assert op.name == "ListObjects"
-    assert args["Bucket"] == "foobaz"
-
-
-def test_s3_full_url() -> None:
-    model = get_service_model("s3")
-    router = ServiceOperationRouter(model)
-    req = Request.from_primitives(
-        "GET",
-        "https://b7525d4a-4973-4207-9f07-a73b4ec3ff65.s3.amazonaws.com/?tagging",
-        {},
-    )
-    op, args = router.match(req)
-
-    assert op.name == "GetBucketTagging"
-    assert args["Bucket"] == "b7525d4a-4973-4207-9f07-a73b4ec3ff65"
-
-
-def test_s3_control_full_url() -> None:
-    model = get_service_model("s3control")
-    router = ServiceOperationRouter(model)
-    req = Request.from_primitives(
-        "GET",
-        "https://123456789012.s3-control.us-east-1.amazonaws.com/v20180820/tags/arn%3Aaws%3As3%3A%3A%3Abd054ad3-6778-4f25-91a5-c7c84db350e2",
-        {"x-amz-account-id": "0123456789012"},
-    )
-    op, args = router.match(req)
-
-    assert op.name == "ListTagsForResource"
-    # AccountId comes from the host prefix, when the host has it.
-    assert args == {
-        "resourceArn": "arn:aws:s3:::bd054ad3-6778-4f25-91a5-c7c84db350e2",
-        "AccountId": "123456789012",
-    }
-
-
-def test_s3_control_server_mode_url() -> None:
-    router = ServiceOperationRouter(get_service_model("s3control"))
-    req = Request.from_primitives(
-        "GET",
-        "http://localhost:5000/v20180820/accesspoint/my-access-point",
-        {"x-amz-account-id": "123456789012"},
-    )
-    op, args = router.match(req)
-
-    assert op.name == "GetAccessPoint"
-    # No host prefix, so no AccountId (the parser falls back to the header).
-    assert args == {"name": "my-access-point"}
+    assert op.name == expected_op
+    assert args == expected_args
 
 
 @pytest.mark.parametrize(
@@ -129,45 +140,37 @@ def test_s3_control_account_id_host_label(url: str, expected_account_id: str) ->
     assert response._get_param("Name") == "my-access-point"
 
 
-def test_op_args() -> None:
-    model = get_service_model("route53")
-    router = ServiceOperationRouter(model)
-    req = Request.from_primitives(
-        "POST",
-        "https://route53.us-east-1.amazon.com/2013-04-01/keysigningkey/HostedZoneId/Name/activate",
-        {},
-    )
-    op, args = router.match(req)
-    assert op.name == "ActivateKeySigningKey"
-    assert args["HostedZoneId"] == "HostedZoneId"
-    assert args["Name"] == "Name"
-
-
 def test_s3_key_trailing_slash_is_preserved() -> None:
-    router = ServiceOperationRouter(get_service_model("s3"))
+    router = get_service_router("s3")
     req = Request.from_primitives("PUT", "https://s3.amazonaws.com/bucket/dir/", {})
     op, args = router.match(req)
     assert op.name == "PutObject"
     assert args["Key"] == "dir/"
 
 
-def test_s3_bucket_trailing_slash_is_optional() -> None:
-    router = ServiceOperationRouter(get_service_model("s3"))
-    for url in ["https://s3.amazonaws.com/bucket", "https://s3.amazonaws.com/bucket/"]:
-        op, args = router.match(Request.from_primitives("PUT", url, {}))
-        assert op.name == "CreateBucket"
-        assert args == {"Bucket": "bucket"}
+@pytest.mark.parametrize(
+    "url",
+    [
+        pytest.param("https://s3.amazonaws.com/bucket", id="without slash"),
+        pytest.param("https://s3.amazonaws.com/bucket/", id="with slash"),
+    ],
+)
+def test_s3_bucket_trailing_slash_is_optional(url: str) -> None:
+    router = get_service_router("s3")
+    op, args = router.match(Request.from_primitives("PUT", url, {}))
+    assert op.name == "CreateBucket"
+    assert args == {"Bucket": "bucket"}
 
 
 def test_uri_params_are_decoded_once() -> None:
-    router = ServiceOperationRouter(get_service_model("s3"))
+    router = get_service_router("s3")
     req = Request.from_primitives("PUT", "https://s3.amazonaws.com/bucket/a%2525b", {})
     _, args = router.match(req)
     assert args["Key"] == "a%25b"
 
 
 def test_last_label_is_implicitly_greedy() -> None:
-    router = ServiceOperationRouter(get_service_model("bedrock-agentcore-control"))
+    router = get_service_router("bedrock-agentcore-control")
     arn = "arn:aws:bedrock-agentcore:us-east-1:123456789012:runtime/abc"
     req = Request.from_primitives("GET", f"https://localhost/tags/{arn}", {})
     op, args = router.match(req)
@@ -176,7 +179,7 @@ def test_last_label_is_implicitly_greedy() -> None:
 
 
 def test_implicitly_greedy_label_excludes_trailing_slash() -> None:
-    router = ServiceOperationRouter(get_service_model("s3"))
+    router = get_service_router("s3")
     req = Request.from_primitives("GET", "https://s3.amazonaws.com/bucket/?tagging", {})
     op, args = router.match(req)
     assert op.name == "GetBucketTagging"
@@ -184,7 +187,7 @@ def test_implicitly_greedy_label_excludes_trailing_slash() -> None:
 
 
 def test_s3_virtual_host_key_with_leading_slash() -> None:
-    router = ServiceOperationRouter(get_service_model("s3"))
+    router = get_service_router("s3")
     req = Request.from_primitives("PUT", "https://bucket.s3.amazonaws.com//key", {})
     op, args = router.match(req)
     assert op.name == "PutObject"
@@ -192,7 +195,7 @@ def test_s3_virtual_host_key_with_leading_slash() -> None:
 
 
 def test_rest_query_arg_constraints_ignore_form_body() -> None:
-    router = ServiceOperationRouter(get_service_model("s3"))
+    router = get_service_router("s3")
     body = b"delete="
     req = Request.from_primitives(
         "POST",
@@ -233,7 +236,7 @@ def test_rest_query_arg_constraints_ignore_form_body() -> None:
 def test_query_protocol_routes_by_action(
     method: str, url: str, body: str | None
 ) -> None:
-    router = ServiceOperationRouter(get_service_model("sts"))
+    router = get_service_router("sts")
     headers = {"Content-Type": "application/x-www-form-urlencoded"}
     op, args = router.match(Request.from_primitives(method, url, headers, body))
     assert op.name == "GetCallerIdentity"
@@ -269,7 +272,7 @@ def test_query_protocol_routes_by_action(
 def test_query_and_json_protocol_not_found(
     service: str, headers: dict[str, str], body: str | bytes
 ) -> None:
-    router = ServiceOperationRouter(get_service_model(service))
+    router = get_service_router(service)
     req = Request.from_primitives("POST", "https://localhost:5000/", headers, body)
     with pytest.raises(NotFound):
         router.match(req)
@@ -294,7 +297,7 @@ def test_query_and_json_protocol_not_found(
     ],
 )
 def test_sqs_queue_url_path_params(headers: dict[str, str], body: str | bytes) -> None:
-    router = ServiceOperationRouter(get_service_model("sqs"))
+    router = get_service_router("sqs")
     url = "https://sqs.us-east-1.amazonaws.com/123456789012/my-queue"
     op, args = router.match(Request.from_primitives("POST", url, headers, body))
     assert op.name == "SendMessage"
@@ -323,7 +326,7 @@ def test_sqs_queue_url_path_params(headers: dict[str, str], body: str | bytes) -
 def test_s3_virtual_host_dotted_bucket_name(
     method: str, url: str, expected_op: str, expected_args: dict[str, str]
 ) -> None:
-    router = ServiceOperationRouter(get_service_model("s3"))
+    router = get_service_router("s3")
     op, args = router.match(Request.from_primitives(method, url, {}))
     assert op.name == expected_op
     assert args == expected_args
@@ -337,13 +340,13 @@ def test_s3_virtual_host_dotted_bucket_name(
     ],
 )
 def test_rest_required_query_arg_constraint(url: str, expected_op: str) -> None:
-    router = ServiceOperationRouter(get_service_model("s3"))
+    router = get_service_router("s3")
     op, _ = router.match(Request.from_primitives("GET", url, {}))
     assert op.name == expected_op
 
 
 def test_rest_leading_slash_of_greedy_first_label_is_preserved() -> None:
-    router = ServiceOperationRouter(get_service_model("mediastore-data"))
+    router = get_service_router("mediastore-data")
     op, args = router.match(
         Request.from_primitives("GET", "http://localhost:5000//folder/file", {})
     )
@@ -352,14 +355,14 @@ def test_rest_leading_slash_of_greedy_first_label_is_preserved() -> None:
 
 
 def test_rest_method_not_allowed_is_not_found() -> None:
-    router = ServiceOperationRouter(get_service_model("mq"))
+    router = get_service_router("mq")
     req = Request.from_primitives("PATCH", "/v1/brokers/broker-id/users/username", {})
     with pytest.raises(NotFound):
         router.match(req)
 
 
 def test_protocol_without_router_is_not_found() -> None:
-    router = ServiceOperationRouter(get_service_model("cloudwatch"))
+    router = get_service_router("cloudwatch")
     headers = {"Content-Type": "application/cbor", "Smithy-Protocol": "rpc-v2-cbor"}
     req = Request.from_primitives(
         "POST", "/service/GraniteServiceVersion20100801/operation/ListMetrics", headers
@@ -368,7 +371,7 @@ def test_protocol_without_router_is_not_found() -> None:
         router.match(req)
 
 
-def _rest_json_model(operations: dict[str, dict]) -> ServiceModel:
+def _rest_json_model(operations: dict[str, dict[str, Any]]) -> ServiceModel:
     return ServiceModel(
         {
             "metadata": {
