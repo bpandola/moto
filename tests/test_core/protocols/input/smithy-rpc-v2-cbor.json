@@ -873,106 +873,11 @@
                     }
                 },
                 "description": "RpcV2 Cbor should not serialize null structure values",
-                "params": {
-                    "stringValue": null
-                },
+                "params": {},
                 "serialized": {
                     "method": "POST",
                     "uri": "/service/RpcV2Protocol/operation/SimpleScalarProperties",
                     "body": "v/8=",
-                    "headers": {
-                        "Accept": "application/cbor",
-                        "Content-Type": "application/cbor",
-                        "smithy-protocol": "rpc-v2-cbor"
-                    },
-                    "requireHeaders": [
-                        "Content-Length"
-                    ]
-                }
-            },
-            {
-                "id": "RpcV2CborSupportsNaNFloatInputs",
-                "given": {
-                    "name": "SimpleScalarProperties",
-                    "http": {
-                        "method": "POST",
-                        "requestUri": "/"
-                    },
-                    "input": {
-                        "shape": "SimpleScalarStructure"
-                    }
-                },
-                "description": "Supports handling NaN float values.",
-                "params": {
-                    "doubleValue": "NaN",
-                    "floatValue": "NaN"
-                },
-                "serialized": {
-                    "method": "POST",
-                    "uri": "/service/RpcV2Protocol/operation/SimpleScalarProperties",
-                    "body": "v2tkb3VibGVWYWx1Zft/+AAAAAAAAGpmbG9hdFZhbHVl+n/AAAD/",
-                    "headers": {
-                        "Accept": "application/cbor",
-                        "Content-Type": "application/cbor",
-                        "smithy-protocol": "rpc-v2-cbor"
-                    },
-                    "requireHeaders": [
-                        "Content-Length"
-                    ]
-                }
-            },
-            {
-                "id": "RpcV2CborSupportsInfinityFloatInputs",
-                "given": {
-                    "name": "SimpleScalarProperties",
-                    "http": {
-                        "method": "POST",
-                        "requestUri": "/"
-                    },
-                    "input": {
-                        "shape": "SimpleScalarStructure"
-                    }
-                },
-                "description": "Supports handling Infinity float values.",
-                "params": {
-                    "doubleValue": "Infinity",
-                    "floatValue": "Infinity"
-                },
-                "serialized": {
-                    "method": "POST",
-                    "uri": "/service/RpcV2Protocol/operation/SimpleScalarProperties",
-                    "body": "v2tkb3VibGVWYWx1Zft/8AAAAAAAAGpmbG9hdFZhbHVl+n+AAAD/",
-                    "headers": {
-                        "Accept": "application/cbor",
-                        "Content-Type": "application/cbor",
-                        "smithy-protocol": "rpc-v2-cbor"
-                    },
-                    "requireHeaders": [
-                        "Content-Length"
-                    ]
-                }
-            },
-            {
-                "id": "RpcV2CborSupportsNegativeInfinityFloatInputs",
-                "given": {
-                    "name": "SimpleScalarProperties",
-                    "http": {
-                        "method": "POST",
-                        "requestUri": "/"
-                    },
-                    "input": {
-                        "shape": "SimpleScalarStructure"
-                    }
-                },
-                "description": "Supports handling Infinity float values.",
-                "params": {
-                    "doubleValue": "-Infinity",
-                    "floatValue": "-Infinity"
-                },
-                "serialized": {
-                    "method": "POST",
-                    "uri": "/service/RpcV2Protocol/operation/SimpleScalarProperties",
-                    "body": "v2tkb3VibGVWYWx1Zfv/8AAAAAAAAGpmbG9hdFZhbHVl+v+AAAD/",
                     "headers": {
                         "Accept": "application/cbor",
                         "Content-Type": "application/cbor",

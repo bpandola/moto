@@ -2,7 +2,6 @@
 import base64
 import copy
 import json
-import math
 import os
 import re
 from calendar import timegm
@@ -10,7 +9,6 @@ from enum import Enum
 from urllib.parse import parse_qs, urlparse
 
 import pytest
-from botocore.parsers import RpcV2CBORParser as BotocoreRpcV2CBORParser
 from botocore.utils import parse_timestamp
 from dateutil.tz import tzutc
 from werkzeug.datastructures import Headers, MultiDict
@@ -86,41 +84,6 @@ def _compliance_blob_parser_for(protocol):
     return _compliance_blob_parser
 
 
-def _special_floats_to_str(value):
-    if isinstance(value, dict):
-        return {k: _special_floats_to_str(v) for k, v in value.items()}
-    if isinstance(value, list):
-        return [_special_floats_to_str(v) for v in value]
-    if isinstance(value, float) and math.isnan(value):
-        return "NaN"
-    if isinstance(value, float) and math.isinf(value):
-        return "Infinity" if value > 0 else "-Infinity"
-    return value
-
-
-def _bytes_to_str(value):
-    if isinstance(value, dict):
-        return {k: _bytes_to_str(v) for k, v in value.items()}
-    if isinstance(value, list):
-        return [_bytes_to_str(v) for v in value]
-    if isinstance(value, bytes):
-        return value.decode("utf-8")
-    return value
-
-
-def _error_shape_for(operation_model, error_code):
-    for error_shape in operation_model.error_shapes:
-        if error_shape.error_code == error_code:
-            return error_shape
-    raise AssertionError(f"No error shape found for {error_code}")
-
-
-def _remove_none_values(value):
-    if isinstance(value, dict):
-        return {k: _remove_none_values(v) for k, v in value.items() if v is not None}
-    return value
-
-
 def _compliance_timestamp_parser(value):
     datetime = parse_timestamp(value)
     datetime = datetime.astimezone(tzutc())
@@ -183,13 +146,7 @@ def test_input_compliance(json_description: dict, case: dict, protocol: str):
         serialized = {**serialized, "body": base64.b64decode(serialized["body"])}
     request_dict = _create_request_dict(case["given"], serialized)
     parsed = parser.parse(request_dict)
-    expected = case.get("params", {})
-    if protocol == CBOR_PROTOCOL:
-        # The CBOR test cases are written from the client's perspective, so null
-        # parameters are never sent, and NaN/Infinity are given as strings.
-        parsed = _special_floats_to_str(parsed)
-        expected = _remove_none_values(expected)
-    assert parsed == expected
+    assert parsed == case.get("params", {})
 
 
 @pytest.mark.parametrize(
@@ -203,10 +160,10 @@ def test_output_compliance(json_description: dict, case: dict, protocol):
     serializer = protocol_serializer(operation_model)
     result = case["result"] if "error" not in case else _create_exception(case)
     resp = serializer.serialize(result)  # _to_response(result)
+    expected_body = case["response"]["body"]
     if protocol == CBOR_PROTOCOL:
-        _assert_cbor_output_compliance(operation_model, case, resp)
-        return
-    assert resp["body"] == case["response"]["body"]
+        expected_body = base64.b64decode(expected_body)
+    assert resp["body"] == expected_body
     protocol_to_content_type = {
         "ec2": "text/xml",
         "json": "application/x-amz-json-1.0",
@@ -214,6 +171,7 @@ def test_output_compliance(json_description: dict, case: dict, protocol):
         "query-json": "application/json",
         "rest-xml": "application/xml",
         "rest-json": "application/json",
+        CBOR_PROTOCOL: "application/cbor",
     }
     if resp["body"]:
         content_type = resp["headers"]["Content-Type"]
@@ -224,56 +182,6 @@ def test_output_compliance(json_description: dict, case: dict, protocol):
         resp["headers"].pop("Content-Type", None)
         assert resp["headers"] == headers_expected
     assert resp["status_code"] == case["response"]["status_code"]
-
-
-def _assert_cbor_output_compliance(operation_model, case, resp):
-    # The CBOR test cases are written from the client's perspective: they describe
-    # how a client should parse the given response, including responses that Moto
-    # would never send (e.g. half-precision floats, extra fields).  Instead of
-    # comparing bytes, we verify that botocore parses our response into the
-    # expected result.
-    expected_headers = case["response"]["headers"]
-    assert resp["headers"]["smithy-protocol"] == "rpc-v2-cbor"
-    assert "X-Amzn-Errortype" not in resp["headers"]
-    if "x-amzn-query-error" in expected_headers:
-        assert (
-            resp["headers"]["x-amzn-query-error"]
-            == expected_headers["x-amzn-query-error"]
-        )
-    if "error" in case:
-        # The fixtures use a 400 for all errors, but botocore models carry the
-        # status code of the awsQueryError trait (e.g. 402), which Moto honors.
-        assert 400 <= resp["status_code"] < 600
-    else:
-        assert resp["status_code"] == case["response"]["status_code"]
-    if operation_model.output_shape is None and "error" not in case:
-        assert resp["body"] == b""
-        assert "Content-Type" not in resp["headers"]
-    else:
-        assert resp["headers"]["Content-Type"] == "application/cbor"
-
-    parser = BotocoreRpcV2CBORParser(timestamp_parser=lambda value: value)
-    response_dict = {
-        "status_code": resp["status_code"],
-        "headers": resp["headers"],
-        "body": resp["body"],
-    }
-    if "error" in case:
-        # Like botocore's client, parse the error code first, then the modeled fields.
-        parsed_error = parser.parse(response_dict, operation_model.output_shape)
-        assert parsed_error["Error"]["Code"] == case["errorCode"]
-        if "errorMessage" in case:
-            assert parsed_error["Error"]["Message"] == case["errorMessage"]
-        error_shape = _error_shape_for(operation_model, case["errorCode"])
-        parsed = parser.parse(response_dict, error_shape)
-        expected = {k: v for k, v in case["error"].items() if k.lower() != "message"}
-        parsed = {k: v for k, v in parsed.items() if k.lower() != "message"}
-        assert parsed == expected
-    else:
-        parsed = parser.parse(response_dict, operation_model.output_shape)
-        parsed.pop("ResponseMetadata", None)
-        parsed = _bytes_to_str(_special_floats_to_str(parsed))
-        assert parsed == _remove_none_values(case["result"])
 
 
 def _create_exception(case):
