@@ -252,6 +252,9 @@ class S3Response(BaseResponse):
         self.backend.abort_multipart_upload(self.bucket_name, upload_id)
         return 204, {}, ""
 
+    def list_buckets(self) -> TYPE_RESPONSE:
+        return self.all_buckets()
+
     def all_buckets(self) -> TYPE_RESPONSE:
         self.data["Action"] = "ListAllMyBuckets"
         self._authenticate_and_authorize_s3_action()
@@ -624,6 +627,9 @@ class S3Response(BaseResponse):
             pass
         return response_headers
 
+    def get_bucket_notification_configuration(self) -> TYPE_RESPONSE:
+        return self._bucket_response_get(self._get_param("Bucket"), self.querystring)
+
     def _bucket_response_get(
         self, bucket_name: str, querystring: dict[str, Any]
     ) -> str | TYPE_RESPONSE:
@@ -975,6 +981,56 @@ class S3Response(BaseResponse):
         parsed_xml["PublicAccessBlockConfiguration"].pop("@xmlns", None)
 
         return parsed_xml
+
+    def create_bucket(self) -> TYPE_RESPONSE:
+        return self._bucket_response_put(
+            self.normalized_request, self._get_param("Bucket"), self.querystring
+        )
+
+    def put_bucket_versioning(self) -> TYPE_RESPONSE:
+        return self._bucket_response_put(
+            self.normalized_request, self._get_param("Bucket"), self.querystring
+        )
+
+    def put_bucket_tagging(self) -> TYPE_RESPONSE:
+        return self._bucket_response_put(
+            self.normalized_request, self._get_param("Bucket"), self.querystring
+        )
+
+    def put_bucket_inventory_configuration(self) -> TYPE_RESPONSE:
+        return self._bucket_response_put(
+            self.normalized_request, self._get_param("Bucket"), self.querystring
+        )
+
+    def put_bucket_cors(self) -> TYPE_RESPONSE:
+        return self._bucket_response_put(
+            self.normalized_request, self._get_param("Bucket"), self.querystring
+        )
+
+    def put_bucket_accelerate_configuration(self) -> TYPE_RESPONSE:
+        return self._bucket_response_put(
+            self.normalized_request, self._get_param("Bucket"), self.querystring
+        )
+
+    def put_public_access_block(self) -> TYPE_RESPONSE:
+        return self._bucket_response_put(
+            self.normalized_request, self._get_param("Bucket"), self.querystring
+        )
+
+    def put_bucket_policy(self) -> TYPE_RESPONSE:
+        return self._bucket_response_put(
+            self.normalized_request, self._get_param("Bucket"), self.querystring
+        )
+
+    def put_bucket_notification_configuration(self) -> TYPE_RESPONSE:
+        return self._bucket_response_put(
+            self.normalized_request, self._get_param("Bucket"), self.querystring
+        )
+
+    def put_bucket_website(self) -> TYPE_RESPONSE:
+        return self._bucket_response_put(
+            self.normalized_request, self._get_param("Bucket"), self.querystring
+        )
 
     def _bucket_response_put(
         self,
@@ -1643,6 +1699,11 @@ class S3Response(BaseResponse):
         self.backend.delete_bucket_policy(self.bucket_name)
         return 204, {}, ""
 
+    def post_object(self) -> TYPE_RESPONSE:
+        return self._bucket_response_post(
+            self.normalized_request, self._get_param("Bucket")
+        )
+
     def _bucket_response_post(self, request: Any, bucket_name: str) -> TYPE_RESPONSE:
         response_headers = {}
         if not request.headers.get("Content-Length"):
@@ -1713,6 +1774,9 @@ class S3Response(BaseResponse):
             if hasattr(request, "full_path")
             else path_url(request.url)
         )
+
+    def delete_objects(self) -> TYPE_RESPONSE:
+        return self._bucket_response_delete_keys(self._get_param("Bucket"))
 
     def _bucket_response_delete_keys(
         self, bucket_name: str, authenticated: bool = True
@@ -2626,11 +2690,15 @@ class S3Response(BaseResponse):
 
     def head_object(
         self,
-        bucket_name: str,
-        query: dict[str, Any],
-        key_name: str,
-        headers: dict[str, Any],
+        # bucket_name: str,
+        # query: dict[str, Any],
+        # key_name: str,
+        # headers: dict[str, Any],
     ) -> TYPE_RESPONSE:
+        bucket_name = self._get_param("Bucket")
+        query = self.querystring
+        key_name = self._get_param("Key")
+        headers = self.normalized_request.headers
         self._set_action("KEY", "HEAD", query)
         self._authenticate_and_authorize_s3_action(
             bucket_name=bucket_name, key_name=key_name
@@ -3114,6 +3182,15 @@ class S3Response(BaseResponse):
             if pn <= prev:
                 raise InvalidPartOrder()
             yield pn, p.getElementsByTagName("ETag")[0].firstChild.wholeText  # type: ignore[union-attr]
+
+    def restore_object(self) -> TYPE_RESPONSE:
+        return self._key_response_post(
+            self.normalized_request,
+            self.normalized_request.data,
+            self._get_param("Bucket"),
+            self.querystring,
+            self._get_param("Key"),
+        )
 
     def _key_response_post(
         self,

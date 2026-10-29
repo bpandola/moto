@@ -12,12 +12,12 @@ url_bases.extend(settings.get_s3_custom_endpoints())
 
 url_paths = {
     # subdomain bucket
-    "{0}/$": S3Response.bucket_dispatch,
+    "{0}/$": S3Response.dispatch,
     # subdomain key of path-based bucket
-    "{0}/(?P<key_or_bucket_name>[^/]+)$": S3Response.ambiguous_dispatch,
-    "{0}/(?P<key_or_bucket_name>[^/]+)/$": S3Response.ambiguous_dispatch,
+    "{0}/(?P<key_or_bucket_name>[^/]+)$": S3Response.dispatch,
+    "{0}/(?P<key_or_bucket_name>[^/]+)/$": S3Response.dispatch,
     # path-based bucket + key
-    "{0}/(?P<bucket_name_path>[^/]+)/(?P<key_name>.+)": S3Response.key_dispatch,
+    "{0}/(?P<bucket_name_path>[^/]+)/(?P<key_name>.+)": S3Response.dispatch,
     # subdomain bucket + key with empty first part of path
-    "{0}/(?P<key_name>/.*)$": S3Response.key_dispatch,
+    "{0}/(?P<key_name>/.*)$": S3Response.dispatch,
 }
