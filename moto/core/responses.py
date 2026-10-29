@@ -487,9 +487,10 @@ class BaseResponse(ActionAuthenticatorMixin):
             response = "", {}
         if len(response) == 2:
             body, new_headers = response
+            status = int(new_headers.get("status", 200))
         else:
             status, new_headers, body = response
-        status = int(new_headers.get("status", 200))
+        # status = int(new_headers.get("status", 200))
         headers.update(new_headers)
         return status, headers, body
 
