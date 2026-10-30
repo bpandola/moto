@@ -381,17 +381,6 @@ class BaseResponse(ActionAuthenticatorMixin):
         return None  # type: ignore[return-value]
 
     def _get_action(self) -> str:
-        action = self.querystring.get("Action")
-        if action and isinstance(action, list):
-            action = action[0]
-        if action:
-            return action
-        # Some services use a header for the action
-        # Headers are case-insensitive. Probably a better way to do this.
-        match = self.headers.get("x-amz-target") or self.headers.get("X-Amz-Target")
-        if match:
-            return match.split(".")[-1]
-        # get action from method and uri
         return self._get_action_from_method_and_request_uri(self.normalized_request)
 
     def parse_parameters(self, request: Request) -> None:
