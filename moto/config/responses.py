@@ -260,10 +260,9 @@ class ConfigResponse(BaseResponse):
         return ""
 
     def select_resource_config(self) -> str:
-        params = self._get_params()
-        expression: str = params.get("Expression", "")
-        limit = params.get("Limit")
-        next_token = params.get("NextToken")
+        expression = self._get_param("Expression", if_none="")
+        limit = self._get_param("Limit")
+        next_token = self._get_param("NextToken")
         results, query_info, next_token = self.config_backend.select_resource_config(
             expression=expression,
             limit=limit,
