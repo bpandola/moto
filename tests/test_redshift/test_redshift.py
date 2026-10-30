@@ -1,6 +1,5 @@
 import re
-import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import boto3
 import pytest
@@ -8,7 +7,6 @@ from botocore.exceptions import ClientError
 
 from moto import mock_aws
 from moto.core import DEFAULT_ACCOUNT_ID as ACCOUNT_ID
-from moto.core.utils import utcnow
 
 
 @mock_aws
@@ -1928,15 +1926,15 @@ def test_get_cluster_credentials():
         NodeType="ds2.xlarge",
     )
 
-    expected_expiration = time.mktime((utcnow() + timedelta(seconds=900)).timetuple())
+    expected_expiration = (
+        datetime.now(timezone.utc) + timedelta(seconds=900)
+    ).timestamp()
     db_user = "some_user"
     response = client.get_cluster_credentials(
         ClusterIdentifier=cluster_identifier, DbUser=db_user
     )
     assert response["DbUser"] == f"IAM:{db_user}"
-    assert time.mktime((response["Expiration"]).timetuple()) == pytest.approx(
-        expected_expiration
-    )
+    assert response["Expiration"].timestamp() == pytest.approx(expected_expiration)
     assert len(response["DbPassword"]) == 32
 
     response = client.get_cluster_credentials(
@@ -1949,13 +1947,13 @@ def test_get_cluster_credentials():
     )
     assert response["DbUser"] == "IAM:some_other_user"
 
-    expected_expiration = time.mktime((utcnow() + timedelta(seconds=3000)).timetuple())
+    expected_expiration = (
+        datetime.now(timezone.utc) + timedelta(seconds=3000)
+    ).timestamp()
     response = client.get_cluster_credentials(
         ClusterIdentifier=cluster_identifier, DbUser=db_user, DurationSeconds=3000
     )
-    assert time.mktime(response["Expiration"].timetuple()) == pytest.approx(
-        expected_expiration
-    )
+    assert response["Expiration"].timestamp() == pytest.approx(expected_expiration)
 
 
 @mock_aws
