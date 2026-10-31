@@ -23,7 +23,6 @@ from moto.s3bucket_path.utils import (
 )
 from moto.utilities.utils import get_partition
 
-from ..core.exceptions import SignatureDoesNotMatchError
 from .exceptions import (
     AccessForbidden,
     BucketAccessDeniedError,
@@ -67,6 +66,7 @@ from .exceptions import (
     ReplicationConfigurationNotFoundError,
     S3AclAndGrantError,
     S3ClientError,
+    S3SignatureDoesNotMatchError,
     ServerSideEncryptionConfigurationNotFoundError,
     VersioningNotEnabledForReplication,
 )
@@ -301,7 +301,7 @@ class S3Response(BaseResponse):
         if not key and signed_url and not authorized_request:
             # coming in from requests.get(s3.generate_presigned_url())
             if self._invalid_headers(self.request.url, dict(self.request.headers)):
-                raise SignatureDoesNotMatchError()
+                raise S3SignatureDoesNotMatchError()
 
     def serialized(self, action_result: ActionResult) -> TYPE_RESPONSE:
         status_code, headers, body = super().serialized(action_result)

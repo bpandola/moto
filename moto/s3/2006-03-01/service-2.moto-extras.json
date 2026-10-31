@@ -177,6 +177,12 @@
       },
       "ArgumentName":{"type":"string"},
       "ArgumentValue":{"type":"string"},
+      "BadRequest": {
+        "type": "structure",
+        "members": {},
+        "error": {"httpStatusCode": 400},
+        "exception": true
+      },
       "BucketAlreadyExists": {
         "type": "structure",
         "members": {
@@ -207,6 +213,18 @@
         "error": {"httpStatusCode": 403},
         "exception": true
       },
+      "EntityTooSmall": {
+        "type": "structure",
+        "members": {},
+        "error": {"httpStatusCode": 400},
+        "exception": true
+      },
+      "IllegalLocationConstraintException": {
+        "type": "structure",
+        "members": {},
+        "error": {"httpStatusCode": 400},
+        "exception": true
+      },
       "InvalidAccessKeyId": {
         "type": "structure",
         "members": {
@@ -223,12 +241,54 @@
         },
         "exception": true
       },
+      "InvalidBucketName": {
+        "type": "structure",
+        "members": {},
+        "error": {"httpStatusCode": 400},
+        "exception": true
+      },
+      "InvalidBucketState": {
+        "type": "structure",
+        "members": {},
+        "error": {"httpStatusCode": 409},
+        "exception": true
+      },
+      "InvalidLocationConstraint": {
+        "type": "structure",
+        "members": {},
+        "error": {"httpStatusCode": 400},
+        "exception": true
+      },
+      "InvalidNamespaceHeader": {
+        "type": "structure",
+        "members": {},
+        "error": {"httpStatusCode": 400},
+        "exception": true
+      },
       "InvalidObjectState": {
         "type": "structure",
         "members": {
           "StorageClass": {"shape": "StorageClass"}
         },
         "error": {"httpStatusCode": 403},
+        "exception": true
+      },
+      "InvalidPart": {
+        "type": "structure",
+        "members": {},
+        "error": {"httpStatusCode": 400},
+        "exception": true
+      },
+      "InvalidPartNumber": {
+        "type": "structure",
+        "members": {},
+        "error": {"httpStatusCode": 416},
+        "exception": true
+      },
+      "InvalidPartOrder": {
+        "type": "structure",
+        "members": {},
+        "error": {"httpStatusCode": 400},
         "exception": true
       },
       "InvalidRange": {
@@ -255,11 +315,35 @@
         "error": {"httpStatusCode": 400},
         "exception": true
       },
+      "InvalidTag": {
+        "type": "structure",
+        "members": {},
+        "error": {"httpStatusCode": 400},
+        "exception": true
+      },
+      "InvalidTargetBucketForLogging": {
+        "type": "structure",
+        "members": {},
+        "error": {"httpStatusCode": 400},
+        "exception": true
+      },
       "InvalidToken": {
         "type": "structure",
         "members": {
           "BucketName": {"shape": "BucketName"}
         },
+        "error": {"httpStatusCode": 400},
+        "exception": true
+      },
+      "MalformedACLError": {
+        "type": "structure",
+        "members": {},
+        "error": {"httpStatusCode": 400},
+        "exception": true
+      },
+      "MalformedXML": {
+        "type": "structure",
+        "members": {},
         "error": {"httpStatusCode": 400},
         "exception": true
       },
@@ -276,6 +360,12 @@
         "type": "structure",
         "members": {},
         "error": {"httpStatusCode": 411},
+        "exception": true
+      },
+      "MissingRequestBodyError": {
+        "type": "structure",
+        "members": {},
+        "error": {"httpStatusCode": 400},
         "exception": true
       },
       "NoSuchBucket": {

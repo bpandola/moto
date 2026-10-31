@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from werkzeug.exceptions import RequestedRangeNotSatisfiable
-
 from moto.core.exceptions import ServiceException
 
 from .notifications import S3NotificationEvent
@@ -386,9 +384,9 @@ class InvalidRange(S3ClientError):
         self.actual_object_size = actual_size
 
 
-class RangeNotSatisfiable(RequestedRangeNotSatisfiable):
-    def __init__(self) -> None:
-        super().__init__(description="Requested Range Not Satisfiable")
+class RangeNotSatisfiable(S3ClientError):
+    code = "InvalidPartNumber"
+    message = "The requested partnumber is not satisfiable"
 
 
 class InvalidContinuationToken(S3ClientError):
@@ -429,14 +427,14 @@ class AccessDeniedByLock(S3ClientError):
 class MissingUploadObjectWithObjectLockHeaders(S3ClientError):
     def __init__(self) -> None:
         super().__init__(
-            "MissingUploadObjectWithObjectLockHeaders",
+            "InvalidRequest",
             "Content-MD5 or x-amz-sdk-checksum-algorithm header required to upload an object with a retention period configured using Object Lock",
         )
 
 
 class BucketNeedsToBeNew(S3ClientError):
     def __init__(self) -> None:
-        super().__init__("InvalidBucket", "Bucket needs to be empty")
+        super().__init__("InvalidBucketState", "Bucket needs to be empty")
 
 
 class CopyObjectMustChangeSomething(S3ClientError):
