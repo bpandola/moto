@@ -33,6 +33,11 @@
           "resultWrapper": "DeleteResult"
         }
       },
+      "GetBucketAccelerateConfiguration": {
+        "output": {
+          "resultWrapper": "AccelerateConfiguration"
+        }
+      },
       "GetBucketAcl": {
         "output": {
           "resultWrapper": "AccessControlPolicy"
@@ -78,9 +83,24 @@
           "resultWrapper": "ReplicationConfiguration"
         }
       },
+      "GetBucketRequestPayment": {
+        "output": {
+          "resultWrapper": "RequestPaymentConfiguration"
+        }
+      },
       "GetBucketTagging": {
         "output": {
           "resultWrapper": "Tagging"
+        }
+      },
+      "GetBucketVersioning": {
+        "output": {
+          "resultWrapper": "VersioningConfiguration"
+        }
+      },
+      "GetBucketWebsite": {
+        "output": {
+          "resultWrapper": "WebsiteConfiguration"
         }
       },
       "GetObjectAcl": {
@@ -113,6 +133,11 @@
           "resultWrapper": "PublicAccessBlockConfiguration"
         }
       },
+      "ListBucketInventoryConfigurations": {
+        "output": {
+          "resultWrapper": "ListInventoryConfigurationsResult"
+        }
+      },
       "ListBuckets": {
         "output": {
           "resultWrapper": "ListAllMyBucketsResult"
@@ -136,6 +161,11 @@
       "ListObjectsV2": {
         "output": {
           "resultWrapper": "ListBucketResult"
+        }
+      },
+      "ListParts": {
+        "output": {
+          "resultWrapper": "ListPartsResult"
         }
       },
       "ObjectCORSPreflightCheck": {
