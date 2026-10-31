@@ -177,7 +177,7 @@ def test_s3_lifecycle_config_dict():
             "Filter": {
                 "And": {
                     "Prefix": "some/path",
-                    "Tag": [{"Key": "TheKey", "Value": "TheValue"}],
+                    "Tags": [{"Key": "TheKey", "Value": "TheValue"}],
                 }
             },
             "Expiration": {"Days": 1},
@@ -193,8 +193,8 @@ def test_s3_lifecycle_config_dict():
             "ID": "rule5",
             "Status": "Enabled",
             "Filter": {"Prefix": ""},
-            "Transition": [{"Days": 10, "StorageClass": "GLACIER"}],
-            "NoncurrentVersionTransition": [
+            "Transitions": [{"Days": 10, "StorageClass": "GLACIER"}],
+            "NoncurrentVersionTransitions": [
                 {
                     "NoncurrentDays": 10,
                     "StorageClass": "GLACIER",
@@ -309,39 +309,37 @@ def test_s3_notification_config_dict():
 
     # And some notifications:
     notifications = {
-        "TopicConfiguration": [
+        "TopicConfigurations": [
             {
                 "Id": "Topic",
-                "Topic": "arn:aws:sns:us-west-2:012345678910:mytopic",
-                "Event": [
+                "TopicArn": "arn:aws:sns:us-west-2:012345678910:mytopic",
+                "Events": [
                     "s3:ReducedRedundancyLostObject",
                     "s3:ObjectRestore:Completed",
                 ],
             }
         ],
-        "QueueConfiguration": [
+        "QueueConfigurations": [
             {
                 "Id": "Queue",
-                "Queue": "arn:aws:sqs:us-west-2:012345678910:myqueue",
-                "Event": ["s3:ObjectRemoved:Delete"],
+                "QueueArn": "arn:aws:sqs:us-west-2:012345678910:myqueue",
+                "Events": ["s3:ObjectRemoved:Delete"],
                 "Filter": {
-                    "S3Key": {
-                        "FilterRule": [{"Name": "prefix", "Value": "stuff/here/"}]
-                    }
+                    "Key": {"FilterRules": [{"Name": "prefix", "Value": "stuff/here/"}]}
                 },
             }
         ],
-        "CloudFunctionConfiguration": [
+        "LambdaFunctionConfigurations": [
             {
                 "Id": "Lambda",
-                "CloudFunction": "arn:aws:lambda:us-west-2:012345678910:function:mylambda",
-                "Event": [
+                "LambdaFunctionArn": "arn:aws:lambda:us-west-2:012345678910:function:mylambda",
+                "Events": [
                     "s3:ObjectCreated:Post",
                     "s3:ObjectCreated:Copy",
                     "s3:ObjectCreated:Put",
                 ],
                 "Filter": {
-                    "S3Key": {"FilterRule": [{"Name": "suffix", "Value": ".png"}]}
+                    "Key": {"FilterRules": [{"Name": "suffix", "Value": ".png"}]}
                 },
             }
         ],
@@ -529,9 +527,7 @@ def test_s3_config_dict():
         }
     )
 
-    # The policy is a byte array -- need to encode in Python 3
-    pass_policy = bytes(policy, "utf-8")
-    s3_config_query_backend.put_bucket_policy("bucket1", pass_policy)
+    s3_config_query_backend.put_bucket_policy("bucket1", policy)
 
     # Get the us-west-2 bucket and verify that it works properly:
     bucket1_result = s3_config_query.get_config_resource(

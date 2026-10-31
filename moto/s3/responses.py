@@ -6,7 +6,6 @@ from collections.abc import Iterator
 from typing import Any
 from urllib.parse import parse_qs, unquote, urlencode, urlparse, urlunparse
 from xml.dom import minidom
-from xml.parsers.expat import ExpatError
 
 import xmltodict
 from werkzeug.exceptions import Forbidden
@@ -19,14 +18,13 @@ from moto.core.request import Request
 from moto.core.responses import ActionResult, BaseResponse, EmptyResult
 from moto.core.utils import (
     ALT_DOMAIN_SUFFIXES,
-    ensure_boolean,
     extract_region_from_aws_authorization,
     rfc_1123_datetime,
 )
 from moto.s3bucket_path.utils import (
     bucket_name_from_url as bucketpath_bucket_name_from_url,
 )
-from moto.utilities.utils import PARTITION_NAMES, get_partition
+from moto.utilities.utils import get_partition
 
 from ..core.exceptions import SignatureDoesNotMatchError
 from .exceptions import (
@@ -45,7 +43,6 @@ from .exceptions import (
     InvalidMaxPartArgument,
     InvalidMaxPartNumberArgument,
     InvalidNamespaceHeaderException,
-    InvalidNotificationARN,
     InvalidObjectState,
     InvalidPartOrder,
     InvalidRange,
@@ -526,11 +523,11 @@ class S3Response(BaseResponse):
         if they are re-defining the same headers.
         """
 
-        def _to_string(header: list[str] | str) -> str:
+        def _to_string(header: list[str] | str | int) -> str:
             # We allow list and strs in header values. Transform lists in comma-separated strings
             if isinstance(header, list):
                 return ", ".join(header)
-            return header
+            return str(header)
 
         for cors_rule in bucket.cors:
             if cors_rule.allowed_methods is not None:
@@ -598,11 +595,11 @@ class S3Response(BaseResponse):
                 return response_headers
             bucket = self.backend.get_bucket(self.bucket_name)
 
-            def _to_string(header: list[str] | str) -> str:
+            def _to_string(header: list[str] | str | int) -> str:
                 # We allow list and strs in header values. Transform lists in comma-separated strings
                 if isinstance(header, list):
                     return ", ".join(header)
-                return header
+                return str(header)
 
             for cors_rule in bucket.cors:
                 if cors_rule.allowed_origins is not None:
@@ -876,12 +873,6 @@ class S3Response(BaseResponse):
                 result_folders.append(key)
         return result_keys, result_folders
 
-    def _parse_pab_config(self) -> dict[str, Any]:
-        parsed_xml = xmltodict.parse(self.body)
-        parsed_xml["PublicAccessBlockConfiguration"].pop("@xmlns", None)
-
-        return parsed_xml
-
     def create_bucket(self) -> ActionResult:
         bucket_name = self.bucket_name
         # us-east-1, the default AWS region behaves a bit differently
@@ -949,40 +940,42 @@ class S3Response(BaseResponse):
         return ActionResult(result)
 
     def put_object_lock_configuration(self) -> ActionResult:
-        config = self._process_lock_config_from_body()
+        lock_config = self._get_param("ObjectLockConfiguration")
+        if lock_config is None:
+            raise MissingRequestBody()
+        if "ObjectLockEnabled" not in lock_config:
+            raise MalformedXML()
+        default_retention = lock_config.get("Rule", {}).get("DefaultRetention")
+        days = years = None
+        if default_retention:
+            days = default_retention.get("Days", 0)
+            years = default_retention.get("Years", 0)
+            if days and years:
+                raise MalformedXML()
 
         self.backend.put_object_lock_configuration(
             self.bucket_name,
-            config.get("enabled"),  # type: ignore
-            config.get("mode"),
-            config.get("days"),
-            config.get("years"),
+            lock_config["ObjectLockEnabled"] == "Enabled",
+            (default_retention or {}).get("Mode"),
+            days,
+            years,
         )
         return EmptyResult()
 
     def put_bucket_versioning(self) -> ActionResult:
-        body = self.body.decode("utf-8")
-        ver = re.search(r"<Status>([A-Za-z]+)</Status>", body)
-        if not ver:
+        status = self._get_param("VersioningConfiguration.Status")
+        if not status:
             raise MalformedXML()
-        self.backend.put_bucket_versioning(self.bucket_name, ver.group(1))
+        self.backend.put_bucket_versioning(self.bucket_name, status)
         return EmptyResult()
 
     def put_bucket_lifecycle_configuration(self) -> ActionResult:
-        lifecycle_config = xmltodict.parse(self.body)["LifecycleConfiguration"]
-        # Handle empty lifecycle configuration (no rules)
-        if "Rule" not in lifecycle_config:
-            rules = []
-        else:
-            rules = lifecycle_config["Rule"]
-            if not isinstance(rules, list):
-                # If there is only one rule, xmldict returns just the item
-                rules = [rules]
-        self.backend.put_bucket_lifecycle(self.bucket_name, rules)
+        rules = self._get_param("LifecycleConfiguration.Rules", [])
+        self.backend.put_bucket_lifecycle_configuration(self.bucket_name, rules)
         return EmptyResult()
 
     def put_bucket_policy(self) -> ActionResult:
-        self.backend.put_bucket_policy(self.bucket_name, self.body)
+        self.backend.put_bucket_policy(self.bucket_name, self._get_param("Policy"))
         return EmptyResult()
 
     def put_bucket_acl(self) -> ActionResult:
@@ -999,77 +992,68 @@ class S3Response(BaseResponse):
         return EmptyResult()
 
     def put_bucket_website(self) -> ActionResult:
-        self.backend.put_bucket_website(self.bucket_name, self.body)
+        self.backend.put_bucket_website(
+            self.bucket_name, self._get_param("WebsiteConfiguration")
+        )
         return EmptyResult()
 
     def put_bucket_cors(self) -> ActionResult:
-        try:
-            self.backend.put_bucket_cors(self.bucket_name, self._cors_from_body())
-        except KeyError:
-            raise MalformedXML()
+        self.backend.put_bucket_cors(
+            self.bucket_name, self._get_param("CORSConfiguration.CORSRules", [])
+        )
         return EmptyResult()
 
     def put_bucket_logging(self) -> ActionResult:
-        try:
-            self.backend.put_bucket_logging(self.bucket_name, self._logging_from_body())
-        except KeyError:
-            raise MalformedXML()
+        self.backend.put_bucket_logging(
+            self.bucket_name, self._get_param("BucketLoggingStatus.LoggingEnabled")
+        )
         return EmptyResult()
 
     def put_bucket_notification_configuration(self) -> ActionResult:
-        try:
-            self.backend.put_bucket_notification_configuration(
-                self.bucket_name, self._notification_config_from_body()
-            )
-        except KeyError:
-            raise MalformedXML()
+        self.backend.put_bucket_notification_configuration(
+            self.bucket_name, self._get_param("NotificationConfiguration", {})
+        )
         return EmptyResult()
 
     def put_bucket_accelerate_configuration(self) -> ActionResult:
-        try:
-            accelerate_status = self._accelerate_config_from_body()
-            self.backend.put_bucket_accelerate_configuration(
-                self.bucket_name, accelerate_status
-            )
-        except KeyError:
-            raise MalformedXML()
+        self.backend.put_bucket_accelerate_configuration(
+            self.bucket_name, self._get_param("AccelerateConfiguration.Status")
+        )
         return EmptyResult()
 
     def put_public_access_block(self) -> ActionResult:
-        pab_config = self._parse_pab_config()
         self.backend.put_public_access_block(
-            self.bucket_name, pab_config["PublicAccessBlockConfiguration"]
+            self.bucket_name, self._get_param("PublicAccessBlockConfiguration")
         )
         return EmptyResult()
 
     def put_bucket_encryption(self) -> ActionResult:
-        try:
-            self.backend.put_bucket_encryption(
-                self.bucket_name, self._encryption_config_from_body()
-            )
-        except KeyError:
-            raise MalformedXML()
+        self.backend.put_bucket_encryption(
+            self.bucket_name, self._get_param("ServerSideEncryptionConfiguration")
+        )
         return EmptyResult()
 
     def put_bucket_replication(self) -> ActionResult:
         bucket = self.backend.get_bucket(self.bucket_name)
         if not bucket.is_versioned:
             raise VersioningNotEnabledForReplication(bucket_name=self.bucket_name)
-        replication_config = self._replication_config_from_xml(self.body)
-        self.backend.put_bucket_replication(self.bucket_name, replication_config)
+        self.backend.put_bucket_replication(
+            self.bucket_name, self._get_param("ReplicationConfiguration")
+        )
         return EmptyResult()
 
     def put_bucket_ownership_controls(self) -> ActionResult:
-        ownership_rule = self._ownership_rule_from_body()
+        rules = self._get_param("OwnershipControls.Rules", [])
+        if not rules or not rules[0].get("ObjectOwnership"):
+            raise MalformedXML()
         self.backend.put_bucket_ownership_controls(
-            self.bucket_name, ownership=ownership_rule
+            self.bucket_name, ownership=rules[0]["ObjectOwnership"]
         )
         return EmptyResult()
 
     def put_bucket_inventory_configuration(self) -> ActionResult:
-        inventory_config = self._inventory_config_from_body()
         self.backend.put_bucket_inventory_configuration(
-            self.bucket_name, inventory_config
+            self.bucket_name, self._get_param("InventoryConfiguration")
         )
         return EmptyResult()
 
@@ -1107,18 +1091,16 @@ class S3Response(BaseResponse):
             raise ServerSideEncryptionConfigurationNotFoundError(
                 bucket_name=self.bucket_name
             )
-        rule = encryption["Rule"]
-        result_rule: dict[str, Any] = {
-            "ApplyServerSideEncryptionByDefault": rule[
-                "ApplyServerSideEncryptionByDefault"
-            ],
-            "BucketKeyEnabled": ensure_boolean(rule.get("BucketKeyEnabled")),
-        }
-        return ActionResult(
+        rules = [
             {
-                "ServerSideEncryptionConfiguration": {"Rules": [result_rule]},
+                "ApplyServerSideEncryptionByDefault": rule[
+                    "ApplyServerSideEncryptionByDefault"
+                ],
+                "BucketKeyEnabled": rule.get("BucketKeyEnabled", False),
             }
-        )
+            for rule in encryption["Rules"]
+        ]
+        return ActionResult({"ServerSideEncryptionConfiguration": {"Rules": rules}})
 
     def get_bucket_lifecycle_configuration(self) -> ActionResult:
         rules = self.backend.get_bucket_lifecycle(self.bucket_name)
@@ -1172,14 +1154,14 @@ class S3Response(BaseResponse):
             if (
                 rule.expiration_days
                 or rule.expiration_date
-                or rule.expired_object_delete_marker
+                or rule.expired_object_delete_marker is not None
             ):
                 exp: dict[str, Any] = {}
                 if rule.expiration_days:
                     exp["Days"] = rule.expiration_days
                 if rule.expiration_date:
                     exp["Date"] = rule.expiration_date
-                if rule.expired_object_delete_marker:
+                if rule.expired_object_delete_marker is not None:
                     exp["ExpiredObjectDeleteMarker"] = rule.expired_object_delete_marker
                 r["Expiration"] = exp
 
@@ -1261,9 +1243,7 @@ class S3Response(BaseResponse):
                 "Events": item.events,
             }
             if item.filters:
-                config["Filter"] = {
-                    "Key": {"FilterRules": item.filters["S3Key"]["FilterRule"]}
-                }
+                config["Filter"] = item.filters
             return config
 
         result: dict[str, Any] = {
@@ -1315,11 +1295,13 @@ class S3Response(BaseResponse):
                 "ID": rule["ID"],
                 "Priority": rule["Priority"],
                 "Status": rule["Status"],
-                "DeleteMarkerReplication": {"Status": "Disabled"},
-                "Filter": {"Prefix": ""},
+                "DeleteMarkerReplication": rule.get(
+                    "DeleteMarkerReplication", {"Status": "Disabled"}
+                ),
+                "Filter": rule.get("Filter", {"Prefix": ""}),
                 "Destination": rule["Destination"],
             }
-            for rule in replication["Rule"]
+            for rule in replication["Rules"]
         ]
         return ActionResult(
             {
@@ -1348,14 +1330,11 @@ class S3Response(BaseResponse):
         )
         if not website_configuration:
             raise NoSuchWebsiteConfiguration(bucket_name=self.bucket_name)
-        config = xmltodict.parse(
-            website_configuration, force_list={"RoutingRule": True}
-        )["WebsiteConfiguration"]
         result = {
-            "RedirectAllRequestsTo": config.get("RedirectAllRequestsTo"),
-            "IndexDocument": config.get("IndexDocument"),
-            "ErrorDocument": config.get("ErrorDocument"),
-            "RoutingRules": (config.get("RoutingRules") or {}).get("RoutingRule"),
+            "RedirectAllRequestsTo": website_configuration.get("RedirectAllRequestsTo"),
+            "IndexDocument": website_configuration.get("IndexDocument"),
+            "ErrorDocument": website_configuration.get("ErrorDocument"),
+            "RoutingRules": website_configuration.get("RoutingRules"),
         }
         return ActionResult(result)
 
@@ -1391,35 +1370,31 @@ class S3Response(BaseResponse):
         return ActionResult({"ObjectLockConfiguration": config})
 
     def get_public_access_block(self) -> ActionResult:
-        public_block_config = self.backend.get_public_access_block(self.bucket_name)
-        return ActionResult(
-            {
-                "PublicAccessBlockConfiguration": public_block_config,
+        public_access_block = self.backend.get_public_access_block(self.bucket_name)
+        result = {
+            "PublicAccessBlockConfiguration": {
+                "BlockPublicAcls": public_access_block.block_public_acls,
+                "IgnorePublicAcls": public_access_block.ignore_public_acls,
+                "BlockPublicPolicy": public_access_block.block_public_policy,
+                "RestrictPublicBuckets": public_access_block.restrict_public_buckets,
             }
-        )
+        }
+        return ActionResult(result)
 
     def get_bucket_inventory_configuration(self) -> ActionResult:
         config_id = self._get_param("Id")
         inventory_configuration = self.backend.get_bucket_inventory_configuration(
             bucket_name=self.bucket_name, id=config_id
         )
-        config: dict[str, Any] = {
+        config = {
             "Destination": inventory_configuration.destination,
-            "IsEnabled": ensure_boolean(inventory_configuration.is_enabled),
+            "IsEnabled": inventory_configuration.is_enabled,
+            "Filter": inventory_configuration.filters,
             "Id": inventory_configuration.id,
-            "IncludedObjectVersions": "All",
+            "IncludedObjectVersions": inventory_configuration.included_object_versions,
+            "OptionalFields": inventory_configuration.optional_fields,
             "Schedule": inventory_configuration.schedule,
         }
-        if inventory_configuration.filters:
-            config["Filter"] = inventory_configuration.filters
-        if inventory_configuration.optional_fields:
-            # TODO: fix input processing to make sure this is parsed as list and not a dict.
-            optional_fields: list[str] = (
-                inventory_configuration.optional_fields.get("Field", [])
-                if isinstance(inventory_configuration.optional_fields, dict)
-                else inventory_configuration.optional_fields
-            )
-            config["OptionalFields"] = optional_fields
         return ActionResult({"InventoryConfiguration": config})
 
     def list_bucket_inventory_configurations(self) -> ActionResult:
@@ -1428,20 +1403,18 @@ class S3Response(BaseResponse):
                 bucket_name=self.bucket_name,
             )
         )
-        configs = []
-        for inv in inventory_configuration_list:
-            config: dict[str, Any] = {
+        configs = [
+            {
                 "Destination": inv.destination,
                 "IsEnabled": inv.is_enabled,
+                "Filter": inv.filters,
                 "Id": inv.id,
-                "IncludedObjectVersions": "All",
+                "IncludedObjectVersions": inv.included_object_versions,
+                "OptionalFields": inv.optional_fields,
                 "Schedule": inv.schedule,
             }
-            if inv.filters:
-                config["Filter"] = inv.filters
-            if inv.optional_fields:
-                config["OptionalFields"] = inv.optional_fields
-            configs.append(config)
+            for inv in inventory_configuration_list
+        ]
 
         # TODO: Add support for pagination/ continuation tokens
         result = {
@@ -2336,42 +2309,6 @@ class S3Response(BaseResponse):
             self.response_headers["status"] = "206"
         return ActionResult(result)
 
-    def _process_lock_config_from_body(self) -> dict[str, Any]:
-        try:
-            return self._lock_config_from_body()
-        except (TypeError, ExpatError):
-            raise MissingRequestBody
-        except KeyError:
-            raise MalformedXML
-
-    def _lock_config_from_body(self) -> dict[str, Any]:
-        response_dict: dict[str, Any] = {
-            "enabled": False,
-            "mode": None,
-            "days": None,
-            "years": None,
-        }
-        parsed_xml = xmltodict.parse(self.body)
-        enabled = (
-            parsed_xml["ObjectLockConfiguration"]["ObjectLockEnabled"] == "Enabled"
-        )
-        response_dict["enabled"] = enabled
-
-        default_retention = parsed_xml.get("ObjectLockConfiguration").get("Rule")
-        if default_retention:
-            default_retention = default_retention.get("DefaultRetention")
-            mode = default_retention["Mode"]
-            days = int(default_retention.get("Days", 0))
-            years = int(default_retention.get("Years", 0))
-
-            if days and years:
-                raise MalformedXML
-            response_dict["mode"] = mode
-            response_dict["days"] = days
-            response_dict["years"] = years
-
-        return response_dict
-
     def _acl_from_body(self) -> FakeAcl | None:
         parsed_xml = xmltodict.parse(self.body)
         if not parsed_xml.get("AccessControlPolicy"):
@@ -2515,167 +2452,6 @@ class S3Response(BaseResponse):
                 raise NoSystemTags()
 
         return tags
-
-    def _cors_from_body(self) -> list[dict[str, Any]]:
-        parsed_xml = xmltodict.parse(self.body)
-
-        if isinstance(parsed_xml["CORSConfiguration"]["CORSRule"], list):
-            return list(parsed_xml["CORSConfiguration"]["CORSRule"])
-
-        return [parsed_xml["CORSConfiguration"]["CORSRule"]]
-
-    def _encryption_config_from_body(self) -> dict[str, Any]:
-        parsed_xml = xmltodict.parse(self.body)
-
-        if (
-            not parsed_xml["ServerSideEncryptionConfiguration"].get("Rule")
-            or not parsed_xml["ServerSideEncryptionConfiguration"]["Rule"].get(
-                "ApplyServerSideEncryptionByDefault"
-            )
-            or not parsed_xml["ServerSideEncryptionConfiguration"]["Rule"][
-                "ApplyServerSideEncryptionByDefault"
-            ].get("SSEAlgorithm")
-        ):
-            raise MalformedXML()
-
-        return parsed_xml["ServerSideEncryptionConfiguration"]
-
-    def _ownership_rule_from_body(self) -> dict[str, Any]:
-        parsed_xml = xmltodict.parse(self.body)
-
-        if not parsed_xml["OwnershipControls"]["Rule"].get("ObjectOwnership"):
-            raise MalformedXML()
-
-        return parsed_xml["OwnershipControls"]["Rule"]["ObjectOwnership"]
-
-    def _logging_from_body(self) -> dict[str, Any]:
-        parsed_xml = xmltodict.parse(self.body)
-
-        if not parsed_xml["BucketLoggingStatus"].get("LoggingEnabled"):
-            return {}
-
-        if not parsed_xml["BucketLoggingStatus"]["LoggingEnabled"].get("TargetBucket"):
-            raise MalformedXML()
-
-        if not parsed_xml["BucketLoggingStatus"]["LoggingEnabled"].get("TargetPrefix"):
-            parsed_xml["BucketLoggingStatus"]["LoggingEnabled"]["TargetPrefix"] = ""
-
-        # Get the ACLs:
-        if parsed_xml["BucketLoggingStatus"]["LoggingEnabled"].get("TargetGrants"):
-            permissions = ["READ", "WRITE", "FULL_CONTROL"]
-            if not isinstance(
-                parsed_xml["BucketLoggingStatus"]["LoggingEnabled"]["TargetGrants"][
-                    "Grant"
-                ],
-                list,
-            ):
-                target_grants = self._get_grants_from_xml(
-                    [
-                        parsed_xml["BucketLoggingStatus"]["LoggingEnabled"][
-                            "TargetGrants"
-                        ]["Grant"]
-                    ],
-                    MalformedXML,
-                    permissions,
-                )
-            else:
-                target_grants = self._get_grants_from_xml(
-                    parsed_xml["BucketLoggingStatus"]["LoggingEnabled"]["TargetGrants"][
-                        "Grant"
-                    ],
-                    MalformedXML,
-                    permissions,
-                )
-
-            parsed_xml["BucketLoggingStatus"]["LoggingEnabled"]["TargetGrants"] = (
-                target_grants
-            )
-
-        return parsed_xml["BucketLoggingStatus"]["LoggingEnabled"]
-
-    def _notification_config_from_body(self) -> dict[str, Any]:
-        parsed_xml = xmltodict.parse(self.body)
-
-        if not len(parsed_xml["NotificationConfiguration"]):
-            return {}
-
-        # The types of notifications, and their required fields (apparently lambda is categorized by the API as
-        # "CloudFunction"):
-        notification_fields = [
-            ("Topic", "sns"),
-            ("Queue", "sqs"),
-            ("CloudFunction", "lambda"),
-            ("EventBridge", "events"),
-        ]
-
-        found_notifications = (
-            0  # Tripwire -- if this is not ever set, then there were no notifications
-        )
-        for name, arn_string in notification_fields:
-            # EventBridgeConfiguration is passed as an empty dict.
-            if name == "EventBridge":
-                events_field = f"{name}Configuration"
-                if events_field in parsed_xml["NotificationConfiguration"]:
-                    parsed_xml["NotificationConfiguration"][events_field] = {}
-                    found_notifications += 1
-            # 1st verify that the proper notification configuration has been passed in (with an ARN that is close
-            # to being correct -- nothing too complex in the ARN logic):
-            the_notification = parsed_xml["NotificationConfiguration"].get(
-                f"{name}Configuration"
-            )
-            if the_notification:
-                found_notifications += 1
-                if not isinstance(the_notification, list):
-                    the_notification = parsed_xml["NotificationConfiguration"][
-                        f"{name}Configuration"
-                    ] = [the_notification]
-
-                for n in the_notification:
-                    if not any(
-                        n[name].startswith(f"arn:{p}:{arn_string}:")
-                        for p in PARTITION_NAMES
-                    ):
-                        raise InvalidNotificationARN()
-
-                    # 2nd, verify that the Events list is correct:
-                    assert n["Event"]
-                    if not isinstance(n["Event"], list):
-                        n["Event"] = [n["Event"]]
-
-                    # Parse out the filters:
-                    if n.get("Filter"):
-                        # Error if S3Key is blank:
-                        if not n["Filter"]["S3Key"]:
-                            raise KeyError()
-
-                        if not isinstance(n["Filter"]["S3Key"]["FilterRule"], list):
-                            n["Filter"]["S3Key"]["FilterRule"] = [
-                                n["Filter"]["S3Key"]["FilterRule"]
-                            ]
-
-                        for filter_rule in n["Filter"]["S3Key"]["FilterRule"]:
-                            assert filter_rule["Name"] in ["suffix", "prefix"]
-                            assert filter_rule["Value"]
-
-        if not found_notifications:
-            return {}
-
-        return parsed_xml["NotificationConfiguration"]
-
-    def _accelerate_config_from_body(self) -> str:
-        parsed_xml = xmltodict.parse(self.body)
-        config = parsed_xml["AccelerateConfiguration"]
-        return config["Status"]
-
-    def _replication_config_from_xml(self, xml: str) -> dict[str, Any]:
-        parsed_xml = xmltodict.parse(xml, dict_constructor=dict)
-        config = parsed_xml["ReplicationConfiguration"]
-        return config
-
-    def _inventory_config_from_body(self) -> dict[str, Any]:
-        parsed_xml = xmltodict.parse(self.body)
-        config = parsed_xml["InventoryConfiguration"]
-        return config
 
     def delete_object(self) -> ActionResult:
         bypass = self._get_param("BypassGovernanceRetention", False)

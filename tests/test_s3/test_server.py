@@ -122,8 +122,7 @@ def test_s3_server_bucket_versioning():
     res = test_client.put("/", "http://foobaz.localhost:5000/")
     assert res.status_code == 200
 
-    # Just enough XML to enable versioning
-    body = "<Status>Enabled</Status>"
+    body = "<VersioningConfiguration><Status>Enabled</Status></VersioningConfiguration>"
     res = test_client.put("/?versioning", "http://foobaz.localhost:5000", data=body)
     assert res.status_code == 200
 

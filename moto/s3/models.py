@@ -50,6 +50,7 @@ from moto.s3.exceptions import (
     HeadOnDeleteMarker,
     InvalidBucketName,
     InvalidBucketState,
+    InvalidNotificationARN,
     InvalidNotificationDestination,
     InvalidNotificationEvent,
     InvalidObjectState,
@@ -133,7 +134,7 @@ class FakeKey(BaseModel, ManagedState):
         bucket_name: str | None = None,
         encryption: str | None = None,
         kms_key_id: str | None = None,
-        bucket_key_enabled: Any = None,
+        bucket_key_enabled: bool | None = None,
         lock_mode: str | None = None,
         lock_legal_status: str | None = None,
         lock_until: datetime.datetime | None = None,
@@ -677,6 +678,41 @@ def get_canned_acl(acl: str) -> FakeAcl:
     return FakeAcl(grants=grants)
 
 
+def get_grants(
+    grants: list[dict[str, Any]],
+    permissions: list[str],
+    exception_type: type[Exception],
+) -> list[FakeGrant]:
+    """Validates and converts a list of botocore Grant structures."""
+    result = []
+    for grant in grants:
+        if grant.get("Permission", "") not in permissions:
+            raise exception_type()
+
+        grantee = grant.get("Grantee", {})
+        if grantee.get("Type", "") not in [
+            "CanonicalUser",
+            "AmazonCustomerByEmail",
+            "Group",
+        ]:
+            raise exception_type()
+
+        # TODO: Verify that the proper grantee data is supplied based on the type.
+        result.append(
+            FakeGrant(
+                [
+                    FakeGrantee(
+                        grantee_id=grantee.get("ID", ""),
+                        display_name=grantee.get("DisplayName", ""),
+                        uri=grantee.get("URI", ""),
+                    )
+                ],
+                [grant["Permission"]],
+            )
+        )
+    return result
+
+
 class LifecycleFilter(BaseModel):
     tag_key: str | None
     tag_value: str | None
@@ -736,7 +772,7 @@ class LifecycleAndFilter(BaseModel):
 class LifecycleTransition(BaseModel):
     def __init__(
         self,
-        date: str | None = None,
+        date: datetime.datetime | None = None,
         days: int | None = None,
         storage_class: str | None = None,
     ):
@@ -747,7 +783,7 @@ class LifecycleTransition(BaseModel):
     def to_config_dict(self) -> dict[str, Any]:
         config: dict[str, Any] = {}
         if self.date is not None:
-            config["date"] = self.date
+            config["date"] = iso_8601_datetime_without_milliseconds_s3(self.date)
         if self.days is not None:
             config["days"] = self.days
         if self.storage_class is not None:
@@ -781,15 +817,15 @@ class LifecycleRule(BaseModel):
         prefix: str | None = None,
         lc_filter: LifecycleFilter | None = None,
         status: str | None = None,
-        expiration_days: str | None = None,
-        expiration_date: str | None = None,
+        expiration_days: int | None = None,
+        expiration_date: datetime.datetime | None = None,
         transitions: list[LifecycleTransition] | None = None,
-        expired_object_delete_marker: str | None = None,
-        nve_noncurrent_days: str | None = None,
+        expired_object_delete_marker: bool | None = None,
+        nve_noncurrent_days: int | None = None,
         noncurrent_version_transitions: Optional[
             list[LifeCycleNoncurrentVersionTransition]
         ] = None,
-        aimu_days: str | None = None,
+        aimu_days: int | None = None,
     ):
         self.id = rule_id
         self.prefix = prefix
@@ -813,12 +849,14 @@ class LifecycleRule(BaseModel):
             "id": self.id,
             "prefix": self.prefix,
             "status": self.status,
-            "expirationInDays": int(self.expiration_days)
-            if self.expiration_days
-            else None,
+            "expirationInDays": self.expiration_days,
             "expiredObjectDeleteMarker": self.expired_object_delete_marker,
-            "noncurrentVersionExpirationInDays": -1 or int(self.nve_noncurrent_days),  # type: ignore
-            "expirationDate": self.expiration_date,
+            "noncurrentVersionExpirationInDays": -1 or self.nve_noncurrent_days,
+            "expirationDate": iso_8601_datetime_without_milliseconds_s3(
+                self.expiration_date
+            )
+            if self.expiration_date
+            else None,
         }
 
         if self.transitions:
@@ -857,25 +895,17 @@ class LifecycleRule(BaseModel):
 class CorsRule(BaseModel):
     def __init__(
         self,
-        allowed_methods: Any,
-        allowed_origins: Any,
-        allowed_headers: Any = None,
-        expose_headers: Any = None,
-        max_age_seconds: Any = None,
-        id_: Any = None,
+        allowed_methods: list[str],
+        allowed_origins: list[str],
+        allowed_headers: list[str] | None = None,
+        expose_headers: list[str] | None = None,
+        max_age_seconds: int | None = None,
+        id_: str | None = None,
     ):
-        self.allowed_methods = (
-            [allowed_methods] if isinstance(allowed_methods, str) else allowed_methods
-        )
-        self.allowed_origins = (
-            [allowed_origins] if isinstance(allowed_origins, str) else allowed_origins
-        )
-        self.allowed_headers = (
-            [allowed_headers] if isinstance(allowed_headers, str) else allowed_headers
-        )
-        self.exposed_headers = (
-            [expose_headers] if isinstance(expose_headers, str) else expose_headers
-        )
+        self.allowed_methods = allowed_methods
+        self.allowed_origins = allowed_origins
+        self.allowed_headers = allowed_headers
+        self.exposed_headers = expose_headers
         self.max_age_seconds = max_age_seconds
         self.id_ = id_
 
@@ -908,9 +938,9 @@ class Notification(BaseModel):
         return False
 
     def _key_matches(self, key_name: str) -> bool:
-        if "S3Key" not in self.filters:
+        if "Key" not in self.filters:
             return True
-        _filters = {f["Name"]: f["Value"] for f in self.filters["S3Key"]["FilterRule"]}
+        _filters = {f["Name"]: f["Value"] for f in self.filters["Key"]["FilterRules"]}
         prefix_matches = "prefix" not in _filters or key_name.startswith(
             _filters["prefix"]
         )
@@ -934,7 +964,7 @@ class Notification(BaseModel):
                 "s3KeyFilter": {
                     "filterRules": [
                         {"name": fr["Name"], "value": fr["Value"]}
-                        for fr in self.filters["S3Key"]["FilterRule"]
+                        for fr in self.filters["Key"]["FilterRules"]
                     ]
                 }
             }
@@ -958,8 +988,8 @@ class NotificationConfiguration(BaseModel):
         self.topic = (
             [
                 Notification(
-                    t["Topic"],
-                    t["Event"],
+                    t["TopicArn"],
+                    t["Events"],
                     filters=t.get("Filter"),
                     notification_id=t.get("Id"),
                 )
@@ -971,8 +1001,8 @@ class NotificationConfiguration(BaseModel):
         self.queue = (
             [
                 Notification(
-                    q["Queue"],
-                    q["Event"],
+                    q["QueueArn"],
+                    q["Events"],
                     filters=q.get("Filter"),
                     notification_id=q.get("Id"),
                 )
@@ -984,8 +1014,8 @@ class NotificationConfiguration(BaseModel):
         self.cloud_function = (
             [
                 Notification(
-                    c["CloudFunction"],
-                    c["Event"],
+                    c["LambdaFunctionArn"],
+                    c["Events"],
                     filters=c.get("Filter"),
                     notification_id=c.get("Id"),
                 )
@@ -1068,8 +1098,8 @@ class FakeBucket(CloudFormationModel):
         self.multiparts = MultipartDict()
         self.versioning_status: str | None = None
         self.rules: list[LifecycleRule] = []
-        self.policy: bytes | None = None
-        self.website_configuration: bytes | None = None
+        self.policy: str | None = None
+        self.website_configuration: dict[str, Any] | None = None
         self.acl: FakeAcl | None = get_canned_acl("private")
         self.cors: list[CorsRule] = []
         self.logging: dict[str, Any] = {}
@@ -1105,7 +1135,7 @@ class FakeBucket(CloudFormationModel):
         if self.policy is None:
             return PermissionResult.NEUTRAL
 
-        iam_policy = IAMPolicy(self.policy.decode())
+        iam_policy = IAMPolicy(self.policy)
         return iam_policy.is_action_permitted(action, resource)
 
     def set_lifecycle(self, rules: list[dict[str, Any]]) -> None:
@@ -1114,25 +1144,16 @@ class FakeBucket(CloudFormationModel):
             # Extract and validate actions from Lifecycle rule
             expiration = rule.get("Expiration")
 
-            transitions_input = rule.get("Transition", [])
-            if transitions_input and not isinstance(transitions_input, list):
-                transitions_input = [rule.get("Transition")]
-
             transitions = [
                 LifecycleTransition(
                     date=transition.get("Date"),
                     days=transition.get("Days"),
                     storage_class=transition.get("StorageClass"),
                 )
-                for transition in transitions_input
+                for transition in rule.get("Transitions", [])
             ]
 
-            try:
-                top_level_prefix = (
-                    rule["Prefix"] or ""
-                )  # If it's `None` the set to the empty string
-            except KeyError:
-                top_level_prefix = None
+            top_level_prefix = rule.get("Prefix")
 
             nve_noncurrent_days = None
             if rule.get("NoncurrentVersionExpiration") is not None:
@@ -1142,12 +1163,8 @@ class FakeBucket(CloudFormationModel):
                     "NoncurrentDays"
                 ]
 
-            nv_transitions_input = rule.get("NoncurrentVersionTransition", [])
-            if nv_transitions_input and not isinstance(nv_transitions_input, list):
-                nv_transitions_input = [rule.get("NoncurrentVersionTransition")]
-
             noncurrent_version_transitions = []
-            for nvt in nv_transitions_input:
+            for nvt in rule.get("NoncurrentVersionTransitions", []):
                 if nvt.get("NoncurrentDays") is None or nvt.get("StorageClass") is None:
                     raise MalformedXML()
 
@@ -1178,52 +1195,33 @@ class FakeBucket(CloudFormationModel):
 
             # Pull out the filter:
             lc_filter = None
-            if rule.get("Filter"):
-                # Can't have both `Filter` and `Prefix` (need to check for the presence of the key):
-                try:
-                    # 'Prefix' cannot be outside of a Filter:
-                    if rule["Prefix"] or not rule["Prefix"]:
-                        raise MalformedXML()
-                except KeyError:
-                    pass
+            if rule_filter := rule.get("Filter"):
+                # 'Prefix' cannot be outside of a Filter:
+                if "Prefix" in rule:
+                    raise MalformedXML()
 
                 filters = 0
-                try:
-                    prefix_filter = (
-                        rule["Filter"]["Prefix"] or ""
-                    )  # If it's `None` the set to the empty string
+                prefix_filter = rule_filter.get("Prefix")
+                if prefix_filter is not None:
                     filters += 1
-                except KeyError:
-                    prefix_filter = None
 
                 and_filter = None
-                if rule["Filter"].get("And"):
+                if rule_filter.get("And"):
                     filters += 1
-                    and_tags = {}
-                    if rule["Filter"]["And"].get("Tag"):
-                        if not isinstance(rule["Filter"]["And"]["Tag"], list):
-                            rule["Filter"]["And"]["Tag"] = [
-                                rule["Filter"]["And"]["Tag"]
-                            ]
-
-                        for t in rule["Filter"]["And"]["Tag"]:
-                            and_tags[t["Key"]] = t.get("Value", "")
-
-                    try:
-                        and_prefix = (
-                            rule["Filter"]["And"]["Prefix"] or ""
-                        )  # If it's `None` then set to the empty string
-                    except KeyError:
-                        and_prefix = None
-
-                    and_filter = LifecycleAndFilter(prefix=and_prefix, tags=and_tags)
+                    and_tags = {
+                        t["Key"]: t.get("Value", "")
+                        for t in rule_filter["And"].get("Tags", [])
+                    }
+                    and_filter = LifecycleAndFilter(
+                        prefix=rule_filter["And"].get("Prefix"), tags=and_tags
+                    )
 
                 filter_tag = None
-                if rule["Filter"].get("Tag"):
+                if rule_filter.get("Tag"):
                     filters += 1
                     filter_tag = (
-                        rule["Filter"]["Tag"]["Key"],
-                        rule["Filter"]["Tag"].get("Value", ""),
+                        rule_filter["Tag"]["Key"],
+                        rule_filter["Tag"].get("Value", ""),
                     )
 
                 # Can't have more than 1 filter:
@@ -1235,11 +1233,8 @@ class FakeBucket(CloudFormationModel):
                 )
 
             # If no top level prefix and no filter is present, then this is invalid:
-            if top_level_prefix is None:
-                try:
-                    rule["Filter"]
-                except KeyError:
-                    raise MalformedXML()
+            if top_level_prefix is None and "Filter" not in rule:
+                raise MalformedXML()
 
             self.rules.append(
                 LifecycleRule(
@@ -1263,40 +1258,23 @@ class FakeBucket(CloudFormationModel):
     def set_cors(self, rules: list[dict[str, Any]]) -> None:
         self.cors = []
 
-        if len(rules) > 100:
+        if not rules or len(rules) > 100:
             raise MalformedXML()
 
         for rule in rules:
-            assert isinstance(rule["AllowedMethod"], list) or isinstance(
-                rule["AllowedMethod"], str
-            )
-            assert isinstance(rule["AllowedOrigin"], list) or isinstance(
-                rule["AllowedOrigin"], str
-            )
-            assert isinstance(rule.get("AllowedHeader", []), list) or isinstance(
-                rule.get("AllowedHeader", ""), str
-            )
-            assert isinstance(rule.get("ExposeHeader", []), list) or isinstance(
-                rule.get("ExposeHeader", ""), str
-            )
-            assert isinstance(rule.get("MaxAgeSeconds", "0"), str)
-            assert isinstance(rule.get("ID", ""), str)
+            if not rule.get("AllowedMethods") or not rule.get("AllowedOrigins"):
+                raise MalformedXML()
 
-            if isinstance(rule["AllowedMethod"], str):
-                methods = [rule["AllowedMethod"]]
-            else:
-                methods = rule["AllowedMethod"]
-
-            for method in methods:
+            for method in rule["AllowedMethods"]:
                 if method not in ["GET", "PUT", "HEAD", "POST", "DELETE"]:
                     raise InvalidRequest(method)
 
             self.cors.append(
                 CorsRule(
-                    rule["AllowedMethod"],
-                    rule["AllowedOrigin"],
-                    rule.get("AllowedHeader"),
-                    rule.get("ExposeHeader"),
+                    rule["AllowedMethods"],
+                    rule["AllowedOrigins"],
+                    rule.get("AllowedHeaders"),
+                    rule.get("ExposeHeaders"),
                     rule.get("MaxAgeSeconds"),
                     rule.get("ID"),
                 )
@@ -1311,7 +1289,7 @@ class FakeBucket(CloudFormationModel):
     ) -> bool:
         target_bucket_policy = target_bucket.policy
         if target_bucket_policy:
-            target_bucket_policy_json = json.loads(target_bucket_policy.decode())
+            target_bucket_policy_json = json.loads(target_bucket_policy)
             for stmt in target_bucket_policy_json["Statement"]:
                 if (
                     stmt.get("Principal", {}).get("Service")
@@ -1364,6 +1342,16 @@ class FakeBucket(CloudFormationModel):
             self.logging = {}
             return
 
+        if not logging_config.get("TargetBucket"):
+            raise MalformedXML()
+        logging_config.setdefault("TargetPrefix", "")
+        if logging_config.get("TargetGrants"):
+            logging_config["TargetGrants"] = get_grants(
+                logging_config["TargetGrants"],
+                permissions=["READ", "WRITE", "FULL_CONTROL"],
+                exception_type=MalformedXML,
+            )
+
         # Target bucket must exist in the same account (assuming all moto buckets are in the same account):
         target_bucket = bucket_backend.buckets.get(logging_config["TargetBucket"])
         if not target_bucket:
@@ -1392,16 +1380,48 @@ class FakeBucket(CloudFormationModel):
         self.logging = logging_config
 
     def set_notification_configuration(
-        self, notification_config: dict[str, Any] | None
+        self, notification_config: dict[str, Any]
     ) -> None:
-        if not notification_config:
+        for config_name, arn_name, arn_service in [
+            ("TopicConfigurations", "TopicArn", "sns"),
+            ("QueueConfigurations", "QueueArn", "sqs"),
+            ("LambdaFunctionConfigurations", "LambdaFunctionArn", "lambda"),
+        ]:
+            for config in notification_config.get(config_name, []):
+                # Verify that the ARN is close to being correct -- nothing too complex in the ARN logic
+                if not any(
+                    config.get(arn_name, "").startswith(f"arn:{p}:{arn_service}:")
+                    for p in PARTITION_NAMES
+                ):
+                    raise InvalidNotificationARN()
+                if not config.get("Events"):
+                    raise MalformedXML()
+                if config.get("Filter"):
+                    filter_rules = config["Filter"].get("Key", {}).get("FilterRules")
+                    if not filter_rules:
+                        raise MalformedXML()
+                    for filter_rule in filter_rules:
+                        if filter_rule.get("Name") not in ["suffix", "prefix"]:
+                            raise MalformedXML()
+                        if not filter_rule.get("Value"):
+                            raise MalformedXML()
+
+        if not any(
+            config_name in notification_config
+            for config_name in [
+                "TopicConfigurations",
+                "QueueConfigurations",
+                "LambdaFunctionConfigurations",
+                "EventBridgeConfiguration",
+            ]
+        ):
             self.notification_configuration = None
             return
 
         self.notification_configuration = NotificationConfiguration(
-            topic=notification_config.get("TopicConfiguration"),
-            queue=notification_config.get("QueueConfiguration"),
-            cloud_function=notification_config.get("CloudFunctionConfiguration"),
+            topic=notification_config.get("TopicConfigurations"),
+            queue=notification_config.get("QueueConfigurations"),
+            cloud_function=notification_config.get("LambdaFunctionConfigurations"),
             event_bridge=notification_config.get("EventBridgeConfiguration"),
         )
 
@@ -1629,9 +1649,7 @@ class FakeBucket(CloudFormationModel):
             "logFilePrefix": self.logging.get("TargetPrefix", None),
         }
 
-        s_config["BucketPolicy"] = {
-            "policyText": self.policy.decode("utf-8") if self.policy else None
-        }
+        s_config["BucketPolicy"] = {"policyText": self.policy}
 
         s_config["IsRequesterPaysEnabled"] = (
             "false" if self.payer == "BucketOwner" else "true"
@@ -1677,6 +1695,7 @@ class FakeBucketInventoryConfiguration(BaseModel):
         schedule: dict[str, Any],
         filters: dict[str, Any] | None = None,
         optional_fields: list[str] | None = None,
+        included_object_versions: str | None = None,
     ):
         self.id = id
         self.destination = destination
@@ -1684,6 +1703,7 @@ class FakeBucketInventoryConfiguration(BaseModel):
         self.schedule = schedule
         self.filters = filters
         self.optional_fields = optional_fields
+        self.included_object_versions = included_object_versions
 
 
 class S3Backend(BaseBackend, CloudWatchMetricProvider, TaggableResourcesMixin):
@@ -2138,10 +2158,10 @@ class S3Backend(BaseBackend, CloudWatchMetricProvider, TaggableResourcesMixin):
             next_version_id_marker,
         )
 
-    def get_bucket_policy(self, bucket_name: str) -> bytes | None:
+    def get_bucket_policy(self, bucket_name: str) -> str | None:
         return self.get_bucket(bucket_name).policy
 
-    def put_bucket_policy(self, bucket_name: str, policy: bytes) -> None:
+    def put_bucket_policy(self, bucket_name: str, policy: str) -> None:
         """
         Basic policy enforcement is in place.
 
@@ -2156,8 +2176,13 @@ class S3Backend(BaseBackend, CloudWatchMetricProvider, TaggableResourcesMixin):
         bucket.policy = None
 
     def put_bucket_encryption(
-        self, bucket_name: str, encryption: dict[str, Any]
+        self, bucket_name: str, encryption: dict[str, Any] | None
     ) -> None:
+        rules = (encryption or {}).get("Rules")
+        if not rules or not rules[0].get("ApplyServerSideEncryptionByDefault", {}).get(
+            "SSEAlgorithm"
+        ):
+            raise MalformedXML()
         self.get_bucket(bucket_name).encryption = encryption
 
     def delete_bucket_encryption(self, bucket_name: str) -> None:
@@ -2181,9 +2206,7 @@ class S3Backend(BaseBackend, CloudWatchMetricProvider, TaggableResourcesMixin):
     def put_bucket_replication(
         self, bucket_name: str, replication: dict[str, Any]
     ) -> None:
-        if isinstance(replication["Rule"], dict):
-            replication["Rule"] = [replication["Rule"]]
-        for rule in replication["Rule"]:
+        for rule in replication.get("Rules", []):
             if "Priority" not in rule:
                 rule["Priority"] = 1
             if "ID" not in rule:
@@ -2215,12 +2238,14 @@ class S3Backend(BaseBackend, CloudWatchMetricProvider, TaggableResourcesMixin):
         bucket.delete_lifecycle()
 
     def put_bucket_website(
-        self, bucket_name: str, website_configuration: bytes
+        self, bucket_name: str, website_configuration: dict[str, Any]
     ) -> None:
         bucket = self.get_bucket(bucket_name)
         bucket.website_configuration = website_configuration
 
-    def get_bucket_website_configuration(self, bucket_name: str) -> bytes | None:
+    def get_bucket_website_configuration(
+        self, bucket_name: str
+    ) -> dict[str, Any] | None:
         bucket = self.get_bucket(bucket_name)
         return bucket.website_configuration
 
@@ -2246,7 +2271,7 @@ class S3Backend(BaseBackend, CloudWatchMetricProvider, TaggableResourcesMixin):
         multipart: FakeMultipart | None = None,
         encryption: str | None = None,
         kms_key_id: str | None = None,
-        bucket_key_enabled: Any = None,
+        bucket_key_enabled: bool | None = None,
         lock_mode: str | None = None,
         lock_legal_status: str | None = None,
         lock_until: datetime.datetime | None = None,
@@ -2262,18 +2287,12 @@ class S3Backend(BaseBackend, CloudWatchMetricProvider, TaggableResourcesMixin):
 
         # getting default config from bucket if not included in put request
         if bucket.encryption:
-            bucket_key_enabled = bucket_key_enabled or bucket.encryption["Rule"].get(
-                "BucketKeyEnabled", False
-            )
-            kms_key_id = kms_key_id or bucket.encryption["Rule"][
-                "ApplyServerSideEncryptionByDefault"
-            ].get("KMSMasterKeyID")
-            encryption = (
-                encryption
-                or bucket.encryption["Rule"]["ApplyServerSideEncryptionByDefault"][
-                    "SSEAlgorithm"
-                ]
-            )
+            default_rule = bucket.encryption["Rules"][0]
+            if bucket_key_enabled is None:
+                bucket_key_enabled = default_rule.get("BucketKeyEnabled", False)
+            sse_by_default = default_rule["ApplyServerSideEncryptionByDefault"]
+            kms_key_id = kms_key_id or sse_by_default.get("KMSMasterKeyID")
+            encryption = encryption or sse_by_default["SSEAlgorithm"]
 
         new_key = FakeKey(
             name=key_name,
@@ -3001,7 +3020,7 @@ class S3Backend(BaseBackend, CloudWatchMetricProvider, TaggableResourcesMixin):
         storage: str | None = None,
         encryption: str | None = None,
         kms_key_id: str | None = None,
-        bucket_key_enabled: Any = None,
+        bucket_key_enabled: bool | None = None,
         mdirective: str | None = None,
         metadata: Any | None = None,
         website_redirect_location: str | None = None,
@@ -3208,6 +3227,9 @@ class S3Backend(BaseBackend, CloudWatchMetricProvider, TaggableResourcesMixin):
             schedule=inventory_configuration["Schedule"],
             filters=inventory_configuration.get("Filter"),
             optional_fields=inventory_configuration.get("OptionalFields"),
+            included_object_versions=inventory_configuration.get(
+                "IncludedObjectVersions"
+            ),
         )
 
         bucket.inventory_configs[inv_config.id] = inv_config
