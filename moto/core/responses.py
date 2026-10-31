@@ -432,6 +432,13 @@ class BaseResponse(ActionAuthenticatorMixin):
         context = ActionContext(service_model, operation_model, serializer_cls, self)
         status_code, headers, body = action_result.execute_result(context)
         headers.update(self.response_headers)
+        # A status set on the response headers overrides the modeled one,
+        # e.g. a 206 Partial Content response to a ranged request.
+        if "status" in headers:
+            status_code = int(headers["status"])
+        # 304 Not Modified responses never have a body.
+        if status_code == 304:
+            body = ""
         return status_code, headers, body
 
     def call_action(self) -> TYPE_RESPONSE:
