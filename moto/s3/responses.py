@@ -974,6 +974,12 @@ class S3Response(BaseResponse):
         self.backend.put_bucket_policy(self.bucket_name, self._get_param("Policy"))
         return EmptyResult()
 
+    def put_bucket_request_payment(self) -> ActionResult:
+        self.backend.put_bucket_request_payment(
+            self.bucket_name, self._get_param("RequestPaymentConfiguration.Payer")
+        )
+        return EmptyResult()
+
     def put_bucket_acl(self) -> ActionResult:
         # Headers are first. If not set, then look at the body (consistent with the documentation):
         acls = self._acl_from_headers()
@@ -1298,6 +1304,10 @@ class S3Response(BaseResponse):
         if not policy:
             raise NoSuchBucketPolicy(bucket_name=self.bucket_name)
         return ActionResult({"Policy": policy})
+
+    def get_bucket_request_payment(self) -> ActionResult:
+        payer = self.backend.get_bucket_request_payment(self.bucket_name)
+        return ActionResult({"Payer": payer})
 
     def get_bucket_policy_status(self) -> ActionResult:
         policy = self.backend.get_bucket_policy(self.bucket_name)

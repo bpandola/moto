@@ -2211,6 +2211,14 @@ class S3Backend(BaseBackend, CloudWatchMetricProvider, TaggableResourcesMixin):
         """
         self.get_bucket(bucket_name).policy = policy
 
+    def get_bucket_request_payment(self, bucket_name: str) -> str:
+        return self.get_bucket(bucket_name).payer
+
+    def put_bucket_request_payment(self, bucket_name: str, payer: str) -> None:
+        if payer not in ["BucketOwner", "Requester"]:
+            raise MalformedXML()
+        self.get_bucket(bucket_name).payer = payer
+
     def delete_bucket_policy(self, bucket_name: str) -> None:
         bucket = self.get_bucket(bucket_name)
         bucket.policy = None

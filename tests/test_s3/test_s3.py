@@ -2748,6 +2748,22 @@ def test_accelerate_configuration_is_not_supported_when_bucket_name_has_dots():
     assert exc.value.response["Error"]["Code"] == "InvalidRequest"
 
 
+@mock_aws
+def test_bucket_request_payment():
+    bucket_name = str(uuid.uuid4())
+    s3_client = boto3.client("s3", region_name=DEFAULT_REGION_NAME)
+    s3_client.create_bucket(Bucket=bucket_name)
+
+    resp = s3_client.get_bucket_request_payment(Bucket=bucket_name)
+    assert resp["Payer"] == "BucketOwner"
+
+    s3_client.put_bucket_request_payment(
+        Bucket=bucket_name, RequestPaymentConfiguration={"Payer": "Requester"}
+    )
+    resp = s3_client.get_bucket_request_payment(Bucket=bucket_name)
+    assert resp["Payer"] == "Requester"
+
+
 def store_and_read_back_a_key(key):
     s3_client = boto3.client("s3", region_name=DEFAULT_REGION_NAME)
     bucket_name = str(uuid.uuid4())
