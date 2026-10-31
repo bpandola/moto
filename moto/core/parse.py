@@ -458,7 +458,11 @@ class BaseRestParser(RequestParser):
                     response["body"] and value == {} and isinstance(self, RestXMLParser)
                 ):
                     final_parsed[payload_member_name] = value
-        else:
+        elif any(
+            "location" not in member.serialization for member in member_shapes.values()
+        ):
+            # The body is only parsed if any members are bound to it, since
+            # clients may send a body anyway (e.g. with an S3 GetObject request).
             original_parsed = self._initial_body_parse(response["body"])
             body_parsed = self._parse_shape(shape, original_parsed)
             final_parsed.update(body_parsed)

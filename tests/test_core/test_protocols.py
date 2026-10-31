@@ -209,3 +209,22 @@ def _create_exception(case):
     for key, value in case["error"].items():
         setattr(exc, key, value)
     return exc
+
+
+def test_rest_body_is_not_parsed_without_body_members():
+    # Clients may send a body that the operation doesn't use (e.g. S3 GetObject)
+    from moto.core.responses import get_service_model
+
+    operation_model = get_service_model("s3").operation_model("GetObject")
+    parser = PROTOCOL_PARSERS["rest-xml"](operation_model)
+    parsed = parser.parse(
+        {
+            "method": "GET",
+            "values": MultiDict(),
+            "headers": Headers(),
+            "body": b"not xml",
+            "url_path": "/bucket/key",
+            "url_params": {"Bucket": "bucket", "Key": "key"},
+        }
+    )
+    assert parsed == {"Bucket": "bucket", "Key": "key"}
