@@ -84,6 +84,7 @@ from .models import (
     S3Backend,
     TransitionDefaultMinimumObjectSize,
     get_canned_acl,
+    get_grants,
     s3_backends,
 )
 from .utils import (
@@ -982,12 +983,37 @@ class S3Response(BaseResponse):
         # Headers are first. If not set, then look at the body (consistent with the documentation):
         acls = self._acl_from_headers()
         if not acls:
-            acls = self._acl_from_body()
+            policy = self._get_param("AccessControlPolicy")
+            # The owner is needed for some reason...
+            # TODO: Validate that the Owner is actually correct.
+            if not policy or not policy.get("Owner"):
+                raise MalformedACLError()
+            # If empty, then no ACLs:
+            if policy.get("Grants"):
+                grants = get_grants(
+                    policy["Grants"],
+                    permissions=[
+                        "READ",
+                        "WRITE",
+                        "READ_ACP",
+                        "WRITE_ACP",
+                        "FULL_CONTROL",
+                    ],
+                    exception_type=MalformedACLError,
+                )
+                acls = FakeAcl(grants)
         self.backend.put_bucket_acl(self.bucket_name, acls)
         return EmptyResult()
 
     def put_bucket_tagging(self) -> ActionResult:
-        tagging = self._bucket_tagging_from_body()
+        tagging: dict[str, str] = {}
+        for tag in self._get_param("Tagging.TagSet", []):
+            if tag["Key"] in tagging:
+                raise DuplicateTagKeys()
+            # Verify that "aws:" is not in the tags. If so, then this is a problem:
+            if tag["Key"].startswith("aws:"):
+                raise NoSystemTags()
+            tagging[tag["Key"]] = tag["Value"]
         self.backend.put_bucket_tagging(self.bucket_name, tagging)
         return EmptyResult()
 
@@ -2079,7 +2105,9 @@ class S3Response(BaseResponse):
         elif key_to_tag is None:
             raise MissingVersion(key=key_name, version_id=version_id)
 
-        tagging = self._tagging_from_xml()
+        tagging = {
+            tag["Key"]: tag["Value"] for tag in self._get_param("Tagging.TagSet", [])
+        }
         self.backend.put_object_tagging(key=key_to_tag, tags=tagging)
 
         self.response_headers.update(self._get_cors_headers_other())
@@ -2309,74 +2337,6 @@ class S3Response(BaseResponse):
             self.response_headers["status"] = "206"
         return ActionResult(result)
 
-    def _acl_from_body(self) -> FakeAcl | None:
-        parsed_xml = xmltodict.parse(self.body)
-        if not parsed_xml.get("AccessControlPolicy"):
-            raise MalformedACLError()
-
-        # The owner is needed for some reason...
-        if not parsed_xml["AccessControlPolicy"].get("Owner"):
-            # TODO: Validate that the Owner is actually correct.
-            raise MalformedACLError()
-
-        # If empty, then no ACLs:
-        if parsed_xml["AccessControlPolicy"].get("AccessControlList") is None:
-            return None
-
-        if not parsed_xml["AccessControlPolicy"]["AccessControlList"].get("Grant"):
-            raise MalformedACLError()
-
-        permissions = ["READ", "WRITE", "READ_ACP", "WRITE_ACP", "FULL_CONTROL"]
-
-        if not isinstance(
-            parsed_xml["AccessControlPolicy"]["AccessControlList"]["Grant"], list
-        ):
-            parsed_xml["AccessControlPolicy"]["AccessControlList"]["Grant"] = [
-                parsed_xml["AccessControlPolicy"]["AccessControlList"]["Grant"]
-            ]
-
-        grants = self._get_grants_from_xml(
-            parsed_xml["AccessControlPolicy"]["AccessControlList"]["Grant"],
-            MalformedACLError,
-            permissions,
-        )
-        return FakeAcl(grants)
-
-    def _get_grants_from_xml(
-        self,
-        grant_list: list[dict[str, Any]],
-        exception_type: type[S3ClientError],
-        permissions: list[str],
-    ) -> list[FakeGrant]:
-        grants = []
-        for grant in grant_list:
-            if grant.get("Permission", "") not in permissions:
-                raise exception_type()
-
-            if grant["Grantee"].get("@xsi:type", "") not in [
-                "CanonicalUser",
-                "AmazonCustomerByEmail",
-                "Group",
-            ]:
-                raise exception_type()
-
-            # TODO: Verify that the proper grantee data is supplied based on the type.
-
-            grants.append(
-                FakeGrant(
-                    [
-                        FakeGrantee(
-                            grantee_id=grant["Grantee"].get("ID", ""),
-                            display_name=grant["Grantee"].get("DisplayName", ""),
-                            uri=grant["Grantee"].get("URI", ""),
-                        )
-                    ],
-                    [grant["Permission"]],
-                )
-            )
-
-        return grants
-
     def _acl_from_headers(self) -> FakeAcl | None:
         canned_acl = self._get_param("ACL")
 
@@ -2418,39 +2378,6 @@ class S3Response(BaseResponse):
             parsed_header = parse_qs(tagging, keep_blank_values=True)
             for tag in parsed_header.items():
                 tags[tag[0]] = tag[1][0]
-        return tags
-
-    def _tagging_from_xml(self) -> dict[str, str]:
-        parsed_xml = xmltodict.parse(self.body, force_list={"Tag": True})
-
-        tags = {}
-        for tag in parsed_xml["Tagging"]["TagSet"]["Tag"]:
-            tags[tag["Key"]] = tag["Value"] or ""
-
-        return tags
-
-    def _bucket_tagging_from_body(self) -> dict[str, str]:
-        parsed_xml = xmltodict.parse(self.body)
-
-        tags = {}
-        # Optional if no tags are being sent:
-        if parsed_xml["Tagging"].get("TagSet"):
-            # If there is only 1 tag, then it's not a list:
-            if not isinstance(parsed_xml["Tagging"]["TagSet"]["Tag"], list):
-                tags[parsed_xml["Tagging"]["TagSet"]["Tag"]["Key"]] = parsed_xml[
-                    "Tagging"
-                ]["TagSet"]["Tag"]["Value"]
-            else:
-                for tag in parsed_xml["Tagging"]["TagSet"]["Tag"]:
-                    if tag["Key"] in tags:
-                        raise DuplicateTagKeys()
-                    tags[tag["Key"]] = tag["Value"]
-
-        # Verify that "aws:" is not in the tags. If so, then this is a problem:
-        for key, _ in tags.items():
-            if key.startswith("aws:"):
-                raise NoSystemTags()
-
         return tags
 
     def delete_object(self) -> ActionResult:
