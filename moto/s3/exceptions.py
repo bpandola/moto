@@ -355,11 +355,6 @@ class NoSuchUpload(S3ClientError):
         self.upload_id = upload_id
 
 
-class NotModified(S3ClientError):
-    code = "NotModified"
-    message = "Not Modified"
-
-
 class MissingContentLength(S3ClientError):
     code = "MissingContentLength"
     message = "You must provide the Content-Length HTTP header."

@@ -12,7 +12,12 @@ from moto.core.common_types import TYPE_RESPONSE
 from moto.core.mime_types import APP_XML
 from moto.core.parse import RequestParserError
 from moto.core.request import Request
-from moto.core.responses import ActionResult, BaseResponse, EmptyResult
+from moto.core.responses import (
+    ActionContext,
+    ActionResult,
+    BaseResponse,
+    EmptyResult,
+)
 from moto.core.utils import (
     ALT_DOMAIN_SUFFIXES,
     extract_region_from_aws_authorization,
@@ -58,7 +63,6 @@ from .exceptions import (
     NoSuchWebsiteConfiguration,
     NoSystemTags,
     NotAnIntegerException,
-    NotModified,
     ObjectNotInActiveTierError,
     OwnershipControlsNotFoundError,
     PreconditionFailed,
@@ -162,6 +166,35 @@ ALLOWED_HEADER_OVERRIDES = {
     "ResponseContentDisposition": "ContentDisposition",
     "ResponseContentEncoding": "ContentEncoding",
 }
+
+
+class PartialResult(ActionResult):
+    """A 206 Partial Content response to a ranged or part-number request."""
+
+    def execute_result(self, context: ActionContext) -> TYPE_RESPONSE:
+        _, headers, body = super().execute_result(context)
+        return 206, headers, body
+
+
+class NotModifiedResult(ActionResult):
+    """A 304 Not Modified response, which never has a body."""
+
+    def __init__(self) -> None:
+        super().__init__(None)
+
+    def execute_result(self, context: ActionContext) -> TYPE_RESPONSE:
+        return 304, {}, ""
+
+
+class AcceptedResult(ActionResult):
+    """A 202 Accepted response with no body."""
+
+    def __init__(self) -> None:
+        super().__init__(None)
+
+    def execute_result(self, context: ActionContext) -> TYPE_RESPONSE:
+        _, headers, body = super().execute_result(context)
+        return 202, headers, body
 
 
 class S3Response(BaseResponse):
@@ -1375,7 +1408,7 @@ class S3Response(BaseResponse):
         if key.version_id != "null":
             self.response_headers["x-amz-version-id"] = key.version_id
         if not_modified:
-            raise NotModified()
+            return NotModifiedResult()
 
         acl = self.backend.get_object_acl(key)
         return ActionResult(self._acl_to_dict(acl))
@@ -1499,7 +1532,7 @@ class S3Response(BaseResponse):
         self.backend.delete_bucket_policy(self.bucket_name)
         return EmptyResult()
 
-    def post_object(self) -> ActionResult:
+    def post_object(self) -> tuple[str, dict[str, Any]]:
         key = self.querystring["key"][0]
         f = self.body
 
@@ -1522,13 +1555,13 @@ class S3Response(BaseResponse):
 
             self.response_headers["Location"] = fixed_redirect
 
+        status_code: str | int
         if "success_action_status" in self.querystring:
             status_code = self.querystring["success_action_status"][0]
         elif "success_action_redirect" in self.querystring:
             status_code = 303
         else:
             status_code = 204
-        self.response_headers["status"] = str(status_code)
 
         new_key = self.backend.put_object(
             self.bucket_name, key, f, request_method=self.method
@@ -1553,7 +1586,8 @@ class S3Response(BaseResponse):
             expires=form.get("Expires"),
         )
 
-        return EmptyResult()
+        # PostObject is not modeled, so its status can't come from the serializer
+        return "", {"status": status_code}
 
     def delete_objects(self) -> ActionResult:
         bucket_name = self.bucket_name
@@ -1658,7 +1692,7 @@ class S3Response(BaseResponse):
             self.response_headers["Last-Modified"] = key.last_modified_RFC1123
             if key.version_id != "null":
                 self.response_headers["x-amz-version-id"] = key.version_id
-            raise NotModified()
+            return NotModifiedResult()
 
         result: dict[str, Any] = {
             "Body": key.value,
@@ -1715,8 +1749,7 @@ class S3Response(BaseResponse):
                 if part_number > 1:
                     raise RangeNotSatisfiable
                 result["ContentRange"] = f"bytes 0-{key.size - 1}/{key.size}"
-                self.response_headers["status"] = "206"
-                return ActionResult(result)
+                return PartialResult(result)
 
         byte_range = self._get_range(key.size)
         if byte_range:
@@ -1729,7 +1762,7 @@ class S3Response(BaseResponse):
             result["Body"] = key.value[begin : end + 1]
             result["ContentLength"] = len(result["Body"])
             result["ContentRange"] = f"bytes {begin}-{end}/{key.size}"
-            self.response_headers["status"] = "206"
+            return PartialResult(result)
         return ActionResult(result)
 
     def get_object_attributes(self) -> ActionResult:
@@ -1737,7 +1770,7 @@ class S3Response(BaseResponse):
         key, not_modified = self._get_key(validate_storage_class=False)
         self.response_headers.update(self._get_cors_headers_other())
         if not_modified:
-            raise NotModified()
+            return NotModifiedResult()
 
         attributes_to_get = self._get_param("ObjectAttributes", [])
         response_keys = self.backend.get_object_attributes(key, attributes_to_get)
@@ -1761,7 +1794,7 @@ class S3Response(BaseResponse):
         key, not_modified = self._get_key()
         self.response_headers.update(self._get_cors_headers_other())
         if not_modified:
-            raise NotModified()
+            return NotModifiedResult()
 
         if key.version_id != "null":
             self.response_headers["x-amz-version-id"] = key.version_id
@@ -1773,7 +1806,7 @@ class S3Response(BaseResponse):
         key, not_modified = self._get_key()
         self.response_headers.update(self._get_cors_headers_other())
         if not_modified:
-            raise NotModified()
+            return NotModifiedResult()
 
         tags = self.backend.get_object_tagging(key)["Tags"]
         result = {
@@ -2296,7 +2329,7 @@ class S3Response(BaseResponse):
             self.response_headers["Last-Modified"] = key.last_modified_RFC1123
             if key.is_versioned:
                 self.response_headers["x-amz-version-id"] = key.version_id
-            raise NotModified()
+            return NotModifiedResult()
 
         result: dict[str, Any] = {
             "AcceptRanges": "bytes",
@@ -2340,8 +2373,7 @@ class S3Response(BaseResponse):
                 if part_number > 1:
                     raise RangeNotSatisfiable
                 result["ContentRange"] = f"bytes 0-{full_key.size - 1}/{full_key.size}"
-                self.response_headers["status"] = "206"
-                return ActionResult(result)
+                return PartialResult(result)
 
         byte_range = self._get_range(key.size)
         if byte_range:
@@ -2353,7 +2385,7 @@ class S3Response(BaseResponse):
                         result.pop(member_name)
             result["ContentLength"] = (end - begin) + 1
             result["ContentRange"] = f"bytes {begin}-{end}/{key.size}"
-            self.response_headers["status"] = "206"
+            return PartialResult(result)
         return ActionResult(result)
 
     def _acl_from_headers(self) -> FakeAcl | None:
@@ -2512,7 +2544,7 @@ class S3Response(BaseResponse):
             self._get_param("RestoreRequest.Type"),
         )
         if not previously_restored:
-            self.response_headers["status"] = "202"
+            return AcceptedResult()
         return EmptyResult()
 
     def select_object_content(self) -> ActionResult:

@@ -483,12 +483,6 @@
         "error": {"httpStatusCode": 404},
         "exception": true
       },
-      "NotModified": {
-        "type": "structure",
-        "members": {},
-        "error": {"httpStatusCode": 304},
-        "exception": true
-      },
       "ObjectLockConfigurationNotFoundError": {
         "type": "structure",
         "members": {},
