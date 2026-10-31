@@ -307,6 +307,18 @@ class FakeKey(BaseModel, ManagedState):
         return self._metadata
 
     @property
+    def is_versioned(self) -> bool:
+        return self._is_versioned
+
+    @property
+    def restore_status(self) -> str | None:
+        if self._expiry is None:
+            return None
+        if self.status == "IN_PROGRESS":
+            return 'ongoing-request="true"'
+        return f'ongoing-request="false", expiry-date="{self.expiry_date}"'
+
+    @property
     def response_dict(self) -> dict[str, Any]:  # type: ignore[misc]
         res: dict[str, Any] = {
             "ETag": self.etag,
@@ -323,12 +335,8 @@ class FakeKey(BaseModel, ManagedState):
             ).lower()
         if self._storage_class != "STANDARD":
             res["x-amz-storage-class"] = self._storage_class
-        if self._expiry is not None:
-            if self.status == "IN_PROGRESS":
-                header = 'ongoing-request="true"'
-            else:
-                header = f'ongoing-request="false", expiry-date="{self.expiry_date}"'
-            res["x-amz-restore"] = header
+        if self.restore_status is not None:
+            res["x-amz-restore"] = self.restore_status
 
         if self._is_versioned:
             res["x-amz-version-id"] = str(self.version_id)
@@ -2450,7 +2458,7 @@ class S3Backend(BaseBackend, CloudWatchMetricProvider, TaggableResourcesMixin):
         bucket_name: str,
         key_name: str,
         version_id: str | None = None,
-        part_number: str | None = None,
+        part_number: int | None = None,
         return_delete_marker: bool = False,
     ) -> FakeKey | None:
         bucket = self.get_bucket(bucket_name)
@@ -2483,7 +2491,7 @@ class S3Backend(BaseBackend, CloudWatchMetricProvider, TaggableResourcesMixin):
         bucket_name: str,
         key_name: str,
         version_id: str | None = None,
-        part_number: str | None = None,
+        part_number: int | None = None,
     ) -> FakeKey | None:
         obj = self.get_object(
             bucket_name, key_name, version_id, part_number, return_delete_marker=True

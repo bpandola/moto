@@ -153,6 +153,11 @@
           "requestUri": "/{Bucket}"
         },
         "documentation":""
+      },
+      "PutBucketTagging": {
+        "http": {
+          "responseCode": 204
+        }
       }
     },
     "shapes": {
@@ -267,6 +272,12 @@
         "error": {"httpStatusCode": 405},
         "exception": true
       },
+      "MissingContentLength": {
+        "type": "structure",
+        "members": {},
+        "error": {"httpStatusCode": 411},
+        "exception": true
+      },
       "NoSuchBucket": {
         "type": "structure",
         "members": {
@@ -350,6 +361,12 @@
           "BucketName": {"shape": "BucketName"}
         },
         "error": {"httpStatusCode": 404},
+        "exception": true
+      },
+      "NotModified": {
+        "type": "structure",
+        "members": {},
+        "error": {"httpStatusCode": 304},
         "exception": true
       },
       "ObjectLockConfigurationNotFoundError": {

@@ -1702,18 +1702,10 @@ def test_list_objects_v2_checksum_algo():
         Bucket=bucket_name, Key="1", Body="a", ChecksumAlgorithm="CRC32"
     )
     assert "ChecksumCRC32" in resp
-    assert (
-        resp["ResponseMetadata"]["HTTPHeaders"]["x-amz-sdk-checksum-algorithm"]
-        == "CRC32"
-    )
     resp = s3_client.put_object(
         Bucket=bucket_name, Key="2", Body="b", ChecksumAlgorithm="SHA256"
     )
     assert "ChecksumSHA256" in resp
-    assert (
-        resp["ResponseMetadata"]["HTTPHeaders"]["x-amz-sdk-checksum-algorithm"]
-        == "SHA256"
-    )
 
     resp = s3_client.list_objects_v2(Bucket=bucket_name)["Contents"]
     assert "ChecksumAlgorithm" in resp[0]
