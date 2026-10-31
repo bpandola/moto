@@ -136,8 +136,11 @@ class convert_to_flask_response:
             status, headers, content = 200, {}, result
 
         response = Response(response=content, status=status, headers=headers)
-        if request.method == "HEAD" and "content-length" in headers:
-            response.headers["Content-Length"] = headers["content-length"]
+        if request.method == "HEAD":
+            # Werkzeug sets the Content-Length of the (empty) body, instead of the resource
+            for name, value in headers.items():
+                if name.lower() == "content-length":
+                    response.headers["Content-Length"] = value
         return response
 
 
