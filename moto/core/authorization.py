@@ -35,8 +35,13 @@ class ActionAuthenticatorMixin:
     ]
 
     def _authenticate_and_authorize_action(
-        self, iam_request_cls: type, resource: str = "*"
+        self, iam_request_cls: type, resource: str = "*", action: str | None = None
     ) -> None:
+        """
+        The action defaults to the name of the operation being called.  Services
+        whose IAM action names differ from their operation names (e.g. S3) can
+        pass the IAM action explicitly.
+        """
         if (
             ActionAuthenticatorMixin.request_count
             >= settings.INITIAL_NO_AUTH_ACTION_COUNT
@@ -57,7 +62,7 @@ class ActionAuthenticatorMixin:
                 data=self.data,  # type: ignore[attr-defined]
                 body=self.raw_body,  # type: ignore[attr-defined]
                 headers=self.headers,  # type: ignore[attr-defined]
-                action=self._get_action(),  # type: ignore[attr-defined]
+                action=action or self._get_action(),  # type: ignore[attr-defined]
             )
             iam_request.check_signature()
             iam_request.check_action_permitted(resource)
@@ -70,14 +75,17 @@ class ActionAuthenticatorMixin:
         self._authenticate_and_authorize_action(IAMRequest, resource)
 
     def _authenticate_and_authorize_s3_action(
-        self, bucket_name: str | None = None, key_name: str | None = None
+        self,
+        bucket_name: str | None = None,
+        key_name: str | None = None,
+        action: str | None = None,
     ) -> None:
         arn = f"{bucket_name or '*'}/{key_name}" if key_name else (bucket_name or "*")
         resource = f"arn:{get_partition(self.region)}:s3:::{arn}"  # type: ignore[attr-defined]
 
         from moto.iam.access_control import S3IAMRequest
 
-        self._authenticate_and_authorize_action(S3IAMRequest, resource)
+        self._authenticate_and_authorize_action(S3IAMRequest, resource, action)
 
     @staticmethod
     def set_initial_no_auth_action_count(

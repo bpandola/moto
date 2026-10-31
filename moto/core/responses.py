@@ -443,6 +443,10 @@ class BaseResponse(ActionAuthenticatorMixin):
 
         try:
             self._authenticate_and_authorize_normal_action(resource)
+        except ServiceException as e:
+            status, headers, body = self.serialized(ActionResult(e))
+            headers, body = self._enrich_response(headers, body)
+            return status, headers, body
         except HTTPException as http_error:
             response = http_error.description, {"status": http_error.code}
             status, headers, body = self._transform_response(headers, response)
