@@ -136,7 +136,7 @@ class FakeKey(BaseModel, ManagedState):
         bucket_key_enabled: Any = None,
         lock_mode: str | None = None,
         lock_legal_status: str | None = None,
-        lock_until: str | None = None,
+        lock_until: datetime.datetime | None = None,
         checksum_value: str | None = None,
         checksum_type: str | None = None,
         checksum_parts: int | None = None,
@@ -319,54 +319,6 @@ class FakeKey(BaseModel, ManagedState):
         return f'ongoing-request="false", expiry-date="{self.expiry_date}"'
 
     @property
-    def response_dict(self) -> dict[str, Any]:  # type: ignore[misc]
-        res: dict[str, Any] = {
-            "ETag": self.etag,
-            "last-modified": self.last_modified_RFC1123,
-            "content-length": str(self.size),
-        }
-        if self.encryption is not None:
-            res["x-amz-server-side-encryption"] = self.encryption
-            if self.encryption == "aws:kms" and self.kms_key_id is not None:
-                res["x-amz-server-side-encryption-aws-kms-key-id"] = self.kms_key_id
-        if self.encryption == "aws:kms" and self.bucket_key_enabled is not None:
-            res["x-amz-server-side-encryption-bucket-key-enabled"] = str(
-                self.bucket_key_enabled
-            ).lower()
-        if self._storage_class != "STANDARD":
-            res["x-amz-storage-class"] = self._storage_class
-        if self.restore_status is not None:
-            res["x-amz-restore"] = self.restore_status
-
-        if self._is_versioned:
-            res["x-amz-version-id"] = str(self.version_id)
-
-        if self.checksum_algorithm is not None:
-            res["x-amz-sdk-checksum-algorithm"] = self.checksum_algorithm
-        if self.website_redirect_location:
-            res["x-amz-website-redirect-location"] = self.website_redirect_location
-        if self.lock_legal_status:
-            res["x-amz-object-lock-legal-hold"] = self.lock_legal_status
-        if self.lock_until:
-            res["x-amz-object-lock-retain-until-date"] = self.lock_until
-        if self.lock_mode:
-            res["x-amz-object-lock-mode"] = self.lock_mode
-
-        if self.lock_legal_status:
-            res["x-amz-object-lock-legal-hold"] = self.lock_legal_status
-        if self.lock_until:
-            res["x-amz-object-lock-retain-until-date"] = self.lock_until
-        if self.lock_mode:
-            res["x-amz-object-lock-mode"] = self.lock_mode
-
-        backend = s3_backends[self.account_id][self.partition]
-        tags = backend.tagger.get_tag_dict_for_resource(self.arn)
-        if tags:
-            res["x-amz-tagging-count"] = str(len(tags.keys()))
-
-        return res
-
-    @property
     def size(self) -> int:
         return self.contentsize
 
@@ -413,19 +365,7 @@ class FakeKey(BaseModel, ManagedState):
             return False
 
         if self.lock_mode in ["GOVERNANCE", "COMPLIANCE"]:
-            now = utcnow()
-            try:
-                until = datetime.datetime.strptime(
-                    self.lock_until,  # type: ignore
-                    "%Y-%m-%dT%H:%M:%SZ",
-                )
-            except ValueError:
-                until = datetime.datetime.strptime(
-                    self.lock_until,  # type: ignore
-                    "%Y-%m-%dT%H:%M:%S.%fZ",
-                )
-
-            if until > now:
+            if self.lock_until and self.lock_until > utcnow():
                 return True
 
         return False
@@ -1718,11 +1658,11 @@ class FakeBucket(CloudFormationModel):
 
         return False
 
-    def default_retention(self) -> str:
-        now = utcnow()
+    def default_retention(self) -> datetime.datetime:
+        now = utcnow().replace(microsecond=0)
         now += datetime.timedelta(self.default_lock_days)  # type: ignore
         now += datetime.timedelta(self.default_lock_years * 365)  # type: ignore
-        return now.strftime("%Y-%m-%dT%H:%M:%SZ")
+        return now
 
 
 class FakeTableStorageBucket(FakeBucket): ...
@@ -2309,7 +2249,7 @@ class S3Backend(BaseBackend, CloudWatchMetricProvider, TaggableResourcesMixin):
         bucket_key_enabled: Any = None,
         lock_mode: str | None = None,
         lock_legal_status: str | None = None,
-        lock_until: str | None = None,
+        lock_until: datetime.datetime | None = None,
         checksum_value: str | None = None,
         # arguments to handle notification
         request_method: str | None = "PUT",
@@ -3067,7 +3007,7 @@ class S3Backend(BaseBackend, CloudWatchMetricProvider, TaggableResourcesMixin):
         website_redirect_location: str | None = None,
         lock_mode: str | None = None,
         lock_legal_status: str | None = None,
-        lock_until: str | None = None,
+        lock_until: datetime.datetime | None = None,
         provided_version_id: str | None = None,
     ) -> None:
         bucket = self.get_bucket(dest_bucket_name)
