@@ -343,6 +343,34 @@ def test_rest_required_query_arg_constraint(url: str, expected_op: str) -> None:
     assert op.name == expected_op
 
 
+@pytest.mark.parametrize(
+    "method,url,headers,expected_op",
+    [
+        pytest.param(
+            "PUT",
+            "/bucket/key",
+            {"x-amz-copy-source": "src/key"},
+            "CopyObject",
+            id="required header",
+        ),
+        pytest.param("PUT", "/bucket/key", {}, "PutObject", id="missing header"),
+        pytest.param(
+            "GET",
+            "/bucket/key?attributes",
+            {},
+            "GetObjectAttributes",
+            id="literal query arg trumps missing header",
+        ),
+    ],
+)
+def test_rest_required_header_constraint(
+    method: str, url: str, headers: dict[str, str], expected_op: str
+) -> None:
+    router = get_service_router("s3")
+    op, _ = router.match(Request.from_primitives(method, url, headers))
+    assert op.name == expected_op
+
+
 def test_rest_leading_slash_of_greedy_first_label_is_preserved() -> None:
     router = get_service_router("mediastore-data")
     op, args = router.match(

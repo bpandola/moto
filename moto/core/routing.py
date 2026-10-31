@@ -231,8 +231,12 @@ class SmithyRule(Rule):
                     if query_arg in operation.http_trait.query_args:
                         continue  # Already constrained, possibly with a value.
                     candidate.add_constraint(RequiredArg(query_arg))
-                for header_name in input_shape.required_headers:
-                    candidate.add_constraint(RequiredHeader(header_name))
+                # A literal query arg in the request URI already identifies the operation.
+                # Required headers aren't constraints then, since botocore omits a header
+                # bound to an empty list (e.g. S3 GetObjectAttributes with ObjectAttributes=[]).
+                if not operation.http_trait.query_args:
+                    for header_name in input_shape.required_headers:
+                        candidate.add_constraint(RequiredHeader(header_name))
             candidates.append(candidate)
         return candidates
 
