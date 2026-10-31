@@ -15,7 +15,7 @@ import tempfile
 import threading
 import urllib.parse
 from bisect import insort
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from enum import Enum
 from importlib import reload
 from io import BytesIO
@@ -86,7 +86,6 @@ from .utils import (
     ARCHIVE_STORAGE_CLASSES,
     LOGGING_SERVICE_PRINCIPAL,
     STORAGE_CLASS,
-    CaseInsensitiveDict,
     _VersionedKeyStore,
     compute_checksum,
 )
@@ -160,7 +159,15 @@ class FakeKey(BaseModel, ManagedState):
         self.website_redirect_location: str | None = None
         self.checksum_algorithm: str | None = None
         self._storage_class: str | None = storage if storage else "STANDARD"
-        self._metadata = LowercaseDict()
+        # User-defined metadata, without the x-amz-meta- prefix
+        self.metadata = LowercaseDict()
+        # System-defined metadata that can be set by the user
+        self.cache_control: str | None = None
+        self.content_disposition: str | None = None
+        self.content_encoding: str | None = None
+        self.content_language: str | None = None
+        self.content_type = "binary/octet-stream"
+        self.expires: str | None = None
         self._expiry: datetime.datetime | None = None
         self._etag = etag
         self._version_id = version_id
@@ -186,9 +193,6 @@ class FakeKey(BaseModel, ManagedState):
         self.checksum_value = checksum_value
         self.checksum_type = checksum_type
         self.checksum_parts = checksum_parts
-
-        # Default metadata values
-        self._metadata["Content-Type"] = "binary/octet-stream"
 
     def safe_name(self, encoding_type: str | None = None) -> str:
         if encoding_type == "url":
@@ -243,18 +247,35 @@ class FakeKey(BaseModel, ManagedState):
     def status(self, value: str) -> None:
         self._status = value
 
-    def set_metadata(self, metadata: Any, replace: bool = False) -> None:
-        if replace:
-            self._metadata = {}  # type: ignore
-        # Remove AWS-specific Content-Encoding
-        if encoding := metadata.pop("Content-Encoding", None):
-            # Remove 'aws-chunked', but keep any other (user-provided) content encoding
-            encoding = ",".join(
-                [enc for enc in encoding.split(",") if enc != "aws-chunked"]
+    def set_metadata(
+        self,
+        metadata: Mapping[str, str] | None = None,
+        cache_control: str | None = None,
+        content_disposition: str | None = None,
+        content_encoding: str | None = None,
+        content_language: str | None = None,
+        content_type: str | None = None,
+        expires: str | None = None,
+    ) -> None:
+        self.metadata.update(metadata or {})
+        if cache_control is not None:
+            self.cache_control = cache_control
+        if content_disposition is not None:
+            self.content_disposition = content_disposition
+        if content_encoding is not None:
+            # Remove AWS-specific 'aws-chunked', but keep any other (user-provided) content encoding
+            self.content_encoding = (
+                ",".join(
+                    [enc for enc in content_encoding.split(",") if enc != "aws-chunked"]
+                )
+                or None
             )
-            if encoding:
-                metadata["Content-Encoding"] = encoding
-        self._metadata.update(metadata)
+        if content_language is not None:
+            self.content_language = content_language
+        if content_type is not None:
+            self.content_type = content_type
+        if expires is not None:
+            self.expires = expires
 
     def set_storage_class(self, storage: str | None) -> None:
         if storage is not None and storage not in STORAGE_CLASS:
@@ -303,10 +324,6 @@ class FakeKey(BaseModel, ManagedState):
         # Different datetime formats depending on how the key is obtained
         # https://github.com/boto/boto/issues/466
         return rfc_1123_datetime(self.last_modified)
-
-    @property
-    def metadata(self) -> LowercaseDict:
-        return self._metadata
 
     @property
     def is_versioned(self) -> bool:
@@ -395,7 +412,7 @@ class FakeMultipart(BaseModel):
     def __init__(
         self,
         key_name: str,
-        metadata: CaseInsensitiveDict,  # type: ignore
+        metadata: dict[str, str],
         account_id: str,
         region_name: str,
         storage: str | None = None,
@@ -403,9 +420,27 @@ class FakeMultipart(BaseModel):
         acl: FakeAcl | None = None,
         sse_encryption: str | None = None,
         kms_key_id: str | None = None,
+        cache_control: str | None = None,
+        content_disposition: str | None = None,
+        content_encoding: str | None = None,
+        content_language: str | None = None,
+        content_type: str | None = None,
+        expires: str | None = None,
+        website_redirect_location: str | None = None,
+        checksum_algorithm: str | None = None,
+        checksum_type: str | None = None,
     ):
         self.key_name = key_name
         self.metadata = metadata
+        self.cache_control = cache_control
+        self.content_disposition = content_disposition
+        self.content_encoding = content_encoding
+        self.content_language = content_language
+        self.content_type = content_type
+        self.expires = expires
+        self.website_redirect_location = website_redirect_location
+        self.checksum_algorithm = checksum_algorithm
+        self.checksum_type = checksum_type
         self.account_id = account_id
         self.region_name = region_name
         self.storage = storage
@@ -423,8 +458,8 @@ class FakeMultipart(BaseModel):
     def complete(
         self, parts: list[dict[str, Any]]
     ) -> tuple[bytes, str, tuple[str, str, int] | None]:
-        checksum_algo: str | None = self.metadata.get("x-amz-checksum-algorithm")
-        checksum_type: str | None = self.metadata.get("x-amz-checksum-type")
+        checksum_algo = self.checksum_algorithm
+        checksum_type = self.checksum_type
         decode_hex = codecs.getdecoder("hex_codec")
         total = bytearray()
         md5s = bytearray()
@@ -2660,12 +2695,21 @@ class S3Backend(BaseBackend, CloudWatchMetricProvider, TaggableResourcesMixin):
         self,
         bucket_name: str,
         key_name: str,
-        metadata: CaseInsensitiveDict,  # type: ignore
+        metadata: dict[str, str],
         storage_type: str,
         tags: dict[str, str],
         acl: FakeAcl | None,
-        sse_encryption: str,
-        kms_key_id: str,
+        sse_encryption: str | None,
+        kms_key_id: str | None,
+        cache_control: str | None = None,
+        content_disposition: str | None = None,
+        content_encoding: str | None = None,
+        content_language: str | None = None,
+        content_type: str | None = None,
+        expires: str | None = None,
+        website_redirect_location: str | None = None,
+        checksum_algorithm: str | None = None,
+        checksum_type: str | None = None,
     ) -> FakeMultipart:
         multipart = FakeMultipart(
             key_name,
@@ -2677,6 +2721,15 @@ class S3Backend(BaseBackend, CloudWatchMetricProvider, TaggableResourcesMixin):
             acl=acl,
             sse_encryption=sse_encryption,
             kms_key_id=kms_key_id,
+            cache_control=cache_control,
+            content_disposition=content_disposition,
+            content_encoding=content_encoding,
+            content_language=content_language,
+            content_type=content_type,
+            expires=expires,
+            website_redirect_location=website_redirect_location,
+            checksum_algorithm=checksum_algorithm,
+            checksum_type=checksum_type,
         )
 
         bucket = self.get_bucket(bucket_name)
@@ -2705,10 +2758,19 @@ class S3Backend(BaseBackend, CloudWatchMetricProvider, TaggableResourcesMixin):
             encryption=multipart.sse_encryption,
             kms_key_id=multipart.kms_key_id,
         )
-        key.set_metadata(multipart.metadata)
+        key.set_metadata(
+            multipart.metadata,
+            cache_control=multipart.cache_control,
+            content_disposition=multipart.content_disposition,
+            content_encoding=multipart.content_encoding,
+            content_language=multipart.content_language,
+            content_type=multipart.content_type,
+            expires=multipart.expires,
+        )
+        key.website_redirect_location = multipart.website_redirect_location
 
         if checksum_details:
-            key.checksum_algorithm = multipart.metadata.get("x-amz-checksum-algorithm")
+            key.checksum_algorithm = multipart.checksum_algorithm
             key.checksum_type = checksum_details[0]
             key.checksum_value = checksum_details[1]
             key.checksum_parts = checksum_details[2]
@@ -3027,7 +3089,13 @@ class S3Backend(BaseBackend, CloudWatchMetricProvider, TaggableResourcesMixin):
         kms_key_id: str | None = None,
         bucket_key_enabled: bool | None = None,
         mdirective: str | None = None,
-        metadata: Any | None = None,
+        metadata: dict[str, str] | None = None,
+        cache_control: str | None = None,
+        content_disposition: str | None = None,
+        content_encoding: str | None = None,
+        content_language: str | None = None,
+        content_type: str | None = None,
+        expires: str | None = None,
         website_redirect_location: str | None = None,
         lock_mode: str | None = None,
         lock_legal_status: str | None = None,
@@ -3070,9 +3138,25 @@ class S3Backend(BaseBackend, CloudWatchMetricProvider, TaggableResourcesMixin):
         )
         self.tagger.copy_tags(src_key.arn, new_key.arn)
         if mdirective != "REPLACE":
-            new_key.set_metadata(src_key.metadata)
+            new_key.set_metadata(
+                src_key.metadata,
+                cache_control=src_key.cache_control,
+                content_disposition=src_key.content_disposition,
+                content_encoding=src_key.content_encoding,
+                content_language=src_key.content_language,
+                content_type=src_key.content_type,
+                expires=src_key.expires,
+            )
         else:
-            new_key.set_metadata(metadata)
+            new_key.set_metadata(
+                metadata,
+                cache_control=cache_control,
+                content_disposition=content_disposition,
+                content_encoding=content_encoding,
+                content_language=content_language,
+                content_type=content_type,
+                expires=expires,
+            )
 
         if website_redirect_location:
             new_key.website_redirect_location = website_redirect_location

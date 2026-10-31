@@ -9,8 +9,6 @@ from collections.abc import Iterator
 from typing import Any
 from urllib.parse import urlparse
 
-from requests.structures import CaseInsensitiveDict
-
 from moto.core.compat import HAS_CRT
 from moto.settings import S3_IGNORE_SUBDOMAIN_BUCKETNAME
 
@@ -18,23 +16,6 @@ log = logging.getLogger(__name__)
 
 
 bucket_name_regex = re.compile(r"(.+)\.s3(.*)\.amazonaws.com")
-user_settable_fields = {
-    "content-md5",
-    "content-language",
-    "content-type",
-    "content-encoding",
-    "cache-control",
-    "expires",
-    "content-disposition",
-    "x-robots-tag",
-    "x-amz-checksum-algorithm",
-    "x-amz-checksum-type",
-    "x-amz-content-sha256",
-    "x-amz-content-crc32",
-    "x-amz-content-crc32c",
-    "x-amz-content-sha1",
-    "x-amz-website-redirect-location",
-}
 ARCHIVE_STORAGE_CLASSES = [
     "GLACIER",
     "DEEP_ARCHIVE",
@@ -95,28 +76,6 @@ def parse_region_from_url(url: str, use_default_region: bool = True) -> str:
     else:
         region = "us-east-1" if use_default_region else None
     return region
-
-
-def metadata_from_headers(headers: dict[str, Any]) -> CaseInsensitiveDict:  # type: ignore
-    metadata = CaseInsensitiveDict()  # type: ignore
-    meta_regex = re.compile(r"^x-amz-meta-([a-zA-Z0-9\-_.]+)$", flags=re.IGNORECASE)
-    for header in headers.keys():
-        if isinstance(header, str):
-            result = meta_regex.match(header)
-            meta_key = None
-            if result:
-                # Check for extra metadata
-                meta_key = result.group(0).lower()
-            elif header.lower() in user_settable_fields:
-                # Check for special metadata that doesn't start with x-amz-meta
-                meta_key = header
-            if meta_key:
-                metadata[meta_key] = (
-                    headers[header][0]
-                    if isinstance(headers[header], list)
-                    else headers[header]
-                )
-    return metadata
 
 
 class _VersionedKeyStore(dict):  # type: ignore

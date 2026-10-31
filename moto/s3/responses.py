@@ -89,7 +89,6 @@ from .utils import (
     bucket_policy_is_public,
     compute_checksum,
     cors_matches_origin,
-    metadata_from_headers,
     parse_region_from_url,
 )
 
@@ -647,8 +646,8 @@ class S3Response(BaseResponse):
                 },
                 "StorageClass": "STANDARD",
                 "Initiated": "2010-11-10T20:48:33.000Z",
-                "ChecksumAlgorithm": upload.metadata.get("x-amz-checksum-algorithm"),
-                "ChecksumType": upload.metadata.get("x-amz-checksum-type"),
+                "ChecksumAlgorithm": upload.checksum_algorithm,
+                "ChecksumType": upload.checksum_type,
             }
             for upload in multiparts
         ]
@@ -1529,9 +1528,20 @@ class S3Response(BaseResponse):
             acl = get_canned_acl(self.querystring["acl"][0])
             new_key.set_acl(acl)
 
-        # Metadata
-        metadata = metadata_from_headers(self.form_data)
-        new_key.set_metadata(metadata)
+        # PostObject is not modeled, so the metadata is read from the form fields
+        form = self.form_data
+        new_key.set_metadata(
+            {
+                name[len("x-amz-meta-") :]: value
+                for name, value in form.items()
+                if name.lower().startswith("x-amz-meta-")
+            },
+            cache_control=form.get("Cache-Control"),
+            content_disposition=form.get("Content-Disposition"),
+            content_encoding=form.get("Content-Encoding"),
+            content_type=form.get("Content-Type"),
+            expires=form.get("Expires"),
+        )
 
         return EmptyResult()
 
@@ -1640,7 +1650,6 @@ class S3Response(BaseResponse):
                 self.response_headers["x-amz-version-id"] = key.version_id
             raise NotModified()
 
-        metadata = {name.lower(): value for name, value in key.metadata.items()}
         result: dict[str, Any] = {
             "Body": key.value,
             "AcceptRanges": "bytes",
@@ -1651,20 +1660,15 @@ class S3Response(BaseResponse):
             "VersionId": key.version_id
             if key.version_id != "null" or key.is_versioned
             else None,
-            "CacheControl": metadata.get("cache-control"),
-            "ContentDisposition": metadata.get("content-disposition"),
-            "ContentEncoding": metadata.get("content-encoding"),
-            "ContentLanguage": metadata.get("content-language"),
-            "ContentType": metadata.get("content-type"),
-            "Expires": metadata.get("expires"),
-            "WebsiteRedirectLocation": key.website_redirect_location
-            or metadata.get("x-amz-website-redirect-location"),
+            "CacheControl": key.cache_control,
+            "ContentDisposition": key.content_disposition,
+            "ContentEncoding": key.content_encoding,
+            "ContentLanguage": key.content_language,
+            "ContentType": key.content_type,
+            "Expires": key.expires,
+            "WebsiteRedirectLocation": key.website_redirect_location,
             "ServerSideEncryption": key.encryption,
-            "Metadata": {
-                name[len("x-amz-meta-") :]: value
-                for name, value in metadata.items()
-                if name.startswith("x-amz-meta-")
-            },
+            "Metadata": dict(key.metadata),
             "SSEKMSKeyId": key.kms_key_id if key.encryption == "aws:kms" else None,
             "BucketKeyEnabled": str(key.bucket_key_enabled).lower() == "true"
             if key.encryption == "aws:kms" and key.bucket_key_enabled is not None
@@ -1912,9 +1916,24 @@ class S3Response(BaseResponse):
             lock_until=lock_until,
             checksum_value=checksum_value,
         )
-        metadata = metadata_from_headers(self.headers)
-        metadata.update(metadata_from_headers(self.querystring))
-        new_key.set_metadata(metadata)
+        metadata = self._get_param("Metadata", {})
+        # The metadata of a presigned URL can be part of the querystring instead
+        metadata.update(
+            {
+                name[len("x-amz-meta-") :]: value
+                for name, value in self.request.args.items()
+                if name.lower().startswith("x-amz-meta-")
+            }
+        )
+        new_key.set_metadata(
+            metadata,
+            cache_control=self._get_param("CacheControl"),
+            content_disposition=self._get_param("ContentDisposition"),
+            content_encoding=self._get_param("ContentEncoding"),
+            content_language=self._get_param("ContentLanguage"),
+            content_type=self._get_param("ContentType"),
+            expires=self._get_param("Expires"),
+        )
         new_key.set_acl(acl)
         new_key.website_redirect_location = self._get_param("WebsiteRedirectLocation")
         if checksum_algorithm:
@@ -1996,7 +2015,6 @@ class S3Response(BaseResponse):
             website_redirect_location = self._get_param("WebsiteRedirectLocation")
 
             mdirective = self._get_param("MetadataDirective")
-            metadata = metadata_from_headers(self.headers)
             self.backend.copy_object(
                 key_to_copy,
                 self.bucket_name,
@@ -2006,7 +2024,13 @@ class S3Response(BaseResponse):
                 encryption=encryption,
                 bucket_key_enabled=bucket_key_enabled,
                 mdirective=mdirective,
-                metadata=metadata,
+                metadata=self._get_param("Metadata"),
+                cache_control=self._get_param("CacheControl"),
+                content_disposition=self._get_param("ContentDisposition"),
+                content_encoding=self._get_param("ContentEncoding"),
+                content_language=self._get_param("ContentLanguage"),
+                content_type=self._get_param("ContentType"),
+                expires=self._get_param("Expires"),
                 website_redirect_location=website_redirect_location,
                 lock_mode=lock_mode,
                 lock_legal_status=legal_hold,
@@ -2264,7 +2288,6 @@ class S3Response(BaseResponse):
                 self.response_headers["x-amz-version-id"] = key.version_id
             raise NotModified()
 
-        metadata = {name.lower(): value for name, value in key.metadata.items()}
         result: dict[str, Any] = {
             "AcceptRanges": "bytes",
             "Restore": key.restore_status,
@@ -2272,20 +2295,15 @@ class S3Response(BaseResponse):
             "ContentLength": key.size,
             "ETag": key.etag,
             "VersionId": key.version_id if key.is_versioned else None,
-            "CacheControl": metadata.get("cache-control"),
-            "ContentDisposition": metadata.get("content-disposition"),
-            "ContentEncoding": metadata.get("content-encoding"),
-            "ContentLanguage": metadata.get("content-language"),
-            "ContentType": metadata.get("content-type"),
-            "Expires": metadata.get("expires"),
-            "WebsiteRedirectLocation": key.website_redirect_location
-            or metadata.get("x-amz-website-redirect-location"),
+            "CacheControl": key.cache_control,
+            "ContentDisposition": key.content_disposition,
+            "ContentEncoding": key.content_encoding,
+            "ContentLanguage": key.content_language,
+            "ContentType": key.content_type,
+            "Expires": key.expires,
+            "WebsiteRedirectLocation": key.website_redirect_location,
             "ServerSideEncryption": key.encryption,
-            "Metadata": {
-                name[len("x-amz-meta-") :]: value
-                for name, value in metadata.items()
-                if name.startswith("x-amz-meta-")
-            },
+            "Metadata": dict(key.metadata),
             "SSEKMSKeyId": key.kms_key_id if key.encryption == "aws:kms" else None,
             "BucketKeyEnabled": str(key.bucket_key_enabled).lower() == "true"
             if key.encryption == "aws:kms" and key.bucket_key_enabled is not None
@@ -2405,7 +2423,6 @@ class S3Response(BaseResponse):
         key_name = self._get_param("Key")
         encryption = self._get_param("ServerSideEncryption")
         kms_key_id = self._get_param("SSEKMSKeyId")
-        metadata = metadata_from_headers(self.headers)
         tagging = self._tagging_from_headers()
         storage_type = self._get_param("StorageClass", "STANDARD")
         acl = self._acl_from_headers()
@@ -2413,12 +2430,21 @@ class S3Response(BaseResponse):
         multipart = self.backend.create_multipart_upload(
             self.bucket_name,
             key_name,
-            metadata,
+            self._get_param("Metadata", {}),
             storage_type,
             tagging,
             acl,
             encryption,
             kms_key_id,
+            cache_control=self._get_param("CacheControl"),
+            content_disposition=self._get_param("ContentDisposition"),
+            content_encoding=self._get_param("ContentEncoding"),
+            content_language=self._get_param("ContentLanguage"),
+            content_type=self._get_param("ContentType"),
+            expires=self._get_param("Expires"),
+            website_redirect_location=self._get_param("WebsiteRedirectLocation"),
+            checksum_algorithm=self._get_param("ChecksumAlgorithm"),
+            checksum_type=self._get_param("ChecksumType"),
         )
         result = {
             "Bucket": self.bucket_name,
@@ -2426,8 +2452,8 @@ class S3Response(BaseResponse):
             "UploadId": multipart.id,
             "ServerSideEncryption": encryption,
             "SSEKMSKeyId": kms_key_id,
-            "ChecksumAlgorithm": multipart.metadata.get("x-amz-checksum-algorithm"),
-            "ChecksumType": multipart.metadata.get("x-amz-checksum-type"),
+            "ChecksumAlgorithm": multipart.checksum_algorithm,
+            "ChecksumType": multipart.checksum_type,
         }
         return ActionResult(result)
 
