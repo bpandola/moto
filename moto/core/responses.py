@@ -396,7 +396,11 @@ class BaseResponse(ActionAuthenticatorMixin):
         # get action from method and uri
         return self._get_action_from_method_and_request_uri(self.normalized_request)
 
-    def parse_parameters(self, request: Request) -> None:
+    def parse_parameters(self, request: Request, body: bytes | None = None) -> None:
+        """
+        The body defaults to the body of the request.  Services can pass a body
+        that has been decoded first, e.g. an aws-chunked S3 upload.
+        """
         service_model = get_service_model(self.boto3_service_name)
         operation_model = service_model.operation_model(self._get_action())
         protocol = determine_request_protocol(service_model, request)
@@ -407,7 +411,7 @@ class BaseResponse(ActionAuthenticatorMixin):
                 "method": request.method,
                 "values": request.values,
                 "headers": request.headers,
-                "body": request.data,
+                "body": request.data if body is None else body,
                 "url_path": request.path,
                 "url_params": self.uri_match,
             }
