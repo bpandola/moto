@@ -2,12 +2,9 @@ import datetime
 import io
 import re
 import urllib.parse
-from collections.abc import Iterator
 from typing import Any
 from urllib.parse import parse_qs, unquote, urlencode, urlparse, urlunparse
-from xml.dom import minidom
 
-import xmltodict
 from werkzeug.exceptions import Forbidden
 
 from moto import settings
@@ -44,7 +41,6 @@ from .exceptions import (
     InvalidMaxPartNumberArgument,
     InvalidNamespaceHeaderException,
     InvalidObjectState,
-    InvalidPartOrder,
     InvalidRange,
     LockNotEnabled,
     MalformedACLError,
@@ -1541,14 +1537,9 @@ class S3Response(BaseResponse):
 
     def delete_objects(self) -> ActionResult:
         bucket_name = self.bucket_name
-        body_dict = xmltodict.parse(self.body, strip_whitespace=False)
         bypass_retention = self._get_param("BypassGovernanceRetention", False)
 
-        objects = body_dict["Delete"].get("Object", [])
-        if not isinstance(objects, list):
-            # We expect a list of objects, but when there is a single <Object> node xmltodict does not
-            # return a list.
-            objects = [objects]
+        objects = self._get_param("Delete.Objects", [])
         if len(objects) == 0:
             raise MalformedXML()
 
@@ -2410,15 +2401,6 @@ class S3Response(BaseResponse):
         )
         return ActionResult({"VersionId": version_id})
 
-    def _complete_multipart_body(self, body: bytes) -> Iterator[tuple[int, str]]:
-        ps = minidom.parseString(body).getElementsByTagName("Part")
-        prev = 0
-        for p in ps:
-            pn = int(p.getElementsByTagName("PartNumber")[0].firstChild.wholeText)  # type: ignore[union-attr]
-            if pn <= prev:
-                raise InvalidPartOrder()
-            yield pn, p.getElementsByTagName("ETag")[0].firstChild.wholeText  # type: ignore[union-attr]
-
     def create_multipart_upload(self) -> ActionResult:
         key_name = self._get_param("Key")
         encryption = self._get_param("ServerSideEncryption")
@@ -2467,7 +2449,9 @@ class S3Response(BaseResponse):
                 raise PreconditionFailed("If-None-Match")
 
             key = self.backend.complete_multipart_upload(
-                self.bucket_name, multipart_id, self._complete_multipart_body(self.body)
+                self.bucket_name,
+                multipart_id,
+                self._get_param("MultipartUpload.Parts", []),
             )
         if key is None:
             raise MalformedXML()
@@ -2485,12 +2469,11 @@ class S3Response(BaseResponse):
 
     def restore_object(self) -> ActionResult:
         key_name = self._get_param("Key")
-        params = xmltodict.parse(self.body)["RestoreRequest"]
         previously_restored = self.backend.restore_object(
             self.bucket_name,
             key_name,
-            params.get("Days", None),
-            params.get("Type", None),
+            self._get_param("RestoreRequest.Days"),
+            self._get_param("RestoreRequest.Type"),
         )
         if not previously_restored:
             self.response_headers["status"] = "202"
@@ -2498,10 +2481,9 @@ class S3Response(BaseResponse):
 
     def select_object_content(self) -> ActionResult:
         key_name = self._get_param("Key")
-        request = xmltodict.parse(self.body)["SelectObjectContentRequest"]
-        select_query = request["Expression"]
-        input_details = request["InputSerialization"]
-        output_details = request["OutputSerialization"]
+        select_query = self._get_param("Expression")
+        input_details = self._get_param("InputSerialization")
+        output_details = self._get_param("OutputSerialization")
         results, bytes_scanned = self.backend.select_object_content(
             self.bucket_name, key_name, select_query, input_details, output_details
         )

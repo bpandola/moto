@@ -55,6 +55,7 @@ from moto.s3.exceptions import (
     InvalidNotificationEvent,
     InvalidObjectState,
     InvalidPart,
+    InvalidPartOrder,
     InvalidPublicAccessBlockConfiguration,
     InvalidRequest,
     InvalidStorageClass,
@@ -420,7 +421,7 @@ class FakeMultipart(BaseModel):
         self.kms_key_id = kms_key_id
 
     def complete(
-        self, body: Iterator[tuple[int, str]]
+        self, parts: list[dict[str, Any]]
     ) -> tuple[bytes, str, tuple[str, str, int] | None]:
         checksum_algo: str | None = self.metadata.get("x-amz-checksum-algorithm")
         checksum_type: str | None = self.metadata.get("x-amz-checksum-type")
@@ -432,7 +433,11 @@ class FakeMultipart(BaseModel):
 
         last = None
         count = 0
-        for pn, etag in body:
+        for part_info in parts:
+            pn = part_info["PartNumber"]
+            etag = part_info["ETag"]
+            if pn <= 0:
+                raise InvalidPartOrder()
             part = self.parts.get(pn)
             part_etag = None
             if part is not None:
@@ -2679,11 +2684,11 @@ class S3Backend(BaseBackend, CloudWatchMetricProvider, TaggableResourcesMixin):
         return multipart
 
     def complete_multipart_upload(
-        self, bucket_name: str, multipart_id: str, body: Iterator[tuple[int, str]]
+        self, bucket_name: str, multipart_id: str, parts: list[dict[str, Any]]
     ) -> FakeKey | None:
         bucket = self.get_bucket(bucket_name)
         multipart = bucket.multiparts[multipart_id]
-        value, etag, checksum_details = multipart.complete(body)
+        value, etag, checksum_details = multipart.complete(parts)
         if value is not None:
             del bucket.multiparts[multipart_id]
 
@@ -3193,7 +3198,7 @@ class S3Backend(BaseBackend, CloudWatchMetricProvider, TaggableResourcesMixin):
             ], bytes_scanned
 
     def restore_object(
-        self, bucket_name: str, key_name: str, days: str | None, type_: str | None
+        self, bucket_name: str, key_name: str, days: int | None, type_: str | None
     ) -> bool:
         key = self.get_object(bucket_name, key_name)
         if not key:
@@ -3203,7 +3208,7 @@ class S3Backend(BaseBackend, CloudWatchMetricProvider, TaggableResourcesMixin):
             raise InvalidObjectState(storage_class=key.storage_class)
         had_expiry_date = key.expiry_date is not None
         if days:
-            key.restore(int(days))
+            key.restore(days)
         return had_expiry_date
 
     def upload_file(self) -> None:
