@@ -771,7 +771,8 @@ class BaseRestSerializer(ResponseSerializer):
                 )
         if "headers" in serialized_result:
             resp["headers"].update(serialized_result["headers"])
-        if resp["body"]:
+        if resp["body"] and "Content-Type" not in resp["headers"]:
+            # A modeled Content-Type header (e.g. S3 GetObject) takes precedence
             resp["headers"]["Content-Type"] = self.CONTENT_TYPE
         return resp
 
