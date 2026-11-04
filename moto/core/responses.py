@@ -199,8 +199,7 @@ class BaseResponse(ActionAuthenticatorMixin):
     ) -> None:
         """
         full_url and headers are carried by the request itself.  They remain
-        parameters for the callers that deliberately pass something else - see
-        CloudFormationResponse.process_cfn_response, which appends an Action.
+        parameters for the callers that pass them through explicitly.
 
         use_raw_body overrides the class-level default for a single call.
         """
@@ -370,8 +369,7 @@ class BaseResponse(ActionAuthenticatorMixin):
         self.setup_class(request, full_url, headers)
         return self.call_action()
 
-    def _get_action_from_method_and_request_uri(self, request: Request) -> str:
-        """Used for AWS restJson1 and restXml API protocols"""
+    def _get_action_from_request(self, request: Request) -> str:
         try:
             service_router = get_service_router(self.boto3_service_name)
             operation, uri_params = service_router.match(request)
@@ -381,20 +379,8 @@ class BaseResponse(ActionAuthenticatorMixin):
             pass
         return None  # type: ignore[return-value]
 
-    # TODO: Get rid of all overrides once new routing is working.
     def _get_action(self) -> str:
-        action = self.querystring.get("Action")
-        if action and isinstance(action, list):
-            action = action[0]
-        if action:
-            return action
-        # Some services use a header for the action
-        # Headers are case-insensitive. Probably a better way to do this.
-        match = self.headers.get("x-amz-target") or self.headers.get("X-Amz-Target")
-        if match:
-            return match.split(".")[-1]
-        # get action from method and uri
-        return self._get_action_from_method_and_request_uri(self.normalized_request)
+        return self._get_action_from_request(self.normalized_request)
 
     def parse_parameters(self, request: Request, body: bytes | None = None) -> None:
         """
@@ -582,81 +568,7 @@ class BaseResponse(ActionAuthenticatorMixin):
         return if_none
 
     def _get_params(self) -> dict[str, Any]:
-        """
-        Given a querystring of
-        {
-            'Action': ['CreatRule'],
-            'Conditions.member.1.Field': ['http-header'],
-            'Conditions.member.1.HttpHeaderConfig.HttpHeaderName': ['User-Agent'],
-            'Conditions.member.1.HttpHeaderConfig.Values.member.1': ['curl'],
-            'Actions.member.1.FixedResponseConfig.StatusCode': ['200'],
-            'Actions.member.1.FixedResponseConfig.ContentType': ['text/plain'],
-            'Actions.member.1.Type': ['fixed-response']
-        }
-
-        returns
-        {
-            'Action': 'CreatRule',
-            'Conditions': [
-                {
-                    'Field': 'http-header',
-                    'HttpHeaderConfig': {
-                        'HttpHeaderName': 'User-Agent',
-                        'Values': ['curl']
-                    }
-                }
-            ],
-            'Actions': [
-                {
-                    'Type': 'fixed-response',
-                    'FixedResponseConfig': {
-                        'StatusCode': '200',
-                        'ContentType': 'text/plain'
-                    }
-                }
-            ]
-        }
-        """
-        if self.automated_parameter_parsing:
-            return self.params
-        params: dict[str, Any] = {}
-        for k, v in sorted(self.querystring.items()):
-            self._parse_param(k, v[0], params)
-        return params
-
-    def _parse_param(self, key: str, value: str, params: Any) -> None:
-        keylist = key.split(".")
-        obj = params
-        for i, key in enumerate(keylist[:-1]):
-            if key in obj:
-                # step into
-                parent = obj
-                obj = obj[key]
-            else:
-                if key == "member":
-                    if not isinstance(obj, list):
-                        # initialize list
-                        # reset parent
-                        obj = []
-                        parent[keylist[i - 1]] = obj
-                elif isinstance(obj, dict):
-                    # initialize dict
-                    obj[key] = {}
-                    # step into
-                    parent = obj
-                    obj = obj[key]
-                elif key.isdigit():
-                    index = int(key) - 1
-                    if len(obj) <= index:
-                        # initialize list element
-                        obj.insert(index, {})
-                    # step into
-                    parent = obj
-                    obj = obj[index]
-        if isinstance(obj, list):
-            obj.append(value)
-        else:
-            obj[keylist[-1]] = value
+        return self.params
 
     @property
     def request_json(self) -> bool:

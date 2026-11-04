@@ -1743,8 +1743,13 @@ class S3Response(BaseResponse):
         part_number = self._get_param("PartNumber")
         if part_number:
             if key.multipart:
-                # TODO
-                pass
+                part_value = self._set_multipart_part_headers(
+                    key,
+                    part_number,
+                    response_headers,
+                    checksum_mode=self.headers.get("x-amz-checksum-mode") == "ENABLED",
+                )
+                return 206, response_headers, part_value
             else:
                 if part_number > 1:
                     raise RangeNotSatisfiable
@@ -2298,9 +2303,7 @@ class S3Response(BaseResponse):
         if_unmodified_since = self._get_param("IfUnmodifiedSince")
 
         try:
-            key = self.backend.head_object(
-                bucket_name, key_name, version_id=version_id, part_number=part_number
-            )
+            key = self.backend.head_object(bucket_name, key_name, version_id=version_id)
         except HeadOnDeleteMarker as exc:
             self.response_headers["x-amz-delete-marker"] = "true"
             if version_id:
