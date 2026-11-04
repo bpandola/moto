@@ -45,6 +45,7 @@ from .exceptions import (
     InvalidMaxPartNumberArgument,
     InvalidNamespaceHeaderException,
     InvalidObjectState,
+    InvalidPartNumber,
     InvalidRange,
     LockNotEnabled,
     MalformedACLError,
@@ -66,7 +67,6 @@ from .exceptions import (
     ObjectNotInActiveTierError,
     OwnershipControlsNotFoundError,
     PreconditionFailed,
-    RangeNotSatisfiable,
     ReplicationConfigurationNotFoundError,
     S3AclAndGrantError,
     S3ClientError,
@@ -1782,7 +1782,7 @@ class S3Response(BaseResponse):
                 return PartialResult(result)
             else:
                 if part_number > 1:
-                    raise RangeNotSatisfiable
+                    raise InvalidPartNumber(part_number, 1)
                 result["ContentRange"] = f"bytes 0-{key.size - 1}/{key.size}"
                 return PartialResult(result)
 
@@ -2401,7 +2401,7 @@ class S3Response(BaseResponse):
                 self._set_multipart_part_result(key, part_number, result, checksum_mode)
             else:
                 if part_number > 1:
-                    raise RangeNotSatisfiable
+                    raise InvalidPartNumber(part_number, 1)
                 result["ContentRange"] = f"bytes 0-{key.size - 1}/{key.size}"
             return PartialResult(result)
 

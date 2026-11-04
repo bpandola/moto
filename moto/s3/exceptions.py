@@ -388,11 +388,6 @@ class InvalidPartNumber(S3ClientError):
         self.actual_part_count = actual_part_count
 
 
-class RangeNotSatisfiable(S3ClientError):
-    code = "InvalidPartNumber"
-    message = "The requested partnumber is not satisfiable"
-
-
 class InvalidContinuationToken(S3ClientError):
     def __init__(self) -> None:
         super().__init__(
