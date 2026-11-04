@@ -309,12 +309,6 @@
         "error": {"httpStatusCode": 400},
         "exception": true
       },
-      "InvalidPartNumber": {
-        "type": "structure",
-        "members": {},
-        "error": {"httpStatusCode": 416},
-        "exception": true
-      },
       "InvalidPartOrder": {
         "type": "structure",
         "members": {},

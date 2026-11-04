@@ -1682,6 +1682,36 @@ class S3Response(BaseResponse):
 
         return decoded_body
 
+    @staticmethod
+    def _set_multipart_part_result(
+        key: FakeKey, part_number: int, result: dict[str, Any], checksum_mode: bool
+    ) -> bytes:
+        """
+        Set the members for a GetObject/HeadObject request for a single part of a multipart object.
+        Returns the value of the requested part.
+        """
+        start, end = key.multipart.get_part_range(part_number)  # type: ignore[union-attr]
+        part_value = key.value[start : end + 1]
+        result["ContentRange"] = f"bytes {start}-{end}/{key.size}"
+        result["ContentLength"] = end - start + 1
+        result["PartsCount"] = key.multipart.parts_count  # type: ignore[union-attr]
+        # The full-object checksum does not apply to a single part.
+        # AWS returns the part checksum for COMPOSITE checksums, and nothing for FULL_OBJECT checksums
+        for member_name in list(result):
+            if member_name.startswith("Checksum"):
+                result.pop(member_name)
+        if (
+            checksum_mode
+            and key.checksum_algorithm
+            and key.checksum_type == "COMPOSITE"
+        ):
+            algorithm = key.checksum_algorithm
+            result[f"Checksum{algorithm.upper()}"] = compute_checksum(
+                part_value, algorithm
+            ).decode()
+            result["ChecksumType"] = key.checksum_type
+        return part_value
+
     def get_object(self) -> ActionResult:
         key, not_modified = self._get_key()
         self.response_headers.update(self._get_cors_headers_other())
@@ -1743,13 +1773,13 @@ class S3Response(BaseResponse):
         part_number = self._get_param("PartNumber")
         if part_number:
             if key.multipart:
-                part_value = self._set_multipart_part_headers(
+                result["Body"] = self._set_multipart_part_result(
                     key,
                     part_number,
-                    response_headers,
-                    checksum_mode=self.headers.get("x-amz-checksum-mode") == "ENABLED",
+                    result,
+                    checksum_mode=self._get_param("ChecksumMode") == "ENABLED",
                 )
-                return 206, response_headers, part_value
+                return PartialResult(result)
             else:
                 if part_number > 1:
                     raise RangeNotSatisfiable
@@ -2367,16 +2397,13 @@ class S3Response(BaseResponse):
             result[f"Checksum{key.checksum_algorithm.upper()}"] = key.checksum_value
 
         if part_number:
-            full_key: FakeKey = self.backend.head_object(  # type: ignore[assignment]
-                bucket_name, key_name, version_id
-            )
-            if full_key.multipart:
-                result["PartsCount"] = len(full_key.multipart.partlist)
+            if key.multipart:
+                self._set_multipart_part_result(key, part_number, result, checksum_mode)
             else:
                 if part_number > 1:
                     raise RangeNotSatisfiable
-                result["ContentRange"] = f"bytes 0-{full_key.size - 1}/{full_key.size}"
-                return PartialResult(result)
+                result["ContentRange"] = f"bytes 0-{key.size - 1}/{key.size}"
+            return PartialResult(result)
 
         byte_range = self._get_range(key.size)
         if byte_range:

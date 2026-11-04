@@ -472,7 +472,11 @@ class FakeMultipart(BaseModel):
         last = None
         count = 0
         part_sizes = []
-        for pn, etag in body:
+        for part_info in parts:
+            pn = part_info["PartNumber"]
+            etag = part_info["ETag"]
+            if pn <= 0:
+                raise InvalidPartOrder()
             part = self.parts.get(pn)
             part_etag = None
             if part is not None:
