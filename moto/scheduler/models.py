@@ -72,7 +72,7 @@ class Schedule(BaseModel):
                 within_rule = diff <= rule
                 if not within_rule:
                     raise ValidationException(
-                        message="The StartDate you specify cannot be earlier than 5 minutes ago."
+                        "The StartDate you specify cannot be earlier than 5 minutes ago."
                     )
         return start_date
 

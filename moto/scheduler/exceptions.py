@@ -1,33 +1,32 @@
 """Exceptions raised by the scheduler service."""
 
-from moto.core.exceptions import JsonRESTError
+from moto.core.exceptions import ServiceException
 
 
-class ScheduleExists(JsonRESTError):
-    def __init__(self, name: str) -> None:
-        super().__init__("ConflictException", f"Schedule {name} already exists.")
+class EventBridgeSchedulerException(ServiceException):
+    pass
 
 
-class ScheduleNotFound(JsonRESTError):
-    code = 404
-
-    def __init__(self, name: str) -> None:
-        super().__init__(
-            "ResourceNotFoundException", f"Schedule {name} does not exist."
-        )
-
-
-class ScheduleGroupNotFound(JsonRESTError):
-    code = 404
+class ScheduleExists(EventBridgeSchedulerException):
+    code = "ConflictException"
 
     def __init__(self, name: str) -> None:
-        super().__init__(
-            "ResourceNotFoundException", f"Schedule group {name} does not exist."
-        )
+        super().__init__(f"Schedule {name} already exists.")
 
 
-class ValidationException(JsonRESTError):
-    code = 400
+class ScheduleNotFound(EventBridgeSchedulerException):
+    code = "ResourceNotFoundException"
 
-    def __init__(self, message: str):
-        super().__init__(error_type="ValidationException", message=message)
+    def __init__(self, name: str) -> None:
+        super().__init__(f"Schedule {name} does not exist.")
+
+
+class ScheduleGroupNotFound(EventBridgeSchedulerException):
+    code = "ResourceNotFoundException"
+
+    def __init__(self, name: str) -> None:
+        super().__init__(f"Schedule group {name} does not exist.")
+
+
+class ValidationException(EventBridgeSchedulerException):
+    code = "ValidationException"
