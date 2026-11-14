@@ -1,8 +1,9 @@
-from moto.core.exceptions import JsonRESTError
+from moto.core.exceptions import ServiceException
 
 
-class NotFoundException(JsonRESTError):
-    code = 400
+class MediaConnectException(ServiceException):
+    pass
 
-    def __init__(self, message: str):
-        super().__init__("NotFoundException", message)
+
+class NotFoundException(MediaConnectException):
+    code = "NotFoundException"

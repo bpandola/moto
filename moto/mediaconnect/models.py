@@ -172,26 +172,26 @@ class MediaConnectBackend(BaseBackend):
             flow = self._flows[flow_arn]
             flow.resolve_transient_states()
             return flow
-        raise NotFoundException(message="Flow not found.")
+        raise NotFoundException("Flow not found.")
 
     def delete_flow(self, flow_arn: str) -> Flow:
         if flow_arn in self._flows:
             return self._flows.pop(flow_arn)
-        raise NotFoundException(message="Flow not found.")
+        raise NotFoundException("Flow not found.")
 
     def start_flow(self, flow_arn: str) -> Flow:
         if flow_arn in self._flows:
             flow = self._flows[flow_arn]
             flow.status = "STARTING"
             return flow
-        raise NotFoundException(message="Flow not found.")
+        raise NotFoundException("Flow not found.")
 
     def stop_flow(self, flow_arn: str) -> Flow:
         if flow_arn in self._flows:
             flow = self._flows[flow_arn]
             flow.status = "STOPPING"
             return flow
-        raise NotFoundException(message="Flow not found.")
+        raise NotFoundException("Flow not found.")
 
     def tag_resource(self, resource_arn: str, tags: dict[str, Any]) -> None:
         tag_list = TaggingService.convert_dict_to_tags_input(tags)
@@ -200,7 +200,7 @@ class MediaConnectBackend(BaseBackend):
     def list_tags_for_resource(self, resource_arn: str) -> dict[str, str]:
         if self.tagger.has_tags(resource_arn):
             return self.tagger.get_tag_dict_for_resource(resource_arn)
-        raise NotFoundException(message="Resource not found.")
+        raise NotFoundException("Resource not found.")
 
     def add_flow_vpc_interfaces(
         self, flow_arn: str, vpc_interfaces: list[dict[str, Any]]
@@ -209,14 +209,14 @@ class MediaConnectBackend(BaseBackend):
             flow = self._flows[flow_arn]
             flow.vpc_interfaces = vpc_interfaces
             return flow
-        raise NotFoundException(message=f"flow with arn={flow_arn} not found")
+        raise NotFoundException(f"flow with arn={flow_arn} not found")
 
     def add_flow_outputs(self, flow_arn: str, outputs: list[dict[str, Any]]) -> Flow:
         if flow_arn in self._flows:
             flow = self._flows[flow_arn]
             flow.outputs = outputs
             return flow
-        raise NotFoundException(message=f"flow with arn={flow_arn} not found")
+        raise NotFoundException(f"flow with arn={flow_arn} not found")
 
     def remove_flow_vpc_interface(self, flow_arn: str, vpc_interface_name: str) -> None:
         if flow_arn in self._flows:
@@ -227,7 +227,7 @@ class MediaConnectBackend(BaseBackend):
                 if vpc_interface["name"] != vpc_interface_name
             ]
         else:
-            raise NotFoundException(message=f"flow with arn={flow_arn} not found")
+            raise NotFoundException(f"flow with arn={flow_arn} not found")
 
     def remove_flow_output(self, flow_arn: str, output_name: str) -> None:
         if flow_arn in self._flows:
@@ -238,7 +238,7 @@ class MediaConnectBackend(BaseBackend):
                 if output["name"] != output_name
             ]
         else:
-            raise NotFoundException(message=f"flow with arn={flow_arn} not found")
+            raise NotFoundException(f"flow with arn={flow_arn} not found")
 
     def update_flow_output(
         self,
@@ -261,7 +261,7 @@ class MediaConnectBackend(BaseBackend):
         vpc_interface_attachment: dict[str, str],
     ) -> dict[str, Any]:
         if flow_arn not in self._flows:
-            raise NotFoundException(message=f"flow with arn={flow_arn} not found")
+            raise NotFoundException(f"flow with arn={flow_arn} not found")
         flow = self._flows[flow_arn]
         for output in flow.outputs:
             if output["outputArn"] == output_arn:
@@ -283,13 +283,13 @@ class MediaConnectBackend(BaseBackend):
                 output["streamId"] = stream_id
                 output["vpcInterfaceAttachment"] = vpc_interface_attachment
                 return output
-        raise NotFoundException(message=f"output with arn={output_arn} not found")
+        raise NotFoundException(f"output with arn={output_arn} not found")
 
     def add_flow_sources(
         self, flow_arn: str, sources: list[dict[str, Any]]
     ) -> list[dict[str, Any]]:
         if flow_arn not in self._flows:
-            raise NotFoundException(message=f"flow with arn={flow_arn} not found")
+            raise NotFoundException(f"flow with arn={flow_arn} not found")
         flow = self._flows[flow_arn]
         for source in sources:
             source_id = random.uuid4().hex
@@ -320,7 +320,7 @@ class MediaConnectBackend(BaseBackend):
         whitelist_cidr: str,
     ) -> dict[str, Any] | None:
         if flow_arn not in self._flows:
-            raise NotFoundException(message=f"flow with arn={flow_arn} not found")
+            raise NotFoundException(f"flow with arn={flow_arn} not found")
         flow = self._flows[flow_arn]
         source: dict[str, Any] | None = next(
             iter(
@@ -354,7 +354,7 @@ class MediaConnectBackend(BaseBackend):
         entitlements: list[dict[str, Any]],
     ) -> list[dict[str, Any]]:
         if flow_arn not in self._flows:
-            raise NotFoundException(message=f"flow with arn={flow_arn} not found")
+            raise NotFoundException(f"flow with arn={flow_arn} not found")
         flow = self._flows[flow_arn]
         for entitlement in entitlements:
             entitlement_id = random.uuid4().hex
@@ -367,15 +367,13 @@ class MediaConnectBackend(BaseBackend):
 
     def revoke_flow_entitlement(self, flow_arn: str, entitlement_arn: str) -> None:
         if flow_arn not in self._flows:
-            raise NotFoundException(message=f"flow with arn={flow_arn} not found")
+            raise NotFoundException(f"flow with arn={flow_arn} not found")
         flow = self._flows[flow_arn]
         for entitlement in flow.entitlements:
             if entitlement_arn == entitlement["entitlementArn"]:
                 flow.entitlements.remove(entitlement)
                 return
-        raise NotFoundException(
-            message=f"entitlement with arn={entitlement_arn} not found"
-        )
+        raise NotFoundException(f"entitlement with arn={entitlement_arn} not found")
 
     def update_flow_entitlement(
         self,
@@ -388,7 +386,7 @@ class MediaConnectBackend(BaseBackend):
         subscribers: list[str],
     ) -> dict[str, Any]:
         if flow_arn not in self._flows:
-            raise NotFoundException(message=f"flow with arn={flow_arn} not found")
+            raise NotFoundException(f"flow with arn={flow_arn} not found")
         flow = self._flows[flow_arn]
         for entitlement in flow.entitlements:
             if entitlement_arn == entitlement["entitlementArn"]:
@@ -398,9 +396,7 @@ class MediaConnectBackend(BaseBackend):
                 entitlement["name"] = name
                 entitlement["subscribers"] = subscribers
                 return entitlement
-        raise NotFoundException(
-            message=f"entitlement with arn={entitlement_arn} not found"
-        )
+        raise NotFoundException(f"entitlement with arn={entitlement_arn} not found")
 
 
 mediaconnect_backends = BackendDict(MediaConnectBackend, "mediaconnect")
