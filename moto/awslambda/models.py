@@ -28,7 +28,6 @@ from moto import settings
 from moto.awslambda.policy import Policy
 from moto.core.base_backend import BackendDict, BaseBackend
 from moto.core.common_models import BaseModel, CloudFormationModel
-from moto.core.exceptions import JsonRESTError as RESTError
 from moto.core.resource_tagging import TaggableResourcesMixin, TaggedResource
 from moto.core.utils import iso_8601_datetime_with_nanoseconds, unix_time_millis, utcnow
 from moto.dynamodb import dynamodb_backends
@@ -58,6 +57,8 @@ from .exceptions import (
     InvalidParameterValueException,
     InvalidRoleFormat,
     LambdaClientError,
+    ResourceConflictException,
+    ResourceNotFoundException,
     UnknownAliasException,
     UnknownEventConfig,
     UnknownFunctionException,
@@ -2046,7 +2047,7 @@ class LambdaBackend(BaseBackend, TaggableResourcesMixin):
         """
         function_name = spec.get("FunctionName", None)
         if function_name is None:
-            raise RESTError("InvalidParameterValueException", "Missing FunctionName")
+            raise InvalidParameterValueException("Missing FunctionName")
 
         fn = LambdaFunction(
             account_id=self.account_id,
@@ -2112,7 +2113,7 @@ class LambdaBackend(BaseBackend, TaggableResourcesMixin):
         required = ["EventSourceArn", "FunctionName"]
         for param in required:
             if not spec.get(param):
-                raise RESTError("InvalidParameterValueException", f"Missing {param}")
+                raise InvalidParameterValueException(f"Missing {param}")
         spec["RegionName"] = self.region_name
         spec["AccountId"] = self.account_id
 
@@ -2127,9 +2128,7 @@ class LambdaBackend(BaseBackend, TaggableResourcesMixin):
             if queue.queue_arn == spec["EventSourceArn"]:
                 if queue.lambda_event_source_mappings.get("func.function_arn"):
                     # TODO: Correct exception?
-                    raise RESTError(
-                        "ResourceConflictException", "The resource already exists."
-                    )
+                    raise ResourceConflictException("The resource already exists.")
                 spec.update({"FunctionArn": func.function_arn})
                 esm = EventSourceMapping(spec)
                 self._event_source_mappings[esm.uuid] = esm
@@ -2162,7 +2161,7 @@ class LambdaBackend(BaseBackend, TaggableResourcesMixin):
                 stream.lambda_event_source_mappings[esm.event_source_arn] = esm
                 return esm
 
-        raise RESTError("ResourceNotFoundException", "Invalid EventSourceArn")
+        raise ResourceNotFoundException("Invalid EventSourceArn")
 
     def publish_layer_version(self, spec: dict[str, Any]) -> LayerVersion:
         required = ["LayerName", "Content"]
@@ -2474,9 +2473,8 @@ class LambdaBackend(BaseBackend, TaggableResourcesMixin):
         if resource_type == "event-source-mapping":
             esm = self._event_source_mappings.get(resource_name)
             if not esm:
-                raise RESTError(
-                    "ResourceNotFoundException",
-                    f"Event source mapping {resource_name} not found.",
+                raise ResourceNotFoundException(
+                    f"Event source mapping {resource_name} not found."
                 )
             return esm
         return self._lambdas.get_function_by_name_or_arn_with_qualifier(arn)
