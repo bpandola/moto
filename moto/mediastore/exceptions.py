@@ -1,31 +1,28 @@
-from moto.core.exceptions import JsonRESTError
+from moto.core.exceptions import ServiceException
 
 
-class MediaStoreClientError(JsonRESTError):
-    code = 400
+class MediaStoreClientError(ServiceException):
+    pass
 
 
 class ContainerNotFoundException(MediaStoreClientError):
+    code = "ContainerNotFoundException"
+
     def __init__(self, msg: str | None = None):
-        self.code = 400
-        super().__init__(
-            "ContainerNotFoundException",
-            msg or "The specified container does not exist",
-        )
+        super().__init__(msg or "The specified container does not exist")
 
 
 class ResourceNotFoundException(MediaStoreClientError):
+    code = "ResourceNotFoundException"
+
     def __init__(self, msg: str | None = None):
-        self.code = 400
-        super().__init__(
-            "ResourceNotFoundException", msg or "The specified container does not exist"
-        )
+        super().__init__(msg or "The specified container does not exist")
 
 
 class PolicyNotFoundException(MediaStoreClientError):
+    code = "PolicyNotFoundException"
+
     def __init__(self, msg: str | None = None):
-        self.code = 400
         super().__init__(
-            "PolicyNotFoundException",
-            msg or "The policy does not exist within the specfied container",
+            msg or "The policy does not exist within the specfied container"
         )
