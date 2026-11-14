@@ -1,26 +1,26 @@
 """Exceptions raised by the bedrockagent service."""
 
-from moto.core.exceptions import JsonRESTError
+from moto.core.exceptions import ServiceException
 
 
-class AgentsforBedrockClientError(JsonRESTError):
-    code = 400
+class AgentsforBedrockClientError(ServiceException):
+    pass
 
 
 class ResourceNotFoundException(AgentsforBedrockClientError):
-    def __init__(self, msg: str):
-        super().__init__("ResourceNotFoundException", f"{msg}")
+    code = "ResourceNotFoundException"
 
 
 class ConflictException(AgentsforBedrockClientError):
-    def __init__(self, msg: str):
-        super().__init__("ConflictException", f"{msg}")
+    code = "ConflictException"
 
 
 class ValidationException(AgentsforBedrockClientError):
+    code = "ValidationException"
+    message = (
+        "Input validation failed. Check your request parameters and retry the request."
+    )
+
     def __init__(self, msg: str):
-        super().__init__(
-            "ValidationException",
-            "Input validation failed. Check your request parameters and retry the request.",
-            f"{msg}",
-        )
+        # The detailed message is not returned to the caller
+        super().__init__(self.message)
