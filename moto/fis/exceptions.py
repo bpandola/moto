@@ -1,14 +1,11 @@
 """Exceptions raised by the fis service."""
 
-from moto.core.exceptions import JsonRESTError
+from moto.core.exceptions import ServiceException
 
 
-class FISException(JsonRESTError):
+class FISException(ServiceException):
     pass
 
 
 class ResourceNotFoundException(FISException):
-    code = 404
-
-    def __init__(self, message: str):
-        super().__init__("ResourceNotFoundException", message)
+    code = "ResourceNotFoundException"
