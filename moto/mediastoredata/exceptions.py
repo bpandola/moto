@@ -1,8 +1,8 @@
-from moto.core.exceptions import JsonRESTError
+from moto.core.exceptions import ServiceException
 
 
-class MediaStoreDataClientError(JsonRESTError):
-    code = 400
+class MediaStoreDataClientError(ServiceException):
+    pass
 
 
 # AWS service exceptions are caught with the underlying botocore exception, ClientError
