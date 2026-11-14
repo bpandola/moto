@@ -1,44 +1,33 @@
 """Exceptions raised by the cloudtrail service."""
 
-from moto.core.exceptions import JsonRESTError
+from moto.core.exceptions import ServiceException
 
 
-class InvalidParameterCombinationException(JsonRESTError):
-    code = 400
-
-    def __init__(self, message: str):
-        super().__init__("InvalidParameterCombinationException", message)
+class CloudTrailException(ServiceException):
+    pass
 
 
-class S3BucketDoesNotExistException(JsonRESTError):
-    code = 400
-
-    def __init__(self, message: str):
-        super().__init__("S3BucketDoesNotExistException", message)
+class InvalidParameterCombinationException(CloudTrailException):
+    code = "InvalidParameterCombinationException"
 
 
-class InsufficientSnsTopicPolicyException(JsonRESTError):
-    code = 400
-
-    def __init__(self, message: str):
-        super().__init__("InsufficientSnsTopicPolicyException", message)
+class S3BucketDoesNotExistException(CloudTrailException):
+    code = "S3BucketDoesNotExistException"
 
 
-class TrailNotFoundException(JsonRESTError):
-    code = 400
+class InsufficientSnsTopicPolicyException(CloudTrailException):
+    code = "InsufficientSnsTopicPolicyException"
+
+
+class TrailNotFoundException(CloudTrailException):
+    code = "TrailNotFoundException"
 
     def __init__(self, account_id: str, name: str):
-        super().__init__(
-            "TrailNotFoundException",
-            f"Unknown trail: {name} for the user: {account_id}",
-        )
+        super().__init__(f"Unknown trail: {name} for the user: {account_id}")
 
 
-class InvalidTrailNameException(JsonRESTError):
-    code = 400
-
-    def __init__(self, message: str):
-        super().__init__("InvalidTrailNameException", message)
+class InvalidTrailNameException(CloudTrailException):
+    code = "InvalidTrailNameException"
 
 
 class TrailNameTooShort(InvalidTrailNameException):
@@ -56,17 +45,12 @@ class TrailNameTooLong(InvalidTrailNameException):
 
 
 class TrailNameNotStartingCorrectly(InvalidTrailNameException):
-    def __init__(self) -> None:
-        super().__init__("Trail name must starts with a letter or number.")
+    message = "Trail name must starts with a letter or number."
 
 
 class TrailNameNotEndingCorrectly(InvalidTrailNameException):
-    def __init__(self) -> None:
-        super().__init__("Trail name must ends with a letter or number.")
+    message = "Trail name must ends with a letter or number."
 
 
 class TrailNameInvalidChars(InvalidTrailNameException):
-    def __init__(self) -> None:
-        super().__init__(
-            "Trail name or ARN can only contain uppercase letters, lowercase letters, numbers, periods (.), hyphens (-), and underscores (_)."
-        )
+    message = "Trail name or ARN can only contain uppercase letters, lowercase letters, numbers, periods (.), hyphens (-), and underscores (_)."
