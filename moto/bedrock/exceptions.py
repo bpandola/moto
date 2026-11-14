@@ -1,33 +1,29 @@
 """Exceptions raised by the bedrock service."""
 
-from moto.core.exceptions import JsonRESTError
-
-# Bedrock.Client.exceptions.ResourceNotFoundException
+from moto.core.exceptions import ServiceException
 
 
-class BedrockClientError(JsonRESTError):
-    code = 400
+class BedrockClientError(ServiceException):
+    pass
 
 
 class ResourceNotFoundException(BedrockClientError):
-    def __init__(self, msg: str):
-        super().__init__("ResourceNotFoundException", f"{msg}")
+    code = "ResourceNotFoundException"
 
 
 class ResourceInUseException(BedrockClientError):
-    def __init__(self, msg: str):
-        super().__init__("ResourceInUseException", f"{msg}")
+    code = "ResourceInUseException"
 
 
 class ValidationException(BedrockClientError):
+    code = "ValidationException"
+
     def __init__(self, msg: str):
+        # The detailed msg is not exposed to the client.
         super().__init__(
-            "ValidationException",
-            "Input validation failed. Check your request parameters and retry the request.",
-            f"{msg}",
+            "Input validation failed. Check your request parameters and retry the request."
         )
 
 
 class TooManyTagsException(BedrockClientError):
-    def __init__(self, msg: str):
-        super().__init__("TooManyTagsException", f"{msg}")
+    code = "TooManyTagsException"
