@@ -1,0 +1,8 @@
+{
+  "version": 1.0,
+  "merge": {
+    "metadata": {
+      "errorNamespace": "com.amazonaws.timestream.v20181101"
+    }
+  }
+}

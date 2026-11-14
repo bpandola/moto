@@ -1,10 +1,11 @@
 """Exceptions raised by the timestreamwrite service."""
 
-from moto.core.exceptions import JsonRESTError
+from moto.core.exceptions import ServiceException
 
 
-class ResourceNotFound(JsonRESTError):
-    error_type = "com.amazonaws.timestream.v20181101#ResourceNotFoundException"
+class TimestreamWriteException(ServiceException):
+    pass
 
-    def __init__(self, msg: str):
-        super().__init__(ResourceNotFound.error_type, msg)
+
+class ResourceNotFound(TimestreamWriteException):
+    code = "ResourceNotFoundException"
