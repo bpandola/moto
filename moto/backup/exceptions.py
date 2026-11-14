@@ -1,27 +1,23 @@
 """Exceptions raised by the backup service."""
 
-from moto.core.exceptions import JsonRESTError
+from moto.core.exceptions import ServiceException
 
 
-class BackupClientError(JsonRESTError):
-    code = 400
+class BackupClientError(ServiceException):
+    pass
 
 
 class AlreadyExistsException(BackupClientError):
-    def __init__(self, msg: str):
-        super().__init__("AlreadyExistsException", f"{msg}")
+    code = "AlreadyExistsException"
 
 
-class ResourceNotFoundException(JsonRESTError):
-    def __init__(self, msg: str):
-        super().__init__("ResourceNotFoundException", f"{msg}")
+class ResourceNotFoundException(BackupClientError):
+    code = "ResourceNotFoundException"
 
 
 class InvalidParameterValueException(BackupClientError):
-    def __init__(self, msg: str):
-        super().__init__("InvalidParameterValueException", f"{msg}")
+    code = "InvalidParameterValueException"
 
 
 class InvalidRequestException(BackupClientError):
-    def __init__(self, msg: str):
-        super().__init__("InvalidRequestException", f"{msg}")
+    code = "InvalidRequestException"

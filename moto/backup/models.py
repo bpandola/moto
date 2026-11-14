@@ -169,7 +169,7 @@ class BackupBackend(BaseBackend, TaggableResourcesMixin):
             p.backup_plan["BackupPlanName"] for p in list(self.plans.values())
         ]:
             raise AlreadyExistsException(
-                msg="Backup plan with the same plan document already exists"
+                "Backup plan with the same plan document already exists"
             )
         plan = Plan(
             backup_plan=backup_plan,
@@ -184,19 +184,19 @@ class BackupBackend(BaseBackend, TaggableResourcesMixin):
     def get_backup_plan(self, backup_plan_id: str, version_id: Any | None) -> Plan:
         msg = "Failed reading Backup plan with provided version"
         if backup_plan_id not in self.plans:
-            raise ResourceNotFoundException(msg=msg)
+            raise ResourceNotFoundException(msg)
         plan = self.plans[backup_plan_id]
         if version_id:
             if plan.version_id == version_id:
                 return plan
             else:
-                raise ResourceNotFoundException(msg=msg)
+                raise ResourceNotFoundException(msg)
         return plan
 
     def delete_backup_plan(self, backup_plan_id: str) -> tuple[str, str, float, str]:
         if backup_plan_id not in self.plans:
             raise ResourceNotFoundException(
-                msg="Failed reading Backup plan with provided version"
+                "Failed reading Backup plan with provided version"
             )
         deletion_date = unix_time()
         res = self.plans[backup_plan_id]
@@ -226,7 +226,7 @@ class BackupBackend(BaseBackend, TaggableResourcesMixin):
     ) -> Vault:
         if backup_vault_name in self.vaults:
             raise AlreadyExistsException(
-                msg="Backup vault with the same name already exists"
+                "Backup vault with the same name already exists"
             )
         vault = Vault(
             backup_vault_name=backup_vault_name,
@@ -256,24 +256,24 @@ class BackupBackend(BaseBackend, TaggableResourcesMixin):
     ) -> None:
         if backup_vault_name not in self.vaults:
             raise ResourceNotFoundException(
-                msg=f"Backup vault {backup_vault_name} not found"
+                f"Backup vault {backup_vault_name} not found"
             )
 
         vault = self.vaults[backup_vault_name]
 
         if vault.lock_date is not None and unix_time() >= vault.lock_date:
             raise InvalidRequestException(
-                msg="Vault Lock configuration is immutable and cannot be modified"
+                "Vault Lock configuration is immutable and cannot be modified"
             )
 
         if min_retention_days is not None and min_retention_days < 1:
             raise InvalidParameterValueException(
-                msg="MinRetentionDays must be at least 1 day"
+                "MinRetentionDays must be at least 1 day"
             )
 
         if max_retention_days is not None and max_retention_days > 36500:
             raise InvalidParameterValueException(
-                msg="MaxRetentionDays cannot exceed 36500 days"
+                "MaxRetentionDays cannot exceed 36500 days"
             )
 
         if (
@@ -282,12 +282,12 @@ class BackupBackend(BaseBackend, TaggableResourcesMixin):
             and min_retention_days > max_retention_days
         ):
             raise InvalidParameterValueException(
-                msg="MinRetentionDays cannot be greater than MaxRetentionDays"
+                "MinRetentionDays cannot be greater than MaxRetentionDays"
             )
 
         if changeable_for_days is not None and changeable_for_days < 3:
             raise InvalidParameterValueException(
-                msg="ChangeableForDays must be at least 3 days"
+                "ChangeableForDays must be at least 3 days"
             )
 
         vault.locked = True
@@ -304,14 +304,14 @@ class BackupBackend(BaseBackend, TaggableResourcesMixin):
     ) -> None:
         if backup_vault_name not in self.vaults:
             raise ResourceNotFoundException(
-                msg=f"Backup vault {backup_vault_name} not found"
+                f"Backup vault {backup_vault_name} not found"
             )
 
         vault = self.vaults[backup_vault_name]
 
         if vault.lock_date is not None and unix_time() >= vault.lock_date:
             raise InvalidRequestException(
-                msg="Vault Lock configuration is immutable and cannot be deleted"
+                "Vault Lock configuration is immutable and cannot be deleted"
             )
 
         vault.locked = False
@@ -354,9 +354,7 @@ class BackupBackend(BaseBackend, TaggableResourcesMixin):
 
     def describe_report_plan(self, report_plan_name: str) -> ReportPlan:
         if report_plan_name not in self.report_plans:
-            raise ResourceNotFoundException(
-                msg=f"Report Plan {report_plan_name} not found"
-            )
+            raise ResourceNotFoundException(f"Report Plan {report_plan_name} not found")
         return self.report_plans[report_plan_name]
 
     def delete_report_plan(self, report_plan_name: str) -> None:
