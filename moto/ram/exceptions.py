@@ -1,34 +1,26 @@
-from moto.core.exceptions import JsonRESTError
+from moto.core.exceptions import ServiceException
 
 
-class InvalidParameterException(JsonRESTError):
-    code = 400
-
-    def __init__(self, message: str):
-        super().__init__("InvalidParameterException", message)
+class ResourceAccessManagerException(ServiceException):
+    pass
 
 
-class MalformedArnException(JsonRESTError):
-    code = 400
-
-    def __init__(self, message: str):
-        super().__init__("MalformedArnException", message)
+class InvalidParameterException(ResourceAccessManagerException):
+    code = "InvalidParameterException"
 
 
-class OperationNotPermittedException(JsonRESTError):
-    code = 400
-
-    def __init__(self) -> None:
-        super().__init__(
-            "OperationNotPermittedException",
-            "Unable to enable sharing with AWS Organizations. "
-            "Received AccessDeniedException from AWSOrganizations with the following error message: "
-            "You don't have permissions to access this resource.",
-        )
+class MalformedArnException(ResourceAccessManagerException):
+    code = "MalformedArnException"
 
 
-class UnknownResourceException(JsonRESTError):
-    code = 400
+class OperationNotPermittedException(ResourceAccessManagerException):
+    code = "OperationNotPermittedException"
+    message = (
+        "Unable to enable sharing with AWS Organizations. "
+        "Received AccessDeniedException from AWSOrganizations with the following error message: "
+        "You don't have permissions to access this resource."
+    )
 
-    def __init__(self, message: str):
-        super().__init__("UnknownResourceException", message)
+
+class UnknownResourceException(ResourceAccessManagerException):
+    code = "UnknownResourceException"
