@@ -348,7 +348,7 @@ def test_get_cluster_policy_not_found():
     resp = exc.value.response
     error = resp["Error"]
     metadata = resp["ResponseMetadata"]
-    assert metadata["HTTPStatusCode"] == 400
+    assert metadata["HTTPStatusCode"] == 404
     assert error["Code"] == "NotFoundException"
     assert error["Message"] == "Resource not found: INVALID_ARN"
 
@@ -395,7 +395,7 @@ def test_delete_cluster_policy_not_found():
     resp = exc.value.response
     error = resp["Error"]
     metadata = resp["ResponseMetadata"]
-    assert metadata["HTTPStatusCode"] == 400
+    assert metadata["HTTPStatusCode"] == 404
     assert error["Code"] == "NotFoundException"
     assert error["Message"] == "Resource not found: INVALID_ARN"
 

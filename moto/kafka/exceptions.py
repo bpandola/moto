@@ -1,17 +1,15 @@
 """Exceptions raised by the kafka service."""
 
-from moto.core.exceptions import JsonRESTError
+from moto.core.exceptions import ServiceException
 
 
-class KafkaException(JsonRESTError):
+class KafkaException(ServiceException):
     pass
 
 
 class NotFoundException(KafkaException):
-    def __init__(self, msg: str):
-        super().__init__("NotFoundException", msg)
+    code = "NotFoundException"
 
 
 class BadRequestException(KafkaException):
-    def __init__(self, msg: str):
-        super().__init__("BadRequestException", msg)
+    code = "BadRequestException"
