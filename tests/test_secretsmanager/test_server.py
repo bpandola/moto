@@ -61,7 +61,7 @@ def test_get_secret_that_does_not_exist():
         },
     )
     json_data = json.loads(get_secret.data.decode("utf-8"))
-    assert json_data["message"] == "Secrets Manager can't find the specified secret."
+    assert json_data["Message"] == "Secrets Manager can't find the specified secret."
     assert json_data["__type"] == "ResourceNotFoundException"
 
 
@@ -87,7 +87,7 @@ def test_get_secret_that_does_not_match():
         },
     )
     json_data = json.loads(get_secret.data.decode("utf-8"))
-    assert json_data["message"] == "Secrets Manager can't find the specified secret."
+    assert json_data["Message"] == "Secrets Manager can't find the specified secret."
     assert json_data["__type"] == "ResourceNotFoundException"
 
 
@@ -115,7 +115,7 @@ def test_get_secret_that_has_no_value():
 
     json_data = json.loads(get_secret.data.decode("utf-8"))
     assert (
-        json_data["message"]
+        json_data["Message"]
         == "Secrets Manager can't find the specified secret value for staging label: AWSCURRENT"
     )
     assert json_data["__type"] == "ResourceNotFoundException"
@@ -217,7 +217,7 @@ def test_describe_secret_that_does_not_exist():
     )
 
     json_data = json.loads(describe_secret.data.decode("utf-8"))
-    assert json_data["message"] == "Secrets Manager can't find the specified secret."
+    assert json_data["Message"] == "Secrets Manager can't find the specified secret."
     assert json_data["__type"] == "ResourceNotFoundException"
 
 
@@ -244,7 +244,7 @@ def test_describe_secret_that_does_not_match():
     )
 
     json_data = json.loads(describe_secret.data.decode("utf-8"))
-    assert json_data["message"] == "Secrets Manager can't find the specified secret."
+    assert json_data["Message"] == "Secrets Manager can't find the specified secret."
     assert json_data["__type"] == "ResourceNotFoundException"
 
 
@@ -355,7 +355,7 @@ def test_rotate_secret_that_does_not_exist():
     )
 
     json_data = json.loads(rotate_secret.data.decode("utf-8"))
-    assert json_data["message"] == "Secrets Manager can't find the specified secret."
+    assert json_data["Message"] == "Secrets Manager can't find the specified secret."
     assert json_data["__type"] == "ResourceNotFoundException"
 
 
@@ -383,7 +383,7 @@ def test_rotate_secret_that_does_not_match():
     )
 
     json_data = json.loads(rotate_secret.data.decode("utf-8"))
-    assert json_data["message"] == "Secrets Manager can't find the specified secret."
+    assert json_data["Message"] == "Secrets Manager can't find the specified secret."
     assert json_data["__type"] == "ResourceNotFoundException"
 
 
@@ -471,7 +471,7 @@ def test_rotate_secret_client_request_token_too_short():
     )
 
     json_data = json.loads(rotate_secret.data.decode("utf-8"))
-    assert json_data["message"] == "ClientRequestToken must be 32-64 characters long."
+    assert json_data["Message"] == "ClientRequestToken must be 32-64 characters long."
     assert json_data["__type"] == "InvalidParameterException"
 
 
@@ -505,7 +505,7 @@ def test_rotate_secret_client_request_token_too_long():
     )
 
     json_data = json.loads(rotate_secret.data.decode("utf-8"))
-    assert json_data["message"] == "ClientRequestToken must be 32-64 characters long."
+    assert json_data["Message"] == "ClientRequestToken must be 32-64 characters long."
     assert json_data["__type"] == "InvalidParameterException"
 
 
@@ -537,7 +537,7 @@ def test_rotate_secret_rotation_lambda_arn_too_long():
     )
 
     json_data = json.loads(rotate_secret.data.decode("utf-8"))
-    assert json_data["message"] == "RotationLambdaARN must <= 2048 characters long."
+    assert json_data["Message"] == "RotationLambdaARN must <= 2048 characters long."
     assert json_data["__type"] == "InvalidParameterException"
 
 
@@ -615,9 +615,9 @@ def test_rotate_secret_with_incorrect_lambda_arn():
         },
     )
     json_data = json.loads(resp.data.decode("utf-8"))
-    assert json_data["message"] == "Resource not found for ARN 'notarealarn'."
+    assert json_data["Message"] == "Resource not found for ARN 'notarealarn'."
     assert json_data["__type"] == "ResourceNotFoundException"
-    assert resp.status_code == 404
+    assert resp.status_code == 400
 
 
 @mock_aws
@@ -1064,7 +1064,7 @@ def test_update_secret_version_stage_validation():
             "Content-Type": APPLICATION_AMZ_JSON_1_1,
         },
     )
-    assert resp.status_code == 404
+    assert resp.status_code == 400
 
     # Add a secret so we can run further checks
     secret = test_client.post(
@@ -1216,7 +1216,7 @@ def test_batch_get_secret_value_with_both_secret_id_list_and_filters():
 
     json_data = json.loads(batch_get_secret_values.data.decode("utf-8"))
     assert (
-        json_data["message"]
+        json_data["Message"]
         == "Either 'SecretIdList' or 'Filters' must be provided, but not both."
     )
     assert json_data["__type"] == "InvalidParameterException"

@@ -529,7 +529,7 @@ class SecretsManagerBackend(BaseBackend, TaggableResourcesMixin):
                     errors.append(
                         {
                             "SecretId": secret_id,
-                            "ErrorCode": e.error_type,
+                            "ErrorCode": e.code,
                             "Message": e.message,
                         }
                     )

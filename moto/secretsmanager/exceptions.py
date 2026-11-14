@@ -1,71 +1,55 @@
-from moto.core.exceptions import JsonRESTError
+from moto.core.exceptions import ServiceException
 
 
-class SecretsManagerClientError(JsonRESTError):
-    code = 400
+class SecretsManagerClientError(ServiceException):
+    pass
 
 
 class ResourceNotFoundException(SecretsManagerClientError):
-    def __init__(self, message: str):
-        self.code = 404
-        super().__init__("ResourceNotFoundException", message)
+    code = "ResourceNotFoundException"
 
 
 class SecretNotFoundException(SecretsManagerClientError):
-    def __init__(self) -> None:
-        self.code = 404
-        super().__init__(
-            "ResourceNotFoundException",
-            message="Secrets Manager can't find the specified secret.",
-        )
+    code = "ResourceNotFoundException"
+    message = "Secrets Manager can't find the specified secret."
 
 
 class SecretHasNoValueException(SecretsManagerClientError):
+    code = "ResourceNotFoundException"
+
     def __init__(self, version_stage: str):
-        self.code = 404
         super().__init__(
-            "ResourceNotFoundException",
-            message="Secrets Manager can't find the specified secret "
-            f"value for staging label: {version_stage}",
+            "Secrets Manager can't find the specified secret "
+            f"value for staging label: {version_stage}"
         )
 
 
 class SecretStageVersionMismatchException(SecretsManagerClientError):
-    def __init__(self) -> None:
-        self.code = 404
-        super().__init__(
-            "InvalidRequestException",
-            message="You provided a VersionStage that is not associated to the provided VersionId.",
-        )
+    code = "InvalidRequestException"
+    message = (
+        "You provided a VersionStage that is not associated to the provided VersionId."
+    )
 
 
 class ClientError(SecretsManagerClientError):
-    def __init__(self, message: str):
-        super().__init__("InvalidParameterValue", message)
+    code = "InvalidParameterValue"
 
 
 class InvalidParameterException(SecretsManagerClientError):
-    def __init__(self, message: str):
-        super().__init__("InvalidParameterException", message)
+    code = "InvalidParameterException"
 
 
 class ResourceExistsException(SecretsManagerClientError):
-    def __init__(self, message: str):
-        super().__init__("ResourceExistsException", message)
+    code = "ResourceExistsException"
 
 
 class InvalidRequestException(SecretsManagerClientError):
-    def __init__(self, message: str):
-        super().__init__("InvalidRequestException", message)
+    code = "InvalidRequestException"
 
 
 class ValidationException(SecretsManagerClientError):
-    def __init__(self, message: str):
-        super().__init__("ValidationException", message)
+    code = "ValidationException"
 
 
 class OperationNotPermittedOnReplica(InvalidParameterException):
-    def __init__(self) -> None:
-        super().__init__(
-            "Operation not permitted on a replica secret. Call must be made in primary secret's region."
-        )
+    message = "Operation not permitted on a replica secret. Call must be made in primary secret's region."
