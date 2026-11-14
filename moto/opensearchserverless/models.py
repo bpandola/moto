@@ -170,11 +170,11 @@ class OpenSearchServiceServerlessBackend(BaseBackend):
             (sp.name, sp.type) for sp in list(self.security_policies.values())
         ]:
             raise ConflictException(
-                msg=f"Policy with name {name} and type {type} already exists"
+                f"Policy with name {name} and type {type} already exists"
             )
         if type not in ["encryption", "network"]:
             raise ValidationException(
-                msg=f"1 validation error detected: Value '{type}' at 'type' failed to satisfy constraint: Member must satisfy enum value set: [encryption, network]"
+                f"1 validation error detected: Value '{type}' at 'type' failed to satisfy constraint: Member must satisfy enum value set: [encryption, network]"
             )
 
         security_policy = SecurityPolicy(
@@ -192,7 +192,7 @@ class OpenSearchServiceServerlessBackend(BaseBackend):
             if sp.name == name and sp.type == type:
                 return sp
         raise ResourceNotFoundException(
-            msg=f"Policy with name {name} and type {type} is not found"
+            f"Policy with name {name} and type {type} is not found"
         )
 
     def list_security_policies(
@@ -247,11 +247,11 @@ class OpenSearchServiceServerlessBackend(BaseBackend):
                     return sp
                 else:
                     raise ValidationException(
-                        msg="Policy version specified in the request refers to an older version and policy has since changed"
+                        "Policy version specified in the request refers to an older version and policy has since changed"
                     )
 
         raise ResourceNotFoundException(
-            msg=f"Policy with name {name} and type {type} is not found"
+            f"Policy with name {name} and type {type} is not found"
         )
 
     def create_collection(
@@ -272,7 +272,7 @@ class OpenSearchServiceServerlessBackend(BaseBackend):
                 policy = sp.policy
         if not policy:
             raise ValidationException(
-                msg=f"No matching security policy of encryption type found for collection name: {name}. Please create security policy of encryption type for this collection."
+                f"No matching security policy of encryption type found for collection name: {name}. Please create security policy of encryption type for this collection."
             )
 
         collection = Collection(
@@ -319,7 +319,7 @@ class OpenSearchServiceServerlessBackend(BaseBackend):
         # Only 1 endpoint should exists under each VPC
         if vpc_id in [ose.vpc_id for ose in list(self.os_endpoints.values())]:
             raise ConflictException(
-                msg=f"Failed to create a VpcEndpoint {name} for AccountId {self.account_id} :: There is already a VpcEndpoint exist under VpcId {vpc_id}"
+                f"Failed to create a VpcEndpoint {name} for AccountId {self.account_id} :: There is already a VpcEndpoint exist under VpcId {vpc_id}"
             )
 
         os_endpoint = OSEndpoint(
@@ -362,7 +362,7 @@ class OpenSearchServiceServerlessBackend(BaseBackend):
         }
         if ids and names:
             raise ValidationException(
-                msg="You need to provide IDs or names. You can't provide both IDs and names in the same request"
+                "You need to provide IDs or names. You can't provide both IDs and names in the same request"
             )
         if ids:
             for i in ids:

@@ -1,22 +1,19 @@
 """Exceptions raised by the opensearchserverless service."""
 
-from moto.core.exceptions import JsonRESTError
+from moto.core.exceptions import ServiceException
 
 
-class BackupClientError(JsonRESTError):
-    code = 400
+class BackupClientError(ServiceException):
+    pass
 
 
 class ConflictException(BackupClientError):
-    def __init__(self, msg: str):
-        super().__init__("ConflictException", f"{msg}")
+    code = "ConflictException"
 
 
 class ValidationException(BackupClientError):
-    def __init__(self, msg: str):
-        super().__init__("ValidationException", f"{msg}")
+    code = "ValidationException"
 
 
 class ResourceNotFoundException(BackupClientError):
-    def __init__(self, msg: str):
-        super().__init__("ResourceNotFoundException", f"{msg}")
+    code = "ResourceNotFoundException"
