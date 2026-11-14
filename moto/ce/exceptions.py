@@ -1,10 +1,14 @@
 """Exceptions raised by the ce service."""
 
-from moto.core.exceptions import JsonRESTError
+from moto.core.exceptions import ServiceException
 
 
-class CostCategoryNotFound(JsonRESTError):
+class CostExplorerException(ServiceException):
+    pass
+
+
+class CostCategoryNotFound(CostExplorerException):
+    code = "ResourceNotFoundException"
+
     def __init__(self, ccd_id: str):
-        super().__init__(
-            "ResourceNotFoundException", f"No Cost Categories found with ID {ccd_id}"
-        )
+        super().__init__(f"No Cost Categories found with ID {ccd_id}")
