@@ -147,7 +147,7 @@ def test_create_deployment_with_invalid_group_id():
             DeploymentType="NewDeployment",
         )
 
-    assert ex.value.response["ResponseMetadata"]["HTTPStatusCode"] == 404
+    assert ex.value.response["ResponseMetadata"]["HTTPStatusCode"] == 400
     assert ex.value.response["Error"]["Code"] == "ResourceNotFoundException"
     assert (
         ex.value.response["Error"]["Message"] == "That group definition does not exist."
@@ -183,7 +183,7 @@ def test_create_deployment_with_invalid_group_version_id():
             DeploymentType="NewDeployment",
         )
 
-    assert ex.value.response["ResponseMetadata"]["HTTPStatusCode"] == 404
+    assert ex.value.response["ResponseMetadata"]["HTTPStatusCode"] == 400
     assert ex.value.response["Error"]["Code"] == "ResourceNotFoundException"
     assert (
         ex.value.response["Error"]["Message"]

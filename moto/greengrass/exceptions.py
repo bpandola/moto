@@ -1,41 +1,29 @@
-from moto.core.exceptions import JsonRESTError
+from moto.core.exceptions import ServiceException
 
 
-class GreengrassClientError(JsonRESTError):
-    code = 400
+class GreengrassClientError(ServiceException):
+    pass
 
 
 class IdNotFoundException(GreengrassClientError):
-    def __init__(self, msg: str):
-        self.code = 404
-        super().__init__("IdNotFoundException", msg)
+    code = "IdNotFoundException"
 
 
 class InvalidContainerDefinitionException(GreengrassClientError):
-    def __init__(self, msg: str):
-        self.code = 400
-        super().__init__("InvalidContainerDefinitionException", msg)
+    code = "InvalidContainerDefinitionException"
 
 
 class VersionNotFoundException(GreengrassClientError):
-    def __init__(self, msg: str):
-        self.code = 404
-        super().__init__("VersionNotFoundException", msg)
+    code = "VersionNotFoundException"
 
 
 class InvalidInputException(GreengrassClientError):
-    def __init__(self, msg: str):
-        self.code = 400
-        super().__init__("InvalidInputException", msg)
+    code = "InvalidInputException"
 
 
 class MissingCoreException(GreengrassClientError):
-    def __init__(self, msg: str):
-        self.code = 400
-        super().__init__("MissingCoreException", msg)
+    code = "MissingCoreException"
 
 
 class ResourceNotFoundException(GreengrassClientError):
-    def __init__(self, msg: str):
-        self.code = 404
-        super().__init__("ResourceNotFoundException", msg)
+    code = "ResourceNotFoundException"
