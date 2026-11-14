@@ -1,48 +1,42 @@
-import json
-
-from moto.core.exceptions import JsonRESTError
+from moto.core.exceptions import ServiceException
 
 
-class OpensearchIngestionExceptions(JsonRESTError):
+class OpensearchIngestionExceptions(ServiceException):
     pass
 
 
 class PipelineAlreadyExistsException(OpensearchIngestionExceptions):
+    code = "ResourceAlreadyExistsException"
+
     def __init__(self, pipeline_name: str):
-        super().__init__(
-            "ResourceAlreadyExistsException",
-            f"Pipeline with given name {pipeline_name} already exists",
-        )
-        self.description = json.dumps({"message": self.message})
+        super().__init__(f"Pipeline with given name {pipeline_name} already exists")
 
 
 class PipelineInvalidStateException(OpensearchIngestionExceptions):
+    code = "ConflictException"
+
     def __init__(self, action: str, valid_states: list[str], current_state: str | None):
         super().__init__(
-            "ConflictException",
-            f"Only pipelines with one of the following statuses are eligible for {action}: {valid_states}. The current status is {current_state}.",
+            f"Only pipelines with one of the following statuses are eligible for {action}: {valid_states}. The current status is {current_state}."
         )
-        self.description = json.dumps({"message": self.message})
 
 
 class PipelineNotFoundException(OpensearchIngestionExceptions):
+    code = "ResourceNotFoundException"
+
     def __init__(self, pipeline_name: str):
-        super().__init__(
-            "ResourceNotFoundException", f"Pipeline {pipeline_name} could not be found."
-        )
-        self.description = json.dumps({"message": self.message})
+        super().__init__(f"Pipeline {pipeline_name} could not be found.")
 
 
 class PipelineValidationException(OpensearchIngestionExceptions):
-    def __init__(self, message: str):
-        super().__init__("ValidationException", message)
-        self.description = json.dumps({"message": self.message})
+    code = "ValidationException"
 
 
 class InvalidVPCOptionsException(OpensearchIngestionExceptions):
+    code = "ValidationException"
+
     def __init__(self, message: str) -> None:
-        super().__init__("ValidationException", f"Invalid VpcOptions: {message}")
-        self.description = json.dumps({"message": self.message})
+        super().__init__(f"Invalid VpcOptions: {message}")
 
 
 class SubnetNotFoundException(InvalidVPCOptionsException):
@@ -56,14 +50,11 @@ class SecurityGroupNotFoundException(InvalidVPCOptionsException):
 
 
 class ResourceNotFoundException(OpensearchIngestionExceptions):
+    code = "ResourceNotFoundException"
+
     def __init__(self, resource_arn: str):
-        super().__init__(
-            "ResourceNotFoundException", f"Resource {resource_arn} could not be found."
-        )
-        self.description = json.dumps({"message": self.message})
+        super().__init__(f"Resource {resource_arn} could not be found.")
 
 
 class ValidationException(OpensearchIngestionExceptions):
-    def __init__(self, message: str):
-        super().__init__("ValidationException", message)
-        self.description = json.dumps({"message": self.message})
+    code = "ValidationException"
