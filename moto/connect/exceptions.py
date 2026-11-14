@@ -1,17 +1,15 @@
 """Exceptions raised by the connect service."""
 
-from moto.core.exceptions import JsonRESTError
+from moto.core.exceptions import ServiceException
 
 
-class ResourceNotFoundException(JsonRESTError):
-    code = 404
-
-    def __init__(self, message: str) -> None:
-        super().__init__("ResourceNotFoundException", message)
+class ConnectException(ServiceException):
+    pass
 
 
-class InvalidParameterException(JsonRESTError):
-    code = 400
+class ResourceNotFoundException(ConnectException):
+    code = "ResourceNotFoundException"
 
-    def __init__(self, message: str) -> None:
-        super().__init__("InvalidParameterException", message)
+
+class InvalidParameterException(ConnectException):
+    code = "InvalidParameterException"
