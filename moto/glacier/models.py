@@ -4,9 +4,9 @@ from typing import Any
 
 from moto.core.base_backend import BackendDict, BaseBackend
 from moto.core.common_models import BaseModel
-from moto.core.exceptions import JsonRESTError
 from moto.utilities.utils import get_partition, md5_hash
 
+from .exceptions import VaultNotFound
 from .utils import get_job_id
 
 
@@ -192,7 +192,7 @@ class GlacierBackend(BaseBackend):
 
     def describe_vault(self, vault_name: str) -> Vault:
         if vault_name not in self.vaults:
-            raise JsonRESTError(error_type="VaultNotFound", message="Vault not found")
+            raise VaultNotFound()
         return self.vaults[vault_name]
 
     def create_vault(self, vault_name: str) -> None:
