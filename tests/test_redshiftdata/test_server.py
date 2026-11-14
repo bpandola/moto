@@ -245,4 +245,4 @@ def get_payload(response):
 def should_return_expected_exception(response, expected_exception, message):
     result_data = get_payload(response)
     assert response.headers.get(HttpHeaders.ErrorType) == expected_exception
-    assert result_data["message"] == message
+    assert result_data["Message"] == message
