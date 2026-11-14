@@ -18,7 +18,6 @@ import requests
 from moto import settings
 from moto.core.base_backend import BackendDict, BaseBackend
 from moto.core.common_models import BaseModel, CloudFormationModel
-from moto.core.exceptions import JsonRESTError
 from moto.core.resource_tagging import TaggableResourcesMixin, TaggedResource
 from moto.core.utils import (
     iso_8601_datetime_without_milliseconds,
@@ -29,6 +28,7 @@ from moto.core.utils import (
 from moto.events.exceptions import (
     IllegalStatusException,
     InvalidEventPatternException,
+    InvalidParameterValueException,
     ResourceAlreadyExistsException,
     ResourceNotFoundException,
     ValidationException,
@@ -1257,8 +1257,7 @@ class EventsBackend(BaseBackend, TaggableResourcesMixin):
         event_bus_name = self._normalize_event_bus_arn(event_bus_arn)
 
         if not event_pattern and not scheduled_expression:
-            raise JsonRESTError(
-                "ValidationException",
+            raise ValidationException(
                 "Parameter(s) EventPattern or ScheduleExpression must be specified.",
             )
 
@@ -1538,9 +1537,7 @@ class EventsBackend(BaseBackend, TaggableResourcesMixin):
             policy_doc = json.loads(policy)
             event_bus.add_policy(policy_doc)
         except JSONDecodeError:
-            raise JsonRESTError(
-                "ValidationException", "This policy contains invalid Json"
-            )
+            raise ValidationException("This policy contains invalid Json")
 
     @staticmethod
     def _condition_param_to_stmt_condition(  # type: ignore[misc]
@@ -1562,32 +1559,27 @@ class EventsBackend(BaseBackend, TaggableResourcesMixin):
         condition: dict[str, str],
     ) -> None:
         if principal is None:
-            raise JsonRESTError(
-                "ValidationException", "Parameter Principal must be specified."
-            )
+            raise ValidationException("Parameter Principal must be specified.")
 
         if condition and principal != "*":
-            raise JsonRESTError(
-                "InvalidParameterValue",
+            raise InvalidParameterValueException(
                 "Value of the parameter 'principal' must be '*' when the parameter 'condition' is set.",
             )
 
         if not condition and self.ACCOUNT_ID.match(principal) is None:
-            raise JsonRESTError(
-                "InvalidParameterValue",
+            raise InvalidParameterValueException(
                 f"Value {principal} at 'principal' failed to satisfy constraint: "
                 r"Member must satisfy regular expression pattern: (\d{12}|\*)",
             )
 
         if action is None or action != "events:PutEvents":
-            raise JsonRESTError(
-                "ValidationException",
+            raise ValidationException(
                 "Provided value in parameter 'action' is not supported.",
             )
 
         if statement_id is None or self.STATEMENT_ID.match(statement_id) is None:
-            raise JsonRESTError(
-                "InvalidParameterValue", r"StatementId must match ^[a-zA-Z0-9-_]{1,64}$"
+            raise InvalidParameterValueException(
+                r"StatementId must match ^[a-zA-Z0-9-_]{1,64}$"
             )
 
         principal_arn = {
@@ -1632,14 +1624,11 @@ class EventsBackend(BaseBackend, TaggableResourcesMixin):
             event_bus.remove_statements()
         else:
             if not event_bus.has_permissions():
-                raise JsonRESTError(
-                    "ResourceNotFoundException", "EventBus does not have a policy."
-                )
+                raise ResourceNotFoundException("EventBus does not have a policy.")
 
             statement = event_bus.remove_statement(statement_id)
             if not statement:
-                raise JsonRESTError(
-                    "ResourceNotFoundException",
+                raise ResourceNotFoundException(
                     "Statement with the provided id does not exist.",
                 )
 
@@ -1661,18 +1650,13 @@ class EventsBackend(BaseBackend, TaggableResourcesMixin):
         tags: list[dict[str, str]] | None = None,
     ) -> EventBus:
         if name in self.event_buses:
-            raise JsonRESTError(
-                "ResourceAlreadyExistsException", f"Event bus {name} already exists."
-            )
+            raise ResourceAlreadyExistsException(f"Event bus {name} already exists.")
 
         if not event_source_name and "/" in name:
-            raise JsonRESTError(
-                "ValidationException", "Event bus name must not contain '/'."
-            )
+            raise ValidationException("Event bus name must not contain '/'.")
 
         if event_source_name and event_source_name not in self.event_sources:
-            raise JsonRESTError(
-                "ResourceNotFoundException",
+            raise ResourceNotFoundException(
                 f"Event source {event_source_name} does not exist.",
             )
 
@@ -1704,9 +1688,7 @@ class EventsBackend(BaseBackend, TaggableResourcesMixin):
 
     def delete_event_bus(self, name: str) -> None:
         if name == "default":
-            raise JsonRESTError(
-                "ValidationException", "Cannot delete event bus default."
-            )
+            raise ValidationException("Cannot delete event bus default.")
         event_bus = self.event_buses.pop(name, None)
         if event_bus:
             self.tagger.delete_all_tags_for_resource(event_bus.arn)
