@@ -1,21 +1,19 @@
 """Exceptions raised by the connectcampaigns service."""
 
-from moto.core.exceptions import JsonRESTError
+from moto.core.exceptions import ServiceException
 
 
-class ResourceNotFoundException(JsonRESTError):
+class ConnectCampaignsException(ServiceException):
+    pass
+
+
+class ResourceNotFoundException(ConnectCampaignsException):
     """When a resource is not found."""
 
-    code = 404
-
-    def __init__(self, message: str) -> None:
-        super().__init__("ResourceNotFoundException", message)
+    code = "ResourceNotFoundException"
 
 
-class ValidationException(JsonRESTError):
+class ValidationException(ConnectCampaignsException):
     """When validation fails on input parameters."""
 
-    code = 400
-
-    def __init__(self, message: str) -> None:
-        super().__init__("ValidationException", message)
+    code = "ValidationException"
