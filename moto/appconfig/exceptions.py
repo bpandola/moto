@@ -1,20 +1,22 @@
 """Exceptions raised by the appconfig service."""
 
-from moto.core.exceptions import JsonRESTError
+from moto.core.exceptions import ServiceException
 
 
-class AppNotFoundException(JsonRESTError):
-    def __init__(self) -> None:
-        super().__init__("ResourceNotFoundException", "Application not found")
+class AppConfigException(ServiceException):
+    pass
 
 
-class ConfigurationProfileNotFound(JsonRESTError):
-    def __init__(self) -> None:
-        super().__init__("ResourceNotFoundException", "ConfigurationProfile not found")
+class AppNotFoundException(AppConfigException):
+    code = "ResourceNotFoundException"
+    message = "Application not found"
 
 
-class ConfigurationVersionNotFound(JsonRESTError):
-    def __init__(self) -> None:
-        super().__init__(
-            "ResourceNotFoundException", "HostedConfigurationVersion not found"
-        )
+class ConfigurationProfileNotFound(AppConfigException):
+    code = "ResourceNotFoundException"
+    message = "ConfigurationProfile not found"
+
+
+class ConfigurationVersionNotFound(AppConfigException):
+    code = "ResourceNotFoundException"
+    message = "HostedConfigurationVersion not found"
