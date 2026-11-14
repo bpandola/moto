@@ -1,28 +1,19 @@
 """Exceptions raised by the timestreaminfluxdb service."""
 
-from moto.core.exceptions import JsonRESTError
+from moto.core.exceptions import ServiceException
 
 
-class TimestreamInfluxDBException(JsonRESTError):
+class TimestreamInfluxDBException(ServiceException):
     pass
 
 
 class ValidationException(TimestreamInfluxDBException):
-    code = 400
-
-    def __init__(self, message: str):
-        super().__init__("ValidationException", message)
+    code = "ValidationException"
 
 
 class ConflictException(TimestreamInfluxDBException):
-    code = 400
-
-    def __init__(self, message: str):
-        super().__init__("ConflictException", message)
+    code = "ConflictException"
 
 
 class ResourceNotFoundException(TimestreamInfluxDBException):
-    code = 400
-
-    def __init__(self, message: str):
-        super().__init__("ResourceNotFoundException", message)
+    code = "ResourceNotFoundException"
