@@ -1,21 +1,17 @@
 """Exceptions raised by the pinpoint service."""
 
-from moto.core.exceptions import JsonRESTError
+from moto.core.exceptions import ServiceException
 
 
-class PinpointExceptions(JsonRESTError):
+class PinpointExceptions(ServiceException):
     pass
 
 
 class ApplicationNotFound(PinpointExceptions):
-    code = 404
-
-    def __init__(self) -> None:
-        super().__init__("NotFoundException", "Application not found")
+    code = "NotFoundException"
+    message = "Application not found"
 
 
 class EventStreamNotFound(PinpointExceptions):
-    code = 404
-
-    def __init__(self) -> None:
-        super().__init__("NotFoundException", "Resource not found")
+    code = "NotFoundException"
+    message = "Resource not found"
