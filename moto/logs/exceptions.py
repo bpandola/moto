@@ -1,22 +1,22 @@
 from typing import Any
 
-from moto.core.exceptions import JsonRESTError
+from moto.core.exceptions import ServiceException
 
 
-class LogsClientError(JsonRESTError):
-    code = 400
+class LogsClientError(ServiceException):
+    pass
 
 
 class ResourceNotFoundException(LogsClientError):
+    code = "ResourceNotFoundException"
+
     def __init__(self, msg: str | None = None):
-        self.code = 400
-        super().__init__(
-            "ResourceNotFoundException",
-            msg or "The specified log group does not exist.",
-        )
+        super().__init__(msg or "The specified log group does not exist.")
 
 
 class InvalidParameterException(LogsClientError):
+    code = "InvalidParameterException"
+
     def __init__(
         self,
         msg: str | None = None,
@@ -24,35 +24,24 @@ class InvalidParameterException(LogsClientError):
         parameter: str | None = None,
         value: Any = None,
     ):
-        self.code = 400
         if constraint:
             msg = f"1 validation error detected: Value '{value}' at '{parameter}' failed to satisfy constraint: {constraint}"
-        super().__init__(
-            "InvalidParameterException", msg or "A parameter is specified incorrectly."
-        )
+        super().__init__(msg or "A parameter is specified incorrectly.")
 
 
 class ResourceAlreadyExistsException(LogsClientError):
-    def __init__(self) -> None:
-        self.code = 400
-        super().__init__(
-            "ResourceAlreadyExistsException", "The specified log group already exists"
-        )
+    code = "ResourceAlreadyExistsException"
+    message = "The specified log group already exists"
 
 
 class LimitExceededException(LogsClientError):
-    def __init__(self) -> None:
-        self.code = 400
-        super().__init__("LimitExceededException", "Resource limit exceeded.")
+    code = "LimitExceededException"
+    message = "Resource limit exceeded."
 
 
 class ValidationException(LogsClientError):
-    def __init__(self, msg: str) -> None:
-        self.code = 400
-        super().__init__("ValidationException", msg)
+    code = "ValidationException"
 
 
 class ConflictException(LogsClientError):
-    def __init__(self, msg: str) -> None:
-        self.code = 400
-        super().__init__("ConflictException", msg)
+    code = "ConflictException"

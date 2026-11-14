@@ -1635,7 +1635,7 @@ class LogsBackend(BaseBackend, TaggableResourcesMixin):
         if name in self.delivery_destinations:
             if tags:
                 raise ConflictException(
-                    msg="Tags can only be provided when a resource is being created, not updated."
+                    "Tags can only be provided when a resource is being created, not updated."
                 )
             if (
                 output_format
@@ -1722,17 +1722,17 @@ class LogsBackend(BaseBackend, TaggableResourcesMixin):
 
         if log_type not in log_types[resource_type]:
             raise ValidationException(
-                msg=" This service is not allowed for this LogSource."
+                " This service is not allowed for this LogSource."
             )
 
         if name in self.delivery_sources:
             if tags:
                 raise ConflictException(
-                    msg="Tags can only be provided when a resource is being created, not updated."
+                    "Tags can only be provided when a resource is being created, not updated."
                 )
             if resource_arn not in self.delivery_sources[name].resource_arns:
                 raise ConflictException(
-                    msg="Update to existing Delivery Source with new ResourceId is not allowed. Please create a new Delivery Source instead."
+                    "Update to existing Delivery Source with new ResourceId is not allowed. Please create a new Delivery Source instead."
                 )
         delivery_source = DeliverySource(
             account_id=self.account_id,
@@ -1785,7 +1785,7 @@ class LogsBackend(BaseBackend, TaggableResourcesMixin):
                 delivery.delivery_source_name == delivery_source_name
                 and delivery.delivery_destination_arn == delivery_destination_arn
             ):
-                raise ConflictException(msg="The specified Delivery already exists")
+                raise ConflictException("The specified Delivery already exists")
             if delivery.delivery_source_name == delivery_source_name:
                 for dd in self.delivery_destinations.values():
                     if (
@@ -1793,7 +1793,7 @@ class LogsBackend(BaseBackend, TaggableResourcesMixin):
                         and delivery.destination_type == dd.delivery_destination_type
                     ):
                         raise ConflictException(
-                            msg="Delivery already exists for this Delivery Source with the same Delivery Destination Type."
+                            "Delivery already exists for this Delivery Source with the same Delivery Destination Type."
                         )
 
         for dd in list(self.delivery_destinations.values()):
