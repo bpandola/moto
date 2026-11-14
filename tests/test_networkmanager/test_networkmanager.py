@@ -541,7 +541,7 @@ def test_device_exceptions():
             Description="Test device",
         )
     err = exc.value.response["Error"]
-    assert err["Code"] == "NotFoundException"
+    assert err["Code"] == "ResourceNotFoundException"
 
     # Test invalid global_network_id for get
     with pytest.raises(ClientError) as exc:
@@ -562,7 +562,7 @@ def test_site_exceptions():
             GlobalNetworkId="invalid-global-network-id", Description="Test site"
         )
     err = exc.value.response["Error"]
-    assert err["Code"] == "NotFoundException"
+    assert err["Code"] == "ResourceNotFoundException"
 
     # Test invalid global_network_id for get
     with pytest.raises(ClientError) as exc:
@@ -586,7 +586,7 @@ def test_link_exceptions():
             Bandwidth={"UploadSpeed": 100, "DownloadSpeed": 100},
         )
     err = exc.value.response["Error"]
-    assert err["Code"] == "NotFoundException"
+    assert err["Code"] == "ResourceNotFoundException"
 
     # Test invalid global_network_id for get
     with pytest.raises(ClientError) as exc:

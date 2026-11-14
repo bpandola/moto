@@ -12,7 +12,7 @@ class ValidationError(NetworkManagerException):
 
 
 class ResourceNotFound(NetworkManagerException):
-    code = "NotFoundException"
+    code = "ResourceNotFoundException"
     message = "Resource not found."
 
     def __init__(self, resource_id: str):

@@ -33,6 +33,5 @@ def test_tag_resource():
     )
     data = json.loads(res.data)
     assert data["Message"] == "Resource not found."
-    # NotFoundException is not in the botocore model, so the modeled
-    # ResourceId member is not serialized.
-    assert res.status_code == 400
+    assert data["ResourceId"] == "test-resource-id"
+    assert res.status_code == 404
