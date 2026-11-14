@@ -1,30 +1,25 @@
-from moto.core.exceptions import JsonRESTError
+from moto.core.exceptions import ServiceException
 
 
-class DmsClientError(JsonRESTError):
-    code = 400
+class DmsClientError(ServiceException):
+    pass
 
 
 class ResourceNotFoundFault(DmsClientError):
-    def __init__(self, message: str):
-        super().__init__("ResourceNotFoundFault", message)
+    code = "ResourceNotFoundFault"
 
 
 class InvalidResourceStateFault(DmsClientError):
-    def __init__(self, message: str):
-        super().__init__("InvalidResourceStateFault", message)
+    code = "InvalidResourceStateFault"
 
 
 class ResourceAlreadyExistsFault(DmsClientError):
-    def __init__(self, message: str):
-        super().__init__("ResourceAlreadyExistsFault", message)
+    code = "ResourceAlreadyExistsFault"
 
 
 class ValidationError(DmsClientError):
-    def __init__(self, message: str):
-        super().__init__("ValidationError", message)
+    code = "ValidationError"
 
 
 class InvalidParameterCombinationException(DmsClientError):
-    def __init__(self, message: str):
-        super().__init__("InvalidParameterCombinationException", message)
+    code = "InvalidParameterCombinationException"
