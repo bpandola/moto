@@ -1,8 +1,12 @@
-from moto.core.exceptions import JsonRESTError
+from moto.core.exceptions import ServiceException
 
 
-class RRValidationException(JsonRESTError):
-    code = 400
+class Route53ResolverException(ServiceException):
+    pass
+
+
+class RRValidationException(Route53ResolverException):
+    code = "ValidationException"
 
     def __init__(self, error_tuples: list[tuple[str, str, str]]):
         """Validation errors are concatenated into one exception message.
@@ -23,63 +27,37 @@ class RRValidationException(JsonRESTError):
                 f"Value '{arg_value}' at '{arg_name}' failed to satisfy "
                 f"constraint: Member must {constraint}"
             )
-        super().__init__("ValidationException", msg_leader + "; ".join(msgs))
+        super().__init__(msg_leader + "; ".join(msgs))
 
 
-class InvalidNextTokenException(JsonRESTError):
-    code = 400
-
-    def __init__(self) -> None:
-        super().__init__(
-            "InvalidNextTokenException",
-            "Invalid value passed for the NextToken parameter",
-        )
+class InvalidNextTokenException(Route53ResolverException):
+    code = "InvalidNextTokenException"
+    message = "Invalid value passed for the NextToken parameter"
 
 
-class InvalidParameterException(JsonRESTError):
-    code = 400
-
-    def __init__(self, message: str):
-        super().__init__("InvalidParameterException", message)
+class InvalidParameterException(Route53ResolverException):
+    code = "InvalidParameterException"
 
 
-class InvalidRequestException(JsonRESTError):
-    code = 400
-
-    def __init__(self, message: str):
-        super().__init__("InvalidRequestException", message)
+class InvalidRequestException(Route53ResolverException):
+    code = "InvalidRequestException"
 
 
-class LimitExceededException(JsonRESTError):
-    code = 400
-
-    def __init__(self, message: str):
-        super().__init__("LimitExceededException", message)
+class LimitExceededException(Route53ResolverException):
+    code = "LimitExceededException"
 
 
-class ResourceExistsException(JsonRESTError):
-    code = 400
-
-    def __init__(self, message: str):
-        super().__init__("ResourceExistsException", message)
+class ResourceExistsException(Route53ResolverException):
+    code = "ResourceExistsException"
 
 
-class ResourceInUseException(JsonRESTError):
-    code = 400
-
-    def __init__(self, message: str):
-        super().__init__("ResourceInUseException", message)
+class ResourceInUseException(Route53ResolverException):
+    code = "ResourceInUseException"
 
 
-class ResourceNotFoundException(JsonRESTError):
-    code = 400
-
-    def __init__(self, message: str):
-        super().__init__("ResourceNotFoundException", message)
+class ResourceNotFoundException(Route53ResolverException):
+    code = "ResourceNotFoundException"
 
 
-class TagValidationException(JsonRESTError):
-    code = 400
-
-    def __init__(self, message: str):
-        super().__init__("ValidationException", message)
+class TagValidationException(Route53ResolverException):
+    code = "ValidationException"
