@@ -1,4 +1,3 @@
-import json
 from typing import Any
 
 from werkzeug.exceptions import HTTPException
@@ -87,29 +86,6 @@ class _RESTError(HTTPException):
     def get_body(self, *args: Any, **kwargs: Any) -> str:
         return self.description or ""
 
-    def to_json(self) -> "JsonRESTError":
-        err = JsonRESTError(error_type=self.error_type, message=self.message)
-        err.code = self.code
-        return err
-
-
-class JsonRESTError(_RESTError):
-    def __init__(self, error_type: str, message: str, _: str = "", **kwargs: Any):
-        super().__init__(error_type, message, **kwargs)
-        self.description: str = json.dumps(
-            {"__type": self.error_type, "message": self.message}
-        )
-        self.content_type = "application/json"
-
-    @property
-    def relative_error_type(self) -> str:
-        # https://smithy.io/2.0/aws/protocols/aws-json-1_1-protocol.html
-        # If a # character is present, then take only the contents after the first # character in the value
-        return (self.error_type.split("#")[-1]) if self.error_type else ""
-
-    def get_body(self, *args: Any, **kwargs: Any) -> str:
-        return self.description
-
 
 class SignatureDoesNotMatchError(_RESTError):
     code = 403
@@ -150,15 +126,11 @@ class AuthFailureError(_RESTError):
         )
 
 
-class InvalidNextTokenException(JsonRESTError):
+class InvalidNextTokenException(ServiceException):
     """For AWS Config resource listing. This will be used by many different resource types, and so it is in moto.core."""
 
-    code = 400
-
-    def __init__(self) -> None:
-        super().__init__(
-            "InvalidNextTokenException", "The nextToken provided is invalid"
-        )
+    code = "InvalidNextTokenException"
+    message = "The nextToken provided is invalid"
 
 
 class InvalidToken(ServiceException):
