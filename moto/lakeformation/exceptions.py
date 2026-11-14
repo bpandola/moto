@@ -1,18 +1,20 @@
 """Exceptions raised by the lakeformation service."""
 
-from moto.core.exceptions import JsonRESTError
+from moto.core.exceptions import ServiceException
 
 
-class EntityNotFound(JsonRESTError):
-    def __init__(self) -> None:
-        super().__init__("EntityNotFoundException", "Entity not found")
+class LakeFormationException(ServiceException):
+    pass
 
 
-class InvalidInput(JsonRESTError):
-    def __init__(self, message: str) -> None:
-        super().__init__("InvalidInputException", message)
+class EntityNotFound(LakeFormationException):
+    code = "EntityNotFoundException"
+    message = "Entity not found"
 
 
-class AlreadyExists(JsonRESTError):
-    def __init__(self, message: str) -> None:
-        super().__init__("AlreadyExistsException", message)
+class InvalidInput(LakeFormationException):
+    code = "InvalidInputException"
+
+
+class AlreadyExists(LakeFormationException):
+    code = "AlreadyExistsException"
