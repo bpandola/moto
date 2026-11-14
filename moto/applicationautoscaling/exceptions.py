@@ -1,6 +1,9 @@
-from moto.core.exceptions import JsonRESTError
+from moto.core.exceptions import ServiceException
 
 
-class AWSValidationException(JsonRESTError):
-    def __init__(self, message: str) -> None:
-        super().__init__("ValidationException", message)
+class ApplicationAutoScalingException(ServiceException):
+    pass
+
+
+class AWSValidationException(ApplicationAutoScalingException):
+    code = "ValidationException"
