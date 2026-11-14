@@ -532,7 +532,9 @@ class BaseJSONSerializer(ResponseSerializer):
     ) -> None:
         error_code = self._get_protocol_specific_error_code(shape)
         serialized["__type"] = error_code
-        message = getattr(error, "message", None) or str(error)
+        message = getattr(error, "message", None)
+        if message is None:
+            message = str(error)
         if shape is not None:
             self._serialize(serialized, error, shape, "")
         if message:
@@ -975,7 +977,9 @@ class RpcV2CBORSerializer(BaseJSONSerializer):
             or self.service_model.metadata.get("targetPrefix")
         )
         serialized["__type"] = f"{namespace}#{shape.name}" if namespace else shape.name
-        message = getattr(error, "message", None) or str(error)
+        message = getattr(error, "message", None)
+        if message is None:
+            message = str(error)
         if shape is not None:
             self._serialize(serialized, error, shape, "")
         if message:
