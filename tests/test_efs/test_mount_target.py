@@ -104,7 +104,7 @@ def test_create_mount_target_invalid_subnet_id(efs, file_system):
             FileSystemId=file_system["FileSystemId"], SubnetId="subnet-12345678"
         )
     resp = exc_info.value.response
-    assert has_status_code(resp, 404)
+    assert has_status_code(resp, 400)
     assert "SubnetNotFound" == resp["Error"]["Code"]
 
 
@@ -116,7 +116,7 @@ def test_create_mount_target_invalid_sg_id(efs, file_system, subnet):
             SecurityGroups=["sg-1234df235"],
         )
     resp = exc_info.value.response
-    assert has_status_code(resp, 404)
+    assert has_status_code(resp, 400)
     assert "SecurityGroupNotFound" == resp["Error"]["Code"]
 
 

@@ -1,99 +1,67 @@
-from moto.core.exceptions import JsonRESTError
+from moto.core.exceptions import ServiceException
 
 
-class EFSError(JsonRESTError):
+class EFSError(ServiceException):
     pass
 
 
 class AccessPointNotFound(EFSError):
-    code = 404
+    code = "AccessPointNotFound"
 
     def __init__(self, access_point_id: str):
-        super().__init__(
-            "AccessPointNotFound", f"Access Point {access_point_id} does not exist."
-        )
+        super().__init__(f"Access Point {access_point_id} does not exist.")
 
 
 class FileSystemAlreadyExists(EFSError):
-    code = 409
+    code = "FileSystemAlreadyExists"
 
     def __init__(self, creation_token: str):
-        super().__init__(
-            "FileSystemAlreadyExists",
-            f"File system with {creation_token} already exists.",
-        )
+        super().__init__(f"File system with {creation_token} already exists.")
 
 
 class FileSystemNotFound(EFSError):
-    code = 404
+    code = "FileSystemNotFound"
 
     def __init__(self, file_system_id: str):
-        super().__init__(
-            "FileSystemNotFound",
-            f"File system '{file_system_id}' does not exist.",
-        )
+        super().__init__(f"File system '{file_system_id}' does not exist.")
 
 
 class FileSystemInUse(EFSError):
-    code = 409
-
-    def __init__(self, msg: str):
-        super().__init__("FileSystemInUse", msg)
+    code = "FileSystemInUse"
 
 
 class MountTargetConflict(EFSError):
-    code = 409
-
-    def __init__(self, msg: str):
-        super().__init__("MountTargetConflict", msg)
+    code = "MountTargetConflict"
 
 
 class MountTargetNotFound(EFSError):
-    code = 404
+    code = "MountTargetNotFound"
 
     def __init__(self, mount_target_id: str):
-        super().__init__(
-            "MountTargetNotFound",
-            f"Mount target '{mount_target_id}' does not exist.",
-        )
+        super().__init__(f"Mount target '{mount_target_id}' does not exist.")
 
 
 class BadRequest(EFSError):
-    code = 400
-
-    def __init__(self, msg: str):
-        super().__init__("BadRequest", msg)
+    code = "BadRequest"
 
 
 class PolicyNotFound(EFSError):
-    code = 404
-
-    def __init__(self, msg: str):
-        super().__init__("PolicyNotFound", msg)
+    code = "PolicyNotFound"
 
 
 class SubnetNotFound(EFSError):
-    code = 404
+    code = "SubnetNotFound"
 
     def __init__(self, subnet_id: str):
-        super().__init__(
-            "SubnetNotFound",
-            f"The subnet ID '{subnet_id}' does not exist",
-        )
+        super().__init__(f"The subnet ID '{subnet_id}' does not exist")
 
 
 class SecurityGroupNotFound(EFSError):
-    code = 404
+    code = "SecurityGroupNotFound"
 
     def __init__(self, security_group_id: str):
-        super().__init__(
-            "SecurityGroupNotFound",
-            f"The SecurityGroup ID '{security_group_id}' does not exist",
-        )
+        super().__init__(f"The SecurityGroup ID '{security_group_id}' does not exist")
 
 
 class SecurityGroupLimitExceeded(EFSError):
-    code = 400
-
-    def __init__(self, msg: str):
-        super().__init__("SecurityGroupLimitExceeded", msg)
+    code = "SecurityGroupLimitExceeded"
