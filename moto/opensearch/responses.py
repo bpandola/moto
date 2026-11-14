@@ -2,10 +2,12 @@
 
 import json
 import re
+from collections.abc import Callable
 from typing import Any
 
 from moto.core.common_types import TYPE_RESPONSE
-from moto.core.responses import BaseResponse
+from moto.core.exceptions import ServiceException
+from moto.core.responses import ActionResult, BaseResponse
 from moto.es.exceptions import InvalidDomainName
 
 from .models import OpenSearchServiceBackend, opensearch_backends
@@ -21,46 +23,54 @@ class OpenSearchServiceResponse(BaseResponse):
     def opensearch_backend(self) -> OpenSearchServiceBackend:
         return opensearch_backends[self.current_account][self.region]
 
+    def _call_legacy(self, method: Callable[[], str]) -> TYPE_RESPONSE:
+        # The legacy ES handlers are routed directly from moto/es/urls.py and
+        # bypass call_action, so errors have to be serialized here.
+        try:
+            return 200, {}, method()
+        except ServiceException as e:
+            return self.serialized(ActionResult(e))
+
     @classmethod
     def list_domains(cls, request: Any, full_url: str, headers: Any) -> TYPE_RESPONSE:  # type: ignore
         response = cls()
         response.setup_class(request)
         if request.method == "GET":
-            return 200, {}, response.list_domain_names()
+            return response._call_legacy(response.list_domain_names)
         if request.method == "POST":
-            return 200, {}, response.describe_domains()
+            return response._call_legacy(response.describe_domains)
 
     @classmethod
     def domains(cls, request: Any, full_url: str, headers: Any) -> TYPE_RESPONSE:  # type: ignore
         response = cls()
         response.setup_class(request)
         if request.method == "POST":
-            return 200, {}, response.create_domain()
+            return response._call_legacy(response.create_domain)
 
     @classmethod
     def domain(cls, request: Any, full_url: str, headers: Any) -> TYPE_RESPONSE:  # type: ignore
         response = cls()
         response.setup_class(request)
         if request.method == "DELETE":
-            return 200, {}, response.delete_domain()
+            return response._call_legacy(response.delete_domain)
         if request.method == "GET":
-            return 200, {}, response.describe_domain()
+            return response._call_legacy(response.describe_domain)
 
     @classmethod
     def tags(cls, request: Any, full_url: str, headers: Any) -> TYPE_RESPONSE:  # type: ignore
         response = cls()
         response.setup_class(request)
         if request.method == "GET":
-            return 200, {}, response.list_tags()
+            return response._call_legacy(response.list_tags)
         if request.method == "POST":
-            return 200, {}, response.add_tags()
+            return response._call_legacy(response.add_tags)
 
     @classmethod
     def tag_removal(cls, request: Any, full_url: str, headers: Any) -> TYPE_RESPONSE:  # type: ignore
         response = cls()
         response.setup_class(request)
         if request.method == "POST":
-            return 200, {}, response.remove_tags()
+            return response._call_legacy(response.remove_tags)
 
     def create_domain(self) -> str:
         domain_name = self._get_param("DomainName")
@@ -153,11 +163,14 @@ class OpenSearchServiceResponse(BaseResponse):
         response.setup_class(request)
 
         domain_name = request.url.split("/")[-2]
-        domain_config = response.opensearch_backend.describe_domain_config(
-            domain_name=domain_name,
-        )
 
-        return 200, {}, json.dumps({"DomainConfig": domain_config})
+        def _describe() -> str:
+            domain_config = response.opensearch_backend.describe_domain_config(
+                domain_name=domain_name,
+            )
+            return json.dumps({"DomainConfig": domain_config})
+
+        return response._call_legacy(_describe)
 
     def update_domain_config(self) -> str:
         domain_name = self._get_param("DomainName")
