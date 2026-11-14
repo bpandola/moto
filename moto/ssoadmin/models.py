@@ -370,9 +370,7 @@ class SSOAdminBackend(BaseBackend):
             if instance_arn_match and permission_set_match:
                 return permission_set
         ps_id = permission_set_arn.split("/")[-1]
-        raise ResourceNotFoundException(
-            message=f"Could not find PermissionSet with id {ps_id}"
-        )
+        raise ResourceNotFoundException(f"Could not find PermissionSet with id {ps_id}")
 
     @paginate(pagination_model=PAGINATION_MODEL)
     def list_permission_sets(self, instance_arn: str) -> list[PermissionSet]:

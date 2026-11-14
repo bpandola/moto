@@ -1,33 +1,22 @@
 """Exceptions raised by the ssoadmin service."""
 
-from moto.core.exceptions import JsonRESTError
+from moto.core.exceptions import ServiceException
 
 
-class ResourceNotFoundException(JsonRESTError):
-    code = 400
-
-    def __init__(self, message: str = "") -> None:
-        super().__init__(
-            error_type="ResourceNotFoundException",
-            message=message,
-        )
+class SSOAdminException(ServiceException):
+    pass
 
 
-class ConflictException(JsonRESTError):
-    code = 400
-
-    def __init__(self, message: str = "") -> None:
-        super().__init__(
-            error_type="ConflictException",
-            message=message,
-        )
+class ResourceNotFoundException(SSOAdminException):
+    code = "ResourceNotFoundException"
+    message = ""
 
 
-class ServiceQuotaExceededException(JsonRESTError):
-    code = 400
+class ConflictException(SSOAdminException):
+    code = "ConflictException"
+    message = ""
 
-    def __init__(self, message: str = "") -> None:
-        super().__init__(
-            error_type="ServiceQuotaExceededException",
-            message=message,
-        )
+
+class ServiceQuotaExceededException(SSOAdminException):
+    code = "ServiceQuotaExceededException"
+    message = ""
