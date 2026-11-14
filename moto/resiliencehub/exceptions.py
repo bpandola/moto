@@ -1,11 +1,14 @@
 """Exceptions raised by the resiliencehub service."""
 
-from moto.core.exceptions import JsonRESTError
+from moto.core.exceptions import ServiceException
 
 
-class ResourceNotFound(JsonRESTError):
-    def __init__(self, msg: str):
-        super().__init__("ResourceNotFoundException", msg)
+class ResilienceHubException(ServiceException):
+    pass
+
+
+class ResourceNotFound(ResilienceHubException):
+    code = "ResourceNotFoundException"
 
 
 class AppNotFound(ResourceNotFound):
@@ -14,8 +17,7 @@ class AppNotFound(ResourceNotFound):
 
 
 class AppVersionNotFound(ResourceNotFound):
-    def __init__(self) -> None:
-        super().__init__("App Version not found")
+    message = "App Version not found"
 
 
 class ResiliencyPolicyNotFound(ResourceNotFound):
@@ -23,6 +25,5 @@ class ResiliencyPolicyNotFound(ResourceNotFound):
         super().__init__(f"ResiliencyPolicy {arn} not found")
 
 
-class ValidationException(JsonRESTError):
-    def __init__(self, msg: str):
-        super().__init__("ValidationException", msg)
+class ValidationException(ResilienceHubException):
+    code = "ValidationException"
