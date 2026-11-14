@@ -1,27 +1,20 @@
-import json
-
-from moto.core.exceptions import JsonRESTError
+from moto.core.exceptions import ServiceException
 
 
-class AmpException(JsonRESTError):
+class AmpException(ServiceException):
     pass
 
 
 class ResourceNotFoundException(AmpException):
+    code = "ResourceNotFoundException"
+
     def __init__(self, message: str, resource_id: str, resource_type: str):
-        super().__init__("ResourceNotFoundException", message)
-        self.description = json.dumps(
-            {
-                "resourceId": resource_id,
-                "message": self.message,
-                "resourceType": resource_type,
-            }
-        )
+        super().__init__(message)
+        self.resourceId = resource_id
+        self.resourceType = resource_type
 
 
 class WorkspaceNotFound(ResourceNotFoundException):
-    code = 404
-
     def __init__(self, workspace_id: str):
         super().__init__(
             "Workspace not found",
@@ -31,8 +24,6 @@ class WorkspaceNotFound(ResourceNotFoundException):
 
 
 class RuleGroupNamespaceNotFound(ResourceNotFoundException):
-    code = 404
-
     def __init__(self, name: str):
         super().__init__(
             "RuleGroupNamespace not found",
@@ -42,8 +33,6 @@ class RuleGroupNamespaceNotFound(ResourceNotFoundException):
 
 
 class AlertManagerDefinitionNotFound(ResourceNotFoundException):
-    code = 404
-
     def __init__(self, workspace_id: str):
         super().__init__(
             "AlertManagerDefinition not found",
@@ -53,14 +42,10 @@ class AlertManagerDefinitionNotFound(ResourceNotFoundException):
 
 
 class AlertManagerDefinitionAlreadyExists(AmpException):
-    code = 409
+    code = "ConflictException"
+    message = "AlertManagerDefinition already exists"
 
     def __init__(self, workspace_id: str):
-        super().__init__("ConflictException", "AlertManagerDefinition already exists")
-        self.description = json.dumps(
-            {
-                "resourceId": workspace_id,
-                "message": self.message,
-                "resourceType": "AWS::APS::Workspace",
-            }
-        )
+        super().__init__(self.message)
+        self.resourceId = workspace_id
+        self.resourceType = "AWS::APS::Workspace"
