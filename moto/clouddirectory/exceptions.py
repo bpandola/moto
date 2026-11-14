@@ -1,50 +1,47 @@
 """Exceptions raised by the clouddirectory service."""
 
-import json
-
-from moto.core.exceptions import JsonRESTError
+from moto.core.exceptions import ServiceException
 
 
-class ValidationError(JsonRESTError):
-    def __init__(self, message: str):
-        super().__init__("ValidationException", message)
+class CloudDirectoryException(ServiceException):
+    pass
 
 
-class InvalidArnException(JsonRESTError):
+class ValidationError(CloudDirectoryException):
+    code = "ValidationException"
+
+
+class InvalidArnException(CloudDirectoryException):
+    code = "InvalidArnException"
+    message = "Invalid Arn"
+
     def __init__(self, resource_id: str):
-        super().__init__("InvalidArnException", "Invalid Arn")
-        body = {
-            "ResourceId": resource_id,
-            "Message": "Invalid Arn",
-        }
-        self.description = json.dumps(body)
+        super().__init__(self.message)
+        self.ResourceId = resource_id
 
 
-class ResourceNotFoundException(JsonRESTError):
+class ResourceNotFoundException(CloudDirectoryException):
+    code = "ResourceNotFoundException"
+    message = "Resource not found"
+
     def __init__(self, resource_id: str):
-        super().__init__("ResourceNotFoundException", "Resource not found")
-        body = {
-            "ResourceId": resource_id,
-            "Message": "Resource not found",
-        }
-        self.description = json.dumps(body)
+        super().__init__(self.message)
+        self.ResourceId = resource_id
 
 
-class SchemaAlreadyPublishedException(JsonRESTError):
+class SchemaAlreadyPublishedException(CloudDirectoryException):
+    code = "SchemaAlreadyPublishedException"
+    message = "Schema already published"
+
     def __init__(self, schema_arn: str):
-        super().__init__("SchemaAlreadyPublishedException", "Schema already published")
-        body = {
-            "SchemaArn": schema_arn,
-            "Message": "Schema already published",
-        }
-        self.description = json.dumps(body)
+        super().__init__(self.message)
+        self.SchemaArn = schema_arn
 
 
-class SchemaAlreadyExistsException(JsonRESTError):
+class SchemaAlreadyExistsException(CloudDirectoryException):
+    code = "SchemaAlreadyExistsException"
+    message = "Schema already exists"
+
     def __init__(self, schema_arn: str):
-        super().__init__("SchemaAlreadyExistsException", "Schema already exists")
-        body = {
-            "SchemaArn": schema_arn,
-            "Message": "Schema already exists",
-        }
-        self.description = json.dumps(body)
+        super().__init__(self.message)
+        self.SchemaArn = schema_arn
