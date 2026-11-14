@@ -1,63 +1,44 @@
-import json
-
-from moto.core.exceptions import JsonRESTError
+from moto.core.exceptions import ServiceException
 
 
-class AppSyncExceptions(JsonRESTError):
+class AppSyncExceptions(ServiceException):
     pass
 
 
 class AWSValidationException(AppSyncExceptions):
-    code = 400
-
-    def __init__(self, message: str):
-        super().__init__("ValidationException", message)
-        self.description = json.dumps({"message": self.message})
+    code = "ValidationException"
 
 
 class ApiKeyValidityOutOfBoundsException(AppSyncExceptions):
-    code = 400
-
-    def __init__(self, message: str):
-        super().__init__("ApiKeyValidityOutOfBoundsException", message)
-        self.description = json.dumps({"message": self.message})
+    code = "ApiKeyValidityOutOfBoundsException"
 
 
 class GraphqlAPINotFound(AppSyncExceptions):
-    code = 404
+    code = "NotFoundException"
 
     def __init__(self, api_id: str):
-        super().__init__("NotFoundException", f"GraphQL API {api_id} not found.")
-        self.description = json.dumps({"message": self.message})
+        super().__init__(f"GraphQL API {api_id} not found.")
 
 
 class GraphQLSchemaException(AppSyncExceptions):
-    code = 400
-
-    def __init__(self, message: str):
-        super().__init__("GraphQLSchemaException", message)
-        self.description = json.dumps({"message": self.message})
+    code = "GraphQLSchemaException"
 
 
 class GraphqlAPICacheNotFound(AppSyncExceptions):
-    code = 404
+    code = "NotFoundException"
 
     def __init__(self, op: str):
         super().__init__(
-            "NotFoundException",
-            f"Unable to {op} the cache as it doesn't exist, please create the cache first.",
+            f"Unable to {op} the cache as it doesn't exist, please create the cache first."
         )
-        self.description = json.dumps({"message": self.message})
 
 
 class EventsAPINotFound(AppSyncExceptions):
-    code = 404
+    code = "NotFoundException"
 
     def __init__(self, api_id: str):
-        super().__init__("NotFoundException", f"Events API {api_id} not found.")
-        self.description = json.dumps({"message": self.message})
+        super().__init__(f"Events API {api_id} not found.")
 
 
 class BadRequestException(AppSyncExceptions):
-    def __init__(self, message: str):
-        super().__init__("BadRequestException", message)
+    code = "BadRequestException"

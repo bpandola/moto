@@ -146,7 +146,7 @@ class GraphqlSchema(BaseModel):
         elif format_ == "JSON":
             return json.dumps(introspection_data)
         else:
-            raise BadRequestException(message=f"Invalid format {format_} given")
+            raise BadRequestException(f"Invalid format {format_} given")
 
 
 class GraphqlAPIKey(BaseModel):
@@ -492,7 +492,7 @@ class AppSyncBackend(BaseBackend, TaggableResourcesMixin):
             # When calling get_introspetion_schema without a graphql schema
             # the response GraphQLSchemaException exception includes InvalidSyntaxError
             # in the message. This might not be the case for other methods.
-            raise GraphQLSchemaException(message="InvalidSyntaxError")
+            raise GraphQLSchemaException("InvalidSyntaxError")
         return graphql_api.graphql_schema
 
     def delete_graphql_api(self, api_id: str) -> None:
@@ -588,7 +588,7 @@ class AppSyncBackend(BaseBackend, TaggableResourcesMixin):
             raise GraphqlAPINotFound(api_id)
         graphql_api = self.graphql_apis[api_id]
         if graphql_api.api_cache is not None:
-            raise BadRequestException(message="The API has already enabled caching.")
+            raise BadRequestException("The API has already enabled caching.")
         api_cache = graphql_api.create_api_cache(
             ttl,
             api_caching_behavior,
