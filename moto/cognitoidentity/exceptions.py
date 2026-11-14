@@ -1,14 +1,17 @@
-from moto.core.exceptions import JsonRESTError
+from moto.core.exceptions import ServiceException
 
 
-class ResourceNotFoundError(JsonRESTError):
-    def __init__(self, message: str):
-        super().__init__(error_type="ResourceNotFoundException", message=message)
+class CognitoIdentityException(ServiceException):
+    pass
 
 
-class InvalidNameException(JsonRESTError):
+class ResourceNotFoundError(CognitoIdentityException):
+    code = "ResourceNotFoundException"
+
+
+class InvalidNameException(CognitoIdentityException):
+    code = "ValidationException"
     message = "1 validation error detected: Value '{}' at 'identityPoolName' failed to satisfy constraint: Member must satisfy regular expression pattern: [\\w\\s+=,.@-]+"
 
     def __init__(self, name: str):
-        msg = InvalidNameException.message.format(name)
-        super().__init__(error_type="ValidationException", message=msg)
+        super().__init__(InvalidNameException.message.format(name))
