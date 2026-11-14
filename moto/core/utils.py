@@ -508,4 +508,6 @@ def service_name_from_moto_package_name(moto_package_name: str) -> str:
     # so we can't just do a simple reverse replacement.  We have to create a lookup
     # table of all possible service names and their Moto counterparts.
     lut = {name.replace("-", ""): name for name in Session().get_available_services()}
+    # Package names that don't follow the hyphen-stripping convention.
+    lut["awslambda"] = "lambda"
     return lut.get(moto_package_name, moto_package_name)
