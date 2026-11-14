@@ -1,13 +1,18 @@
-from moto.core.exceptions import JsonRESTError
+from moto.core.exceptions import ServiceException
 
 
-class InvalidParameterValueException(JsonRESTError):
-    def __init__(self, message: str):
-        super().__init__("InvalidParameterValueException", message)
+class DAXException(ServiceException):
+    pass
 
 
-class ClusterNotFoundFault(JsonRESTError):
+class InvalidParameterValueException(DAXException):
+    code = "InvalidParameterValueException"
+
+
+class ClusterNotFoundFault(DAXException):
+    code = "ClusterNotFoundFault"
+
     def __init__(self, name: str | None = None):
         # DescribeClusters and DeleteCluster use a different message for the same error
         msg = f"Cluster {name} not found." if name else "Cluster not found."
-        super().__init__("ClusterNotFoundFault", msg)
+        super().__init__(msg)
