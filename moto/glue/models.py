@@ -17,6 +17,7 @@ from ..utilities.paginator import paginate
 from ..utilities.tagging_service import TaggingService
 from .exceptions import (
     AlreadyExistsException,
+    ConcurrentModificationException,
     ConcurrentRunsExceededException,
     CrawlerAlreadyExistsException,
     CrawlerNotFoundException,
@@ -25,13 +26,14 @@ from .exceptions import (
     DatabaseAlreadyExistsException,
     DatabaseNotFoundException,
     EntityNotFoundException,
+    GSRInvalidInputException,
     IllegalSessionStateException,
     JobNotFoundException,
     JobRunNotFoundException,
-    JsonRESTError,
     NoCrawlsEntryForCrawler,
     PartitionAlreadyExistsException,
     PartitionNotFoundException,
+    ResourceNumberLimitExceededException,
     SchemaNotFoundException,
     SchemaVersionMetadataAlreadyExistsException,
     SchemaVersionNotFoundFromSchemaIdException,
@@ -1568,22 +1570,16 @@ class GlueBackend(BaseBackend, TaggableResourcesMixin):
 
         if policy_exists_condition and policy_exists_condition != "NONE":
             if policy_exists_condition == "MUST_EXIST" and not policy_dict:
-                raise JsonRESTError(
-                    "ResourceNumberLimitExceededException", "Policy does not exist"
-                )
+                raise ResourceNumberLimitExceededException("Policy does not exist")
             elif policy_exists_condition == "NOT_EXIST" and policy_dict:
-                raise JsonRESTError(
-                    "ResourceNumberLimitExceededException", "Policy already exists"
-                )
+                raise ResourceNumberLimitExceededException("Policy already exists")
 
         if (
             policy_hash_condition
             and policy_dict
             and policy_hash_condition != policy_dict.get("PolicyHash")
         ):
-            raise JsonRESTError(
-                "ConcurrentModificationException", "Policy hash condition not met"
-            )
+            raise ConcurrentModificationException("Policy hash condition not met")
 
         policy_hash = hashlib.md5(policy_in_json.encode()).hexdigest()
 
@@ -1647,9 +1643,7 @@ class GlueBackend(BaseBackend, TaggableResourcesMixin):
             and policy_dict
             and policy_hash_condition != policy_dict.get("PolicyHash")
         ):
-            raise JsonRESTError(
-                "ConcurrentModificationException", "Policy hash condition not met"
-            )
+            raise ConcurrentModificationException("Policy hash condition not met")
 
         del self.resource_policies[resource_arn]
         return {}
@@ -1890,7 +1884,7 @@ class FakeTable(BaseModel):
         try:
             int(ver)
         except ValueError as e:
-            raise JsonRESTError("InvalidInputException", str(e))
+            raise GSRInvalidInputException(str(e))
 
         try:
             return self.versions[ver]

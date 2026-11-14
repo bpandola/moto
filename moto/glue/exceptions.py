@@ -1,13 +1,15 @@
-from moto.core.exceptions import JsonRESTError
+from moto.core.exceptions import ServiceException
 
 
-class GlueClientError(JsonRESTError):
-    code = 400
+class GlueClientError(ServiceException):
+    pass
 
 
 class AlreadyExistsException(GlueClientError):
+    code = "AlreadyExistsException"
+
     def __init__(self, typ: str):
-        super().__init__("AlreadyExistsException", f"{typ} already exists.")
+        super().__init__(f"{typ} already exists.")
 
 
 class DatabaseAlreadyExistsException(AlreadyExistsException):
@@ -36,8 +38,10 @@ class SessionAlreadyExistsException(AlreadyExistsException):
 
 
 class EntityNotFoundException(GlueClientError):
+    code = "EntityNotFoundException"
+
     def __init__(self, msg: str):
-        super().__init__("EntityNotFoundException", msg)
+        super().__init__(msg)
 
 
 class DatabaseNotFoundException(EntityNotFoundException):
@@ -117,8 +121,10 @@ class SessionNotFoundException(EntityNotFoundException):
 
 
 class IllegalSessionStateException(GlueClientError):
+    code = "IllegalSessionStateException"
+
     def __init__(self, msg: str):
-        super().__init__("IllegalSessionStateException", msg)
+        super().__init__(msg)
 
 
 class RegistryNotFoundException(EntityNotFoundException):
@@ -134,24 +140,31 @@ class TriggerNotFoundException(EntityNotFoundException):
 
 
 class CrawlerRunningException(GlueClientError):
+    code = "CrawlerRunningException"
+
     def __init__(self, msg: str):
-        super().__init__("CrawlerRunningException", msg)
+        super().__init__(msg)
 
 
 class CrawlerNotRunningException(GlueClientError):
+    code = "CrawlerNotRunningException"
+
     def __init__(self, msg: str):
-        super().__init__("CrawlerNotRunningException", msg)
+        super().__init__(msg)
 
 
 class ConcurrentRunsExceededException(GlueClientError):
+    code = "ConcurrentRunsExceededException"
+
     def __init__(self, msg: str):
-        super().__init__("ConcurrentRunsExceededException", msg)
+        super().__init__(msg)
 
 
 class ResourceNumberLimitExceededException(GlueClientError):
+    code = "ResourceNumberLimitExceededException"
+
     def __init__(self, msg: str):
         super().__init__(
-            "ResourceNumberLimitExceededException",
             msg,
         )
 
@@ -173,9 +186,10 @@ class SchemaVersionMetadataLimitExceededException(ResourceNumberLimitExceededExc
 
 
 class GSRAlreadyExistsException(GlueClientError):
+    code = "AlreadyExistsException"
+
     def __init__(self, msg: str):
         super().__init__(
-            "AlreadyExistsException",
             msg,
         )
 
@@ -195,18 +209,24 @@ class GeneralGSRAlreadyExistsException(GSRAlreadyExistsException):
 
 
 class InvalidStateException(GlueClientError):
+    code = "InvalidStateException"
+
     def __init__(self, op: str, msg: str):
-        super().__init__("InvalidStateException", msg)
+        super().__init__(msg)
 
 
 class InvalidInputException(GlueClientError):
+    code = "InvalidInputException"
+
     def __init__(self, op: str, msg: str):
-        super().__init__("InvalidInputException", msg)
+        super().__init__(msg)
 
 
 class GSRInvalidInputException(GlueClientError):
+    code = "InvalidInputException"
+
     def __init__(self, msg: str):
-        super().__init__("InvalidInputException", msg)
+        super().__init__(msg)
 
 
 class ResourceNameTooLongException(GSRInvalidInputException):
@@ -308,25 +328,28 @@ class DisabledCompatibilityVersioningException(GSRInvalidInputException):
 
 
 class InvalidFilterOperatorException(GlueClientError):
+    code = "ValidationException"
+
     def __init__(self, value: str, position: int) -> None:
         super().__init__(
-            "ValidationException",
             f"Value '{value}' at 'filters.{position}.member.filterOperator' failed to satisfy constraint: Member must satisfy enum value set: [LT, EQ, GT, NE, LE, GE]",
         )
 
 
 class InvalidFilterFieldNameException(GlueClientError):
+    code = "ValidationException"
+
     def __init__(self, value: str, position: int) -> None:
         super().__init__(
-            "ValidationException",
             f"Value '{value}' at 'filters.{position}.member.fieldName' failed to satisfy constraint: Member must satisfy enum value set: [START_TIME, END_TIME, STATE, CRAWL_ID, DPU_HOUR]",
         )
 
 
 class InvalidLogicalOperatorException(GlueClientError):
+    code = "ValidationException"
+
     def __init__(self, value: str, position: int) -> None:
         super().__init__(
-            "ValidationException",
             f"Value '{value}' at 'predicate.conditions.{position}.member.logicalOperator' failed to satisfy constraint: Member must satisfy enum value set: [Equals]",
         )
 
@@ -339,5 +362,11 @@ class NoCrawlsEntryForCrawler(EntityNotFoundException):
 
 
 class IllegalWorkflowStateException(GlueClientError):
+    code = "IllegalWorkflowRunStateException"
+
     def __init__(self, msg: str):
-        super().__init__("IllegalWorkflowRunStateException", msg)
+        super().__init__(msg)
+
+
+class ConcurrentModificationException(GlueClientError):
+    code = "ConcurrentModificationException"
