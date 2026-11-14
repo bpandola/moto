@@ -7,7 +7,6 @@ from typing import Any
 
 from moto.core.base_backend import BackendDict, BaseBackend
 from moto.core.common_models import BaseModel, CloudFormationModel
-from moto.core.exceptions import JsonRESTError
 from moto.core.resource_tagging import TaggableResourcesMixin, TaggedResource
 from moto.core.utils import unix_time, utcnow
 from moto.moto_api._internal import mock_random
@@ -19,6 +18,7 @@ from .exceptions import (
     AccessDeniedException,
     InvalidKeyUsageException,
     KMSInvalidMacException,
+    NotFoundException,
     ValidationException,
 )
 from .utils import (
@@ -204,7 +204,7 @@ class Key(CloudFormationModel):
 
     def revoke_grant(self, grant_id: str) -> None:
         if not self.grants.pop(grant_id, None):
-            raise JsonRESTError("NotFoundException", f"Grant ID {grant_id} not found")
+            raise NotFoundException(f"Grant ID {grant_id} not found")
 
     def retire_grant(self, grant_id: str) -> None:
         self.grants.pop(grant_id, None)
@@ -681,8 +681,7 @@ class KmsBackend(BaseBackend, TaggableResourcesMixin):
         key_id = self.get_key_id(key_id_or_arn)
         if key_id in self.keys:
             return self.tagger.list_tags_for_resource(key_id)
-        raise JsonRESTError(
-            "NotFoundException",
+        raise NotFoundException(
             "The request was rejected because the specified entity or resource could not be found.",
         )
 
@@ -876,8 +875,7 @@ class KmsBackend(BaseBackend, TaggableResourcesMixin):
     def tag_resource(self, arn: str, tags: dict[str, str]) -> None:
         key_id = self.get_key_id(arn)
         if key_id not in self.keys:
-            raise JsonRESTError(
-                "NotFoundException",
+            raise NotFoundException(
                 "The request was rejected because the specified entity or resource could not be found.",
             )
         self.tagger.tag_resource(
@@ -887,8 +885,7 @@ class KmsBackend(BaseBackend, TaggableResourcesMixin):
     def untag_resource(self, arn: str, tag_keys: list[str]) -> None:
         key_id = self.get_key_id(arn)
         if key_id not in self.keys:
-            raise JsonRESTError(
-                "NotFoundException",
+            raise NotFoundException(
                 "The request was rejected because the specified entity or resource could not be found.",
             )
         self.tagger.untag_resource_using_names(key_id, tag_keys)
