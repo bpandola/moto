@@ -252,12 +252,12 @@ class Stream(CloudFormationModel):
             pass
         else:
             raise InvalidArgumentError(
-                message=f"NewStartingHashKey {new_starting_hash_int} used in SplitShard() on shard {shard_to_split} in stream {self.stream_name} under account {self.account_id} is not both greater than one plus the shard's StartingHashKey {shard.starting_hash} and less than the shard's EndingHashKey {(shard.ending_hash - 1)}."
+                f"NewStartingHashKey {new_starting_hash_int} used in SplitShard() on shard {shard_to_split} in stream {self.stream_name} under account {self.account_id} is not both greater than one plus the shard's StartingHashKey {shard.starting_hash} and less than the shard's EndingHashKey {(shard.ending_hash - 1)}."
             )
 
         if not shard.is_open:
             raise InvalidArgumentError(
-                message=f"Shard {shard.shard_id} in stream {self.stream_name} under account {self.account_id} has already been merged or split, and thus is not eligible for merging or splitting."
+                f"Shard {shard.shard_id} in stream {self.stream_name} under account {self.account_id} has already been merged or split, and thus is not eligible for merging or splitting."
             )
 
         last_id = sorted(self.shards.values(), key=attrgetter("_shard_id"))[
@@ -663,7 +663,7 @@ class KinesisBackend(BaseBackend):
             shard = stream.get_shard(shard_id)
         except ShardNotFoundError:
             raise ResourceNotFoundError(
-                message=f"Shard {shard_id} in stream {stream.stream_name} under account {self.account_id} does not exist"
+                f"Shard {shard_id} in stream {stream.stream_name} under account {self.account_id} does not exist"
             )
 
         shard_iterator = compose_new_shard_iterator(
@@ -1078,7 +1078,7 @@ class KinesisBackend(BaseBackend):
             raise StreamNotFoundError(resource_arn, self.account_id)
         if resource_arn not in self.resource_policies:
             raise ResourceNotFoundError(
-                message=f"No resource policy found for resource ARN {resource_arn}."
+                f"No resource policy found for resource ARN {resource_arn}."
             )
         del self.resource_policies[resource_arn]
 

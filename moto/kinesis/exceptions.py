@@ -1,14 +1,16 @@
-from moto.core.exceptions import JsonRESTError
+from moto.core.exceptions import ServiceException
 
 
-class ResourceNotFoundError(JsonRESTError):
-    def __init__(self, message: str):
-        super().__init__(error_type="ResourceNotFoundException", message=message)
+class KinesisException(ServiceException):
+    pass
 
 
-class ResourceInUseError(JsonRESTError):
-    def __init__(self, message: str):
-        super().__init__(error_type="ResourceInUseException", message=message)
+class ResourceNotFoundError(KinesisException):
+    code = "ResourceNotFoundException"
+
+
+class ResourceInUseError(KinesisException):
+    code = "ResourceInUseException"
 
 
 class StreamNotFoundError(ResourceNotFoundError):
@@ -16,10 +18,13 @@ class StreamNotFoundError(ResourceNotFoundError):
         super().__init__(f"Stream {stream_name} under account {account_id} not found.")
 
 
-class StreamCannotBeUpdatedError(JsonRESTError):
+class StreamCannotBeUpdatedError(KinesisException):
+    code = "ValidationException"
+
     def __init__(self, stream_name: str, account_id: str):
-        message = f"Request is invalid. Stream {stream_name} under account {account_id} is in On-Demand mode."
-        super().__init__(error_type="ValidationException", message=message)
+        super().__init__(
+            f"Request is invalid. Stream {stream_name} under account {account_id} is in On-Demand mode."
+        )
 
 
 class ShardNotFoundError(ResourceNotFoundError):
@@ -34,9 +39,8 @@ class ConsumerNotFound(ResourceNotFoundError):
         super().__init__(f"Consumer {consumer}, account {account_id} not found.")
 
 
-class InvalidArgumentError(JsonRESTError):
-    def __init__(self, message: str):
-        super().__init__(error_type="InvalidArgumentException", message=message)
+class InvalidArgumentError(KinesisException):
+    code = "InvalidArgumentException"
 
 
 class InvalidRetentionPeriod(InvalidArgumentError):
@@ -60,27 +64,29 @@ class InvalidIncreaseRetention(InvalidArgumentError):
         super().__init__(msg)
 
 
-class ValidationException(JsonRESTError):
+class ValidationException(KinesisException):
+    code = "ValidationException"
+
     def __init__(self, value: str, position: str, regex_to_match: str):
-        msg = f"1 validation error detected: Value '{value}' at '{position}' failed to satisfy constraint: Member must satisfy regular expression pattern: {regex_to_match}"
-        super().__init__(error_type="ValidationException", message=msg)
-
-
-class RecordSizeExceedsLimit(JsonRESTError):
-    def __init__(self, position: int):
-        msg = f"1 validation error detected: Value at 'records.{position}.member.data' failed to satisfy constraint: Member must have length less than or equal to 1048576"
-        super().__init__(error_type="ValidationException", message=msg)
-
-
-class TotalRecordsSizeExceedsLimit(JsonRESTError):
-    def __init__(self) -> None:
         super().__init__(
-            error_type="InvalidArgumentException",
-            message="Records size exceeds 5 MB limit",
+            f"1 validation error detected: Value '{value}' at '{position}' failed to satisfy constraint: Member must satisfy regular expression pattern: {regex_to_match}"
         )
 
 
-class TooManyRecords(JsonRESTError):
-    def __init__(self) -> None:
-        msg = "1 validation error detected: Value at 'records' failed to satisfy constraint: Member must have length less than or equal to 500"
-        super().__init__(error_type="ValidationException", message=msg)
+class RecordSizeExceedsLimit(KinesisException):
+    code = "ValidationException"
+
+    def __init__(self, position: int):
+        super().__init__(
+            f"1 validation error detected: Value at 'records.{position}.member.data' failed to satisfy constraint: Member must have length less than or equal to 1048576"
+        )
+
+
+class TotalRecordsSizeExceedsLimit(KinesisException):
+    code = "InvalidArgumentException"
+    message = "Records size exceeds 5 MB limit"
+
+
+class TooManyRecords(KinesisException):
+    code = "ValidationException"
+    message = "1 validation error detected: Value at 'records' failed to satisfy constraint: Member must have length less than or equal to 500"
