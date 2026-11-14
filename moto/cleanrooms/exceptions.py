@@ -1,26 +1,16 @@
 """Exceptions raised by the cleanrooms service."""
 
-import json
-
-from moto.core.exceptions import JsonRESTError
+from moto.core.exceptions import ServiceException
 
 
-class CleanRoomsException(JsonRESTError):
+class CleanRoomsException(ServiceException):
     pass
 
 
 class ResourceNotFoundException(CleanRoomsException):
-    code = 404
+    code = "ResourceNotFoundException"
 
     def __init__(self, resource_type: str, resource_id: str):
-        super().__init__(
-            "ResourceNotFoundException",
-            f"Could not find {resource_type} with id {resource_id}",
-        )
-        self.description = json.dumps(
-            {
-                "message": self.message,
-                "resourceId": resource_id,
-                "resourceType": resource_type.upper().replace(" ", "_"),
-            }
-        )
+        super().__init__(f"Could not find {resource_type} with id {resource_id}")
+        self.resourceId = resource_id
+        self.resourceType = resource_type.upper().replace(" ", "_")
