@@ -20,9 +20,11 @@ def test_table_list():
     res = test_client.post(
         "/", headers=headers, data=json.dumps({"TableName": "test-table2"})
     )
-    assert res.headers["X-Amzn-ErrorType"] == "ResourceNotFoundException"
+    assert res.headers["X-Amzn-ErrorType"].endswith("ResourceNotFoundException")
     body = json.loads(res.data.decode("utf-8"))
-    assert body == {
-        "__type": "com.amazonaws.dynamodb.v20120810#ResourceNotFoundException",
-        "message": "Requested resource not found: Table: test-table2 not found",
-    }
+    assert (
+        body["__type"] == "com.amazonaws.dynamodb.v20120810#ResourceNotFoundException"
+    )
+    assert (
+        body["message"] == "Requested resource not found: Table: test-table2 not found"
+    )

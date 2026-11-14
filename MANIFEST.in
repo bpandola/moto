@@ -16,6 +16,7 @@ include moto/emr/resources/*.json
 include moto/emrcontainers/*/*.json
 include moto/emrserverless/*/*.json
 include moto/cognitoidp/resources/*.json
+include moto/dynamodb/*/*.json
 include moto/dynamodb/parsing/reserved_keywords.txt
 include moto/medialive/*/*.json
 include moto/mq/*/*.json

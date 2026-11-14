@@ -5,7 +5,6 @@ from collections.abc import Iterator
 from typing import Any, Optional
 
 from moto.core.base_backend import BackendDict, BaseBackend
-from moto.core.exceptions import JsonRESTError
 from moto.core.resource_tagging import TaggableResourcesMixin, TaggedResource
 from moto.core.utils import unix_time
 from moto.dynamodb.comparisons import (
@@ -17,6 +16,8 @@ from moto.dynamodb.exceptions import (
     BackupNotFoundException,
     ConditionalCheckFailed,
     DeletionProtectedException,
+    DynamodbException,
+    InvalidParameterValueException,
     ItemSizeTooLarge,
     ItemSizeToUpdateTooLarge,
     MockValidationException,
@@ -24,6 +25,7 @@ from moto.dynamodb.exceptions import (
     PointInTimeRecoveryUnavailable,
     PolicyNotFoundException,
     ResourceInUseException,
+    ResourceNotFound,
     ResourceNotFoundException,
     SourceTableNotFoundException,
     StreamAlreadyEnabledException,
@@ -579,11 +581,10 @@ class DynamoDBBackend(BaseBackend, TaggableResourcesMixin):
         try:
             table = self.get_table(table_name)
         except ResourceNotFoundException:
-            raise JsonRESTError("ResourceNotFound", "Table not found")
+            raise ResourceNotFound("Table not found")
 
         if "Enabled" not in ttl_spec or "AttributeName" not in ttl_spec:
-            raise JsonRESTError(
-                "InvalidParameterValue",
+            raise InvalidParameterValueException(
                 "TimeToLiveSpecification does not contain Enabled and AttributeName",
             )
 
@@ -597,7 +598,7 @@ class DynamoDBBackend(BaseBackend, TaggableResourcesMixin):
         try:
             table = self.get_table(table_name)
         except ResourceNotFoundException:
-            raise JsonRESTError("ResourceNotFound", "Table not found")
+            raise ResourceNotFound("Table not found")
 
         return table.ttl
 
@@ -960,6 +961,8 @@ class DynamoDBBackend(BaseBackend, TaggableResourcesMixin):
                 if items:
                     # But if it does, it will always only contain one item at most
                     responses[idx]["Item"] = items[0]
+            except DynamodbException as e:
+                responses[idx] = {"Error": {"Code": e.code, "Message": e.message}}
             except Exception as e:
                 responses[idx] = {"Error": {"Code": e.name, "Message": e.message}}  # type: ignore
         return responses

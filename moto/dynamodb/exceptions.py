@@ -1,21 +1,27 @@
 from typing import Any
 
-from moto.core.exceptions import JsonRESTError
+from moto.core.exceptions import ServiceException
 from moto.dynamodb.limits import HASH_KEY_MAX_LENGTH, RANGE_KEY_MAX_LENGTH
-from moto.dynamodb.models.utilities import dynamo_json_dump
-
-ERROR_TYPE_PREFIX = "com.amazonaws.dynamodb.v20120810#"
+from moto.dynamodb.models.utilities import dynamo_to_dict
 
 
-class DynamodbException(JsonRESTError):
+class DynamodbException(ServiceException):
     pass
 
 
+def _serializable_item(item: dict[str, Any]) -> dict[str, Any]:
+    """Convert an item in DynamoDB JSON (binary values base64-encoded) to the
+    plain form the serializer expects (binary values as raw bytes)."""
+    from moto.dynamodb.models.dynamo_type import DynamoType
+
+    return dynamo_to_dict({k: DynamoType(v) for k, v in item.items()})
+
+
 class MockValidationException(DynamodbException):
-    error_type = ERROR_TYPE_PREFIX + "ValidationException"
+    code = "ValidationException"
 
     def __init__(self, message: str):
-        super().__init__(MockValidationException.error_type, message=message)
+        super().__init__(message)
         self.exception_msg = message
 
 
@@ -209,58 +215,31 @@ class IncorrectDataType(MockValidationException):
 
 
 class ConditionalCheckFailed(DynamodbException):
-    error_type = ERROR_TYPE_PREFIX + "ConditionalCheckFailedException"
+    code = "ConditionalCheckFailedException"
 
     def __init__(self, msg: str | None = None, item: dict[str, Any] | None = None):
-        _msg = msg or "The conditional request failed"
-        super().__init__(ConditionalCheckFailed.error_type, _msg)
-        if item:
-            self.description = dynamo_json_dump(
-                {
-                    "__type": ConditionalCheckFailed.error_type,
-                    # Note the uppercase Message
-                    # This ensures the message is only part of the 'error': {'message': .., 'code': ..}
-                    "message": _msg,
-                    "Item": item,
-                }
-            )
-        else:
-            self.description = dynamo_json_dump(
-                {
-                    "__type": ConditionalCheckFailed.error_type,
-                    # Note that lowercase 'message'
-                    # This ensures that 'message' is a top-level field in the response
-                    # (in addition to being part of the 'error': {'message': .., 'code': ..}
-                    "message": _msg,
-                }
-            )
+        super().__init__(msg or "The conditional request failed")
+        self.Item = _serializable_item(item) if item else None
 
 
 class TransactionCanceledException(DynamodbException):
     cancel_reason_msg = "Transaction cancelled, please refer cancellation reasons for specific reasons [{}]"
-    error_type = "com.amazonaws.dynamodb.v20120810#TransactionCanceledException"
+    code = "TransactionCanceledException"
 
     def __init__(self, errors: list[Any]):
         msg = self.cancel_reason_msg.format(
             ", ".join([str(code) for code, _, _ in errors])
         )
-        super().__init__(
-            error_type=TransactionCanceledException.error_type, message=msg
-        )
+        super().__init__(msg)
         reasons = []
         for code, message, item in errors:
-            r = {"Code": code, "Message": message} if code else {"Code": "None"}
+            r: dict[str, Any] = (
+                {"Code": code, "Message": message} if code else {"Code": "None"}
+            )
             if item:
-                r["Item"] = item
+                r["Item"] = _serializable_item(item)
             reasons.append(r)
-
-        self.description = dynamo_json_dump(
-            {
-                "__type": TransactionCanceledException.error_type,
-                "CancellationReasons": reasons,
-                "Message": msg,
-            }
-        )
+        self.CancellationReasons = reasons
 
 
 class MultipleTransactionsException(MockValidationException):
@@ -324,69 +303,77 @@ class TooManyClauses(MockValidationException):
         )
 
 
-class ResourceNotFoundException(JsonRESTError):
+class ResourceNotFoundException(DynamodbException):
+    code = "ResourceNotFoundException"
+
     def __init__(self, msg: str | None = None, table_name: str | None = None):
-        err = ERROR_TYPE_PREFIX + "ResourceNotFoundException"
         default_msg = "Requested resource not found"
         if table_name is not None:
             default_msg += f": Table: {table_name} not found"
-        super().__init__(err, msg or default_msg)
+        super().__init__(msg or default_msg)
 
 
-class TableNotFoundException(JsonRESTError):
+class TableNotFoundException(DynamodbException):
+    code = "TableNotFoundException"
+
     def __init__(self, name: str):
-        err = ERROR_TYPE_PREFIX + "TableNotFoundException"
-        super().__init__(err, f"Table not found: {name}")
+        super().__init__(f"Table not found: {name}")
 
 
-class PointInTimeRecoveryUnavailable(JsonRESTError):
+class PointInTimeRecoveryUnavailable(DynamodbException):
+    code = "PointInTimeRecoveryUnavailableException"
+
     def __init__(self, name: str):
-        err = ERROR_TYPE_PREFIX + "PointInTimeRecoveryUnavailableException"
-        super().__init__(
-            err, f"Point in time recovery is not enabled for table '{name}'"
-        )
+        super().__init__(f"Point in time recovery is not enabled for table '{name}'")
 
 
-class SourceTableNotFoundException(JsonRESTError):
+class SourceTableNotFoundException(DynamodbException):
+    code = "SourceTableNotFoundException"
+
     def __init__(self, source_table_name: str):
-        er = ERROR_TYPE_PREFIX + "SourceTableNotFoundException"
-        super().__init__(er, f"Source table not found: {source_table_name}")
+        super().__init__(f"Source table not found: {source_table_name}")
 
 
-class BackupNotFoundException(JsonRESTError):
+class BackupNotFoundException(DynamodbException):
+    code = "BackupNotFoundException"
+
     def __init__(self, backup_arn: str):
-        er = ERROR_TYPE_PREFIX + "BackupNotFoundException"
-        super().__init__(er, f"Backup not found: {backup_arn}")
+        super().__init__(f"Backup not found: {backup_arn}")
 
 
-class TableAlreadyExistsException(JsonRESTError):
+class TableAlreadyExistsException(DynamodbException):
+    code = "TableAlreadyExistsException"
+
     def __init__(self, target_table_name: str):
-        er = ERROR_TYPE_PREFIX + "TableAlreadyExistsException"
-        super().__init__(er, f"Table already exists: {target_table_name}")
+        super().__init__(f"Table already exists: {target_table_name}")
 
 
-class ResourceInUseException(JsonRESTError):
+class ResourceInUseException(DynamodbException):
+    code = "ResourceInUseException"
+
     def __init__(self, msg: str | None = None) -> None:
-        er = ERROR_TYPE_PREFIX + "ResourceInUseException"
-        super().__init__(er, msg or "Resource in use")
+        super().__init__(msg or "Resource in use")
 
 
-class StreamAlreadyEnabledException(JsonRESTError):
+class StreamAlreadyEnabledException(DynamodbException):
+    code = "ResourceInUseException"
+
     def __init__(self) -> None:
-        er = ERROR_TYPE_PREFIX + "ResourceInUseException"
-        super().__init__(er, "Cannot enable stream")
+        super().__init__("Cannot enable stream")
 
 
-class InvalidConversion(JsonRESTError):
+class InvalidConversion(DynamodbException):
+    code = "SerializationException"
+
     def __init__(self) -> None:
-        er = "SerializationException"
-        super().__init__(er, "NUMBER_VALUE cannot be converted to String")
+        super().__init__("NUMBER_VALUE cannot be converted to String")
 
 
-class ValidationException(JsonRESTError):
+class ValidationException(DynamodbException):
+    code = "ValidationException"
+
     def __init__(self, msg: str) -> None:
-        er = "ValidationException"
-        super().__init__(er, message=msg)
+        super().__init__(msg)
 
 
 class TransactWriteSingleOpException(MockValidationException):
@@ -399,8 +386,7 @@ class TransactWriteSingleOpException(MockValidationException):
 
 
 class SerializationException(DynamodbException):
-    def __init__(self, msg: str):
-        super().__init__(error_type="SerializationException", message=msg)
+    code = "SerializationException"
 
 
 class UnknownKeyType(MockValidationException):
@@ -416,8 +402,17 @@ class DeletionProtectedException(MockValidationException):
 
 
 class PolicyNotFoundException(DynamodbException):
-    error_type = ERROR_TYPE_PREFIX + "PolicyNotFoundException"
+    code = "PolicyNotFoundException"
 
     def __init__(self, message: str):
-        super().__init__(PolicyNotFoundException.error_type, message=message)
+        super().__init__(message)
         self.exception_msg = message
+
+
+class InvalidParameterValueException(DynamodbException):
+    code = "InvalidParameterValue"
+
+
+class ResourceNotFound(DynamodbException):
+    # Unmodeled code (the model has ResourceNotFoundException); kept as-is for now.
+    code = "ResourceNotFound"
