@@ -1,10 +1,11 @@
 """Exceptions raised by the ivs service."""
 
-from moto.core.exceptions import JsonRESTError
+from moto.core.exceptions import ServiceException
 
 
-class ResourceNotFoundException(JsonRESTError):
-    code = 404
+class IVSException(ServiceException):
+    pass
 
-    def __init__(self, message: str):
-        super().__init__("ResourceNotFoundException", message)
+
+class ResourceNotFoundException(IVSException):
+    code = "ResourceNotFoundException"
