@@ -1,17 +1,15 @@
 """Exceptions raised by the paymentcryptography service."""
 
-from moto.core.exceptions import JsonRESTError
+from moto.core.exceptions import ServiceException
 
 
-class ResourceNotFoundException(JsonRESTError):
-    code = 404
-
-    def __init__(self, msg: str):
-        super().__init__("ResourceNotFoundException", f"{msg}")
+class PaymentCryptographyException(ServiceException):
+    pass
 
 
-class ConflictException(JsonRESTError):
-    code = 409
+class ResourceNotFoundException(PaymentCryptographyException):
+    code = "ResourceNotFoundException"
 
-    def __init__(self, msg: str):
-        super().__init__("ConflictException", f"{msg}")
+
+class ConflictException(PaymentCryptographyException):
+    code = "ConflictException"
