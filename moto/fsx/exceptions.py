@@ -1,15 +1,18 @@
 """Exceptions raised by the fsx service."""
 
-from moto.core.exceptions import JsonRESTError
+from moto.core.exceptions import ServiceException
 
 
-class ResourceNotFoundException(JsonRESTError):
-    def __init__(self, msg: str):
-        super().__init__("ResourceNotFoundException", f"{msg}")
+class FSxException(ServiceException):
+    pass
 
 
-class FileSystemNotFound(JsonRESTError):
+class ResourceNotFoundException(FSxException):
+    code = "ResourceNotFoundException"
+
+
+class FileSystemNotFound(FSxException):
+    code = "FileSystemNotFound"
+
     def __init__(self, file_system_id: str):
-        super().__init__(
-            "FileSystemNotFound", f"File system '{file_system_id}' does not exist."
-        )
+        super().__init__(f"File system '{file_system_id}' does not exist.")

@@ -250,7 +250,7 @@ class FSxBackend(BaseBackend, TaggableResourcesMixin):
         )
         if file_system_id not in self.file_systems:
             raise ResourceNotFoundException(
-                msg=f"FSx resource, {file_system_id} does not exist"
+                f"FSx resource, {file_system_id} does not exist"
             )
         self.backups[backup.backup_id] = backup
         if tags:
@@ -261,9 +261,7 @@ class FSxBackend(BaseBackend, TaggableResourcesMixin):
         self, backup_id: str, client_request_token: str | None
     ) -> dict[str, Any]:
         if backup_id not in self.backups:
-            raise ResourceNotFoundException(
-                msg=f"FSx resource, {backup_id} does not exist"
-            )
+            raise ResourceNotFoundException(f"FSx resource, {backup_id} does not exist")
         self.backups.pop(backup_id)
 
         return {"BackupId": backup_id, "Lifecycle": "DELETED"}
