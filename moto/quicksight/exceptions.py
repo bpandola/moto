@@ -1,28 +1,27 @@
 """Exceptions raised by the quicksight service."""
 
-from moto.core.exceptions import JsonRESTError
+from moto.core.exceptions import ServiceException
 
 
-class ResourceNotFoundException(JsonRESTError):
-    def __init__(self, msg: str):
-        super().__init__("ResourceNotFoundException", msg)
+class QuickSightException(ServiceException):
+    pass
 
 
-class InvalidParameterValueException(JsonRESTError):
-    def __init__(self, msg: str):
-        super().__init__("InvalidParameterValueException", msg)
+class ResourceNotFoundException(QuickSightException):
+    code = "ResourceNotFoundException"
 
 
-class ValidationException(JsonRESTError):
-    def __init__(self, msg: str):
-        super().__init__("ValidationException", msg)
+class InvalidParameterValueException(QuickSightException):
+    code = "InvalidParameterValueException"
 
 
-class SchemaException(JsonRESTError):
-    def __init__(self, msg: str):
-        super().__init__("SchemaException", msg)
+class ValidationException(QuickSightException):
+    code = "ValidationException"
 
 
-class ParamValidationError(JsonRESTError):
-    def __init__(self, msg: str):
-        super().__init__("ParamValidationError", msg)
+class SchemaException(QuickSightException):
+    code = "SchemaException"
+
+
+class ParamValidationError(QuickSightException):
+    code = "ParamValidationError"
