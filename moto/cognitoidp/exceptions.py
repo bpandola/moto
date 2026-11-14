@@ -1,64 +1,60 @@
-from moto.core.exceptions import JsonRESTError
+from moto.core.exceptions import ServiceException
 
 
-class AliasExistsException(JsonRESTError):
-    def __init__(self) -> None:
-        super().__init__(
-            "AliasExistsException", "An account with the given email already exists."
-        )
+class CognitoIDPException(ServiceException):
+    pass
 
 
-class ResourceNotFoundError(JsonRESTError):
+class AliasExistsException(CognitoIDPException):
+    code = "AliasExistsException"
+    message = "An account with the given email already exists."
+
+
+class ResourceNotFoundError(CognitoIDPException):
+    code = "ResourceNotFoundException"
+
     def __init__(self, message: str | None):
-        super().__init__(error_type="ResourceNotFoundException", message=message or "")
+        super().__init__(message or "")
 
 
-class UserNotFoundError(JsonRESTError):
-    def __init__(self, message: str):
-        super().__init__(error_type="UserNotFoundException", message=message)
+class UserNotFoundError(CognitoIDPException):
+    code = "UserNotFoundException"
 
 
-class UsernameExistsException(JsonRESTError):
-    def __init__(self, message: str):
-        super().__init__(error_type="UsernameExistsException", message=message)
+class UsernameExistsException(CognitoIDPException):
+    code = "UsernameExistsException"
 
 
-class GroupExistsException(JsonRESTError):
-    def __init__(self, message: str):
-        super().__init__(error_type="GroupExistsException", message=message)
+class GroupExistsException(CognitoIDPException):
+    code = "GroupExistsException"
 
 
-class NotAuthorizedError(JsonRESTError):
+class NotAuthorizedError(CognitoIDPException):
+    code = "NotAuthorizedException"
+
     def __init__(self, message: str | None):
-        super().__init__(error_type="NotAuthorizedException", message=message or "")
+        super().__init__(message or "")
 
 
-class UserNotConfirmedException(JsonRESTError):
-    def __init__(self, message: str):
-        super().__init__(error_type="UserNotConfirmedException", message=message)
+class UserNotConfirmedException(CognitoIDPException):
+    code = "UserNotConfirmedException"
 
 
-class ExpiredCodeException(JsonRESTError):
-    def __init__(self, message: str):
-        super().__init__(error_type="ExpiredCodeException", message=message)
+class ExpiredCodeException(CognitoIDPException):
+    code = "ExpiredCodeException"
 
 
-class InvalidParameterException(JsonRESTError):
+class InvalidParameterException(CognitoIDPException):
+    code = "InvalidParameterException"
+
     def __init__(self, msg: str | None = None):
-        self.code = 400
-        super().__init__(
-            "InvalidParameterException", msg or "A parameter is specified incorrectly."
-        )
+        super().__init__(msg or "A parameter is specified incorrectly.")
 
 
-class InvalidPasswordException(JsonRESTError):
-    def __init__(self) -> None:
-        super().__init__(
-            error_type="InvalidPasswordException",
-            message="The provided password does not confirm to the configured password policy",
-        )
+class InvalidPasswordException(CognitoIDPException):
+    code = "InvalidPasswordException"
+    message = "The provided password does not confirm to the configured password policy"
 
 
-class CodeMismatchException(JsonRESTError):
-    def __init__(self, message: str):
-        super().__init__(error_type="CodeMismatchException", message=message)
+class CodeMismatchException(CognitoIDPException):
+    code = "CodeMismatchException"
