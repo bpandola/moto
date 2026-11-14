@@ -1,93 +1,80 @@
-import json
-
-from moto.core.exceptions import JsonRESTError
+from moto.core.exceptions import ServiceException
 
 
-class IoTClientError(JsonRESTError):
-    code = 400
+class IoTClientError(ServiceException):
+    pass
 
 
 class ResourceNotFoundException(IoTClientError):
+    code = "ResourceNotFoundException"
+
     def __init__(self, msg: str | None = None):
-        self.code = 404
-        super().__init__(
-            "ResourceNotFoundException", msg or "The specified resource does not exist"
-        )
+        super().__init__(msg or "The specified resource does not exist")
 
 
 class InvalidRequestException(IoTClientError):
+    code = "InvalidRequestException"
+
     def __init__(self, msg: str | None = None):
-        self.code = 400
-        super().__init__("InvalidRequestException", msg or "The request is not valid.")
+        super().__init__(msg or "The request is not valid.")
 
 
 class InvalidStateTransitionException(IoTClientError):
+    code = "InvalidStateTransitionException"
+
     def __init__(self, msg: str | None = None):
-        self.code = 409
-        super().__init__(
-            "InvalidStateTransitionException",
-            msg or "An attempt was made to change to an invalid state.",
-        )
+        super().__init__(msg or "An attempt was made to change to an invalid state.")
 
 
 class VersionConflictException(IoTClientError):
+    code = "VersionConflictException"
+
     def __init__(self, name: str):
-        self.code = 409
         super().__init__(
-            "VersionConflictException",
-            f"The version for thing {name} does not match the expected version.",
+            f"The version for thing {name} does not match the expected version."
         )
 
 
 class CertificateStateException(IoTClientError):
+    code = "CertificateStateException"
+
     def __init__(self, msg: str, cert_id: str):
-        self.code = 406
-        super().__init__("CertificateStateException", f"{msg} Id: {cert_id}")
+        super().__init__(f"{msg} Id: {cert_id}")
 
 
 class DeleteConflictException(IoTClientError):
-    def __init__(self, msg: str):
-        self.code = 409
-        super().__init__("DeleteConflictException", msg)
+    code = "DeleteConflictException"
 
 
 class ResourceAlreadyExistsException(IoTClientError):
+    code = "ResourceAlreadyExistsException"
+
     def __init__(self, msg: str, resource_id: str, resource_arn: str):
-        self.code = 409
-        super().__init__(
-            "ResourceAlreadyExistsException", msg or "The resource already exists."
-        )
-        self.description = json.dumps(
-            {
-                "message": self.message,
-                "resourceId": resource_id,
-                "resourceArn": resource_arn,
-            }
-        )
+        super().__init__(msg or "The resource already exists.")
+        self.resourceId = resource_id
+        self.resourceArn = resource_arn
 
 
 class VersionsLimitExceededException(IoTClientError):
+    code = "VersionsLimitExceededException"
+
     def __init__(self, name: str):
-        self.code = 409
         super().__init__(
-            "VersionsLimitExceededException",
-            f"The policy {name} already has the maximum number of versions (5)",
+            f"The policy {name} already has the maximum number of versions (5)"
         )
 
 
 class ThingStillAttached(IoTClientError):
+    code = "InvalidRequestException"
+
     def __init__(self, name: str):
-        self.code = 409
         super().__init__(
-            "InvalidRequestException",
-            f"Cannot delete. Thing {name} is still attached to one or more principals",
+            f"Cannot delete. Thing {name} is still attached to one or more principals"
         )
 
 
 class ConflictException(IoTClientError):
+    code = "ConflictException"
+
     def __init__(self, name: str):
-        self.code = 409
-        super().__init__(
-            "ConflictException",
-            f"A resource {name} already exists.",
-        )
+        super().__init__(f"A resource {name} already exists.")
