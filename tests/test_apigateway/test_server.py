@@ -143,4 +143,5 @@ def test_put_integration_response_without_body():
     assert json.loads(res.data) == {
         "__type": "BadRequestException",
         "message": "Invalid request input",
+        "Message": "Invalid request input",
     }
