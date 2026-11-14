@@ -1,20 +1,20 @@
 """Exceptions raised by the networkmanager service."""
 
-import json
-
-from moto.core.exceptions import JsonRESTError
+from moto.core.exceptions import ServiceException
 
 
-class ValidationError(JsonRESTError):
-    def __init__(self, message: str):
-        super().__init__("ValidationException", message)
+class NetworkManagerException(ServiceException):
+    pass
 
 
-class ResourceNotFound(JsonRESTError):
+class ValidationError(NetworkManagerException):
+    code = "ValidationException"
+
+
+class ResourceNotFound(NetworkManagerException):
+    code = "NotFoundException"
+    message = "Resource not found."
+
     def __init__(self, resource_id: str):
-        super().__init__("NotFoundException", "Resource not found.")
-        body = {
-            "ResourceId": resource_id,
-            "Message": "Resource not found.",
-        }
-        self.description = json.dumps(body)
+        super().__init__()
+        self.ResourceId = resource_id
