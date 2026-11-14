@@ -17,10 +17,3 @@ class ConflictException(AgentsforBedrockClientError):
 
 class ValidationException(AgentsforBedrockClientError):
     code = "ValidationException"
-    message = (
-        "Input validation failed. Check your request parameters and retry the request."
-    )
-
-    def __init__(self, msg: str):
-        # The detailed message is not returned to the caller
-        super().__init__(self.message)
