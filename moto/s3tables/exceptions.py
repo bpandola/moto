@@ -1,27 +1,22 @@
 """Exceptions raised by the s3tables service."""
 
-from moto.core.exceptions import JsonRESTError
+from moto.core.exceptions import ServiceException
 
 
-class BadRequestException(JsonRESTError):
-    code = 400
+class S3TablesException(ServiceException):
+    pass
 
-    def __init__(self, message: str) -> None:
-        super().__init__("BadRequestException", message)
+
+class BadRequestException(S3TablesException):
+    code = "BadRequestException"
 
 
 class InvalidContinuationToken(BadRequestException):
-    msg = "The continuation token is not valid."
-
-    def __init__(self) -> None:
-        super().__init__(self.msg)
+    message = "The continuation token is not valid."
 
 
 class InvalidTableBucketName(BadRequestException):
-    msg = "The specified bucket name is not valid."
-
-    def __init__(self) -> None:
-        super().__init__(self.msg)
+    message = "The specified bucket name is not valid."
 
 
 class InvalidTableName(BadRequestException):
@@ -32,70 +27,40 @@ class InvalidTableName(BadRequestException):
 
 
 class InvalidNamespaceName(BadRequestException):
-    msg = "The specified namespace name is not valid."
-
-    def __init__(self) -> None:
-        super().__init__(self.msg)
+    message = "The specified namespace name is not valid."
 
 
 class InvalidMetadataLocation(BadRequestException):
-    msg = "The specified metadata location is not valid."
-
-    def __init__(self) -> None:
-        super().__init__(self.msg)
+    message = "The specified metadata location is not valid."
 
 
 class NothingToRename(BadRequestException):
-    msg = "Neither a new namespace name nor a new table name is specified."
-
-    def __init__(self) -> None:
-        super().__init__(self.msg)
+    message = "Neither a new namespace name nor a new table name is specified."
 
 
-class NotFoundException(JsonRESTError):
-    code = 404
-
-    def __init__(self, message: str) -> None:
-        super().__init__("NotFoundException", message)
+class NotFoundException(S3TablesException):
+    code = "NotFoundException"
 
 
 class NamespaceDoesNotExist(NotFoundException):
-    msg = "The specified namespace does not exist."
-
-    def __init__(self) -> None:
-        super().__init__(self.msg)
+    message = "The specified namespace does not exist."
 
 
 class DestinationNamespaceDoesNotExist(NotFoundException):
-    msg = "The specified destination namespace does not exist."
-
-    def __init__(self) -> None:
-        super().__init__(self.msg)
+    message = "The specified destination namespace does not exist."
 
 
 class TableDoesNotExist(NotFoundException):
-    msg = "The specified table does not exist."
-
-    def __init__(self) -> None:
-        super().__init__(self.msg)
+    message = "The specified table does not exist."
 
 
-class ConflictException(JsonRESTError):
-    code = 409
-
-    def __init__(self, message: str) -> None:
-        super().__init__("ConflictException", message)
+class ConflictException(S3TablesException):
+    code = "ConflictException"
 
 
 class VersionTokenMismatch(ConflictException):
-    msg = "Provided version token does not match the table version token."
-
-    def __init__(self) -> None:
-        super().__init__(self.msg)
+    message = "Provided version token does not match the table version token."
 
 
 class TableAlreadyExists(ConflictException):
-    msg = "A table with an identical name already exists in the namespace."
-
-    def __init__(self) -> None:
-        super().__init__(self.msg)
+    message = "A table with an identical name already exists in the namespace."
