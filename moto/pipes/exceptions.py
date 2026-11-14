@@ -1,23 +1,20 @@
 """Exceptions raised by the pipes service."""
 
-import json
-from typing import Any
-
-from moto.core.exceptions import JsonRESTError
+from moto.core.exceptions import ServiceException
 
 
-class ValidationException(JsonRESTError):
-    code = 400
+class PipesException(ServiceException):
+    pass
+
+
+class ValidationException(PipesException):
+    code = "ValidationException"
 
     # TODO: Add field_list parameter in future iterations as it is not being used yet in current codebase
-    def __init__(self, message: str):
-        super().__init__("ValidationException", message)
-        body: dict[str, Any] = {"message": self.message}
-        self.description = json.dumps(body)
 
 
-class ConflictException(JsonRESTError):
-    code = 409
+class ConflictException(PipesException):
+    code = "ConflictException"
 
     def __init__(
         self,
@@ -25,35 +22,25 @@ class ConflictException(JsonRESTError):
         resource_id: str | None = None,
         resource_type: str | None = None,
     ):
-        super().__init__("ConflictException", message)
-        body: dict[str, Any] = {"message": self.message}
-        if resource_id is not None:
-            body["resourceId"] = resource_id
-        if resource_type is not None:
-            body["resourceType"] = resource_type
-        self.description = json.dumps(body)
+        super().__init__(message)
+        self.resourceId = resource_id
+        self.resourceType = resource_type
 
 
-class NotFoundException(JsonRESTError):
-    code = 404
-
-    def __init__(self, message: str):
-        super().__init__("NotFoundException", message)
+class NotFoundException(PipesException):
+    code = "NotFoundException"
 
 
-class InternalException(JsonRESTError):
-    code = 500
+class InternalException(PipesException):
+    code = "InternalException"
 
     def __init__(self, message: str, retry_after_seconds: int | None = None):
-        super().__init__("InternalException", message)
-        body: dict[str, Any] = {"message": self.message}
-        if retry_after_seconds is not None:
-            body["retryAfterSeconds"] = retry_after_seconds
-        self.description = json.dumps(body)
+        super().__init__(message)
+        self.retryAfterSeconds = retry_after_seconds
 
 
-class ServiceQuotaExceededException(JsonRESTError):
-    code = 402
+class ServiceQuotaExceededException(PipesException):
+    code = "ServiceQuotaExceededException"
 
     def __init__(
         self,
@@ -63,21 +50,15 @@ class ServiceQuotaExceededException(JsonRESTError):
         resource_type: str | None = None,
         service_code: str | None = None,
     ):
-        super().__init__("ServiceQuotaExceededException", message)
-        body: dict[str, Any] = {"message": self.message}
-        if quota_code is not None:
-            body["quotaCode"] = quota_code
-        if resource_id is not None:
-            body["resourceId"] = resource_id
-        if resource_type is not None:
-            body["resourceType"] = resource_type
-        if service_code is not None:
-            body["serviceCode"] = service_code
-        self.description = json.dumps(body)
+        super().__init__(message)
+        self.quotaCode = quota_code
+        self.resourceId = resource_id
+        self.resourceType = resource_type
+        self.serviceCode = service_code
 
 
-class ThrottlingException(JsonRESTError):
-    code = 429
+class ThrottlingException(PipesException):
+    code = "ThrottlingException"
 
     def __init__(
         self,
@@ -86,15 +67,10 @@ class ThrottlingException(JsonRESTError):
         retry_after_seconds: int | None = None,
         service_code: str | None = None,
     ):
-        super().__init__("ThrottlingException", message)
-        body: dict[str, Any] = {"message": self.message}
-        if quota_code is not None:
-            body["quotaCode"] = quota_code
-        if retry_after_seconds is not None:
-            body["retryAfterSeconds"] = retry_after_seconds
-        if service_code is not None:
-            body["serviceCode"] = service_code
-        self.description = json.dumps(body)
+        super().__init__(message)
+        self.quotaCode = quota_code
+        self.retryAfterSeconds = retry_after_seconds
+        self.serviceCode = service_code
 
 
 ResourceNotFoundException = NotFoundException

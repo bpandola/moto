@@ -493,25 +493,19 @@ def test_conflict_exception_with_all_parameters():
         resource_id="test-pipe",
         resource_type="pipe",
     )
-    assert exc.code == 409
+    assert exc.code == "ConflictException"
     assert "Resource already exists" in exc.message
-    import json
-
-    body = json.loads(exc.description)
-    assert body["resourceId"] == "test-pipe"
-    assert body["resourceType"] == "pipe"
+    assert exc.resourceId == "test-pipe"
+    assert exc.resourceType == "pipe"
 
 
 def test_internal_exception_with_retry_after():
     from moto.pipes.exceptions import InternalException
 
     exc = InternalException("Internal error", retry_after_seconds=30)
-    assert exc.code == 500
+    assert exc.code == "InternalException"
     assert "Internal error" in exc.message
-    import json
-
-    body = json.loads(exc.description)
-    assert body["retryAfterSeconds"] == 30
+    assert exc.retryAfterSeconds == 30
 
 
 def test_service_quota_exceeded_exception_with_all_parameters():
@@ -524,15 +518,12 @@ def test_service_quota_exceeded_exception_with_all_parameters():
         resource_type="pipe",
         service_code="pipes",
     )
-    assert exc.code == 402
+    assert exc.code == "ServiceQuotaExceededException"
     assert "Quota exceeded" in exc.message
-    import json
-
-    body = json.loads(exc.description)
-    assert body["quotaCode"] == "L-12345678"
-    assert body["resourceId"] == "test-pipe"
-    assert body["resourceType"] == "pipe"
-    assert body["serviceCode"] == "pipes"
+    assert exc.quotaCode == "L-12345678"
+    assert exc.resourceId == "test-pipe"
+    assert exc.resourceType == "pipe"
+    assert exc.serviceCode == "pipes"
 
 
 def test_throttling_exception_with_all_parameters():
@@ -544,11 +535,8 @@ def test_throttling_exception_with_all_parameters():
         retry_after_seconds=60,
         service_code="pipes",
     )
-    assert exc.code == 429
+    assert exc.code == "ThrottlingException"
     assert "Rate limit exceeded" in exc.message
-    import json
-
-    body = json.loads(exc.description)
-    assert body["quotaCode"] == "L-12345678"
-    assert body["retryAfterSeconds"] == 60
-    assert body["serviceCode"] == "pipes"
+    assert exc.quotaCode == "L-12345678"
+    assert exc.retryAfterSeconds == 60
+    assert exc.serviceCode == "pipes"
