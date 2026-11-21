@@ -6,7 +6,7 @@ unpaginated data.
 """
 
 import random
-from typing import Any, Optional
+from typing import Any
 
 import botocore.session
 import pytest
@@ -33,7 +33,7 @@ def drive(
     version: str,
     op: str,
     full: dict[str, Any],
-    server_config: Optional[dict[str, Any]] = None,
+    server_config: dict[str, Any] | None = None,
     model: Any = None,
     **pconf: Any,
 ) -> tuple[Any, list[dict[str, Any]]]:

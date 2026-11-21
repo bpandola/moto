@@ -28,7 +28,7 @@ import hmac
 import json
 import re
 import time
-from typing import Any, Optional
+from typing import Any
 
 import jmespath
 from botocore.utils import set_value_from_jmespath
@@ -82,8 +82,8 @@ class OutputTokenSpec:
 
     def __init__(self, expression: str):
         self.expression = expression
-        self.write_path: Optional[str] = None
-        self.derived_attribute: Optional[str] = None
+        self.write_path: str | None = None
+        self.derived_attribute: str | None = None
         for part in (p.strip() for p in expression.split("||")):
             last_item = _LAST_ITEM_PATH.match(part)
             if last_item:
@@ -101,30 +101,30 @@ class ServerPaginationConfig:
         input_token: Any,
         output_token: Any,
         result_key: Any,
-        limit_key: Optional[str] = None,
-        more_results: Optional[str] = None,
-        non_aggregate_keys: Optional[list[str]] = None,
-        default_page_size: Optional[int] = None,
+        limit_key: str | None = None,
+        more_results: str | None = None,
+        non_aggregate_keys: list[str] | None = None,
+        default_page_size: int | None = None,
         # Dupe of above for current configs
-        limit_default: Optional[int] = None,
-        max_page_size: Optional[int] = None,
+        limit_default: int | None = None,
+        max_page_size: int | None = None,
         min_page_size: int = 1,
         page_size_policy: str = "clamp",
-        token_strategy: Optional[str] = None,
-        token_attributes: Optional[list[Any]] = None,
+        token_strategy: str | None = None,
+        token_attributes: list[Any] | None = None,
         token_position: str = "after_last",
         marker_match: str = "ordered",
-        bound_params: Optional[list[str]] = None,
-        token_ttl: Optional[int] = None,
+        bound_params: list[str] | None = None,
+        token_ttl: int | None = None,
         multi_result_mode: str = "primary",
-        result_key_attributes: Optional[Any] = None,
+        result_key_attributes: Any | None = None,
         # Dupe of above for current configs
-        unique_attribute: Optional[Any] = None,
-        count_keys: Optional[dict[str, str]] = None,
-        echo_params: Optional[list[str]] = None,
-        invalid_token_error: Optional[dict[str, str]] = None,
-        invalid_page_size_error: Optional[dict[str, str]] = None,
-        service_name: Optional[str] = None,
+        unique_attribute: Any | None = None,
+        count_keys: dict[str, str] | None = None,
+        echo_params: list[str] | None = None,
+        invalid_token_error: dict[str, str] | None = None,
+        invalid_page_size_error: dict[str, str] | None = None,
+        service_name: str | None = None,
     ):
         self.operation_name = operation_name
         self.service_name = service_name
@@ -174,7 +174,7 @@ class ServerPaginationConfig:
         cls,
         operation_name: str,
         client_config: dict[str, Any],
-        server_config: Optional[dict[str, Any]] = None,
+        server_config: dict[str, Any] | None = None,
         operation_model: Any = None,
     ) -> "ServerPaginationConfig":
         """Build a config from a paginators-1.json entry.
@@ -357,7 +357,7 @@ class ServerPaginator:
             entries.sort(key=lambda entry: entry[0])
         return entries
 
-    def _marker_key(self, item: Any) -> Optional[tuple[Any, ...]]:
+    def _marker_key(self, item: Any) -> tuple[Any, ...] | None:
         if self._config.token_strategy != "marker":
             return None
         return tuple(

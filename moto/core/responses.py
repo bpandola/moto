@@ -43,7 +43,6 @@ from moto.core.utils import (
 )
 from moto.utilities.aws_headers import gen_amzn_requestid_long
 from moto.utilities.constants import APPLICATION_CBOR
-from moto.utilities.paginator import paginate
 from moto.utilities.utils import get_partition
 
 log = logging.getLogger(__name__)
