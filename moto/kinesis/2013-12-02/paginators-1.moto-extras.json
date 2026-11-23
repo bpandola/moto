@@ -18,8 +18,11 @@
       },
       "ListStreams": {
         "limit_default": 10,
-        "unique_attribute": "StreamName",
-        "fail_on_invalid_token": false
+        "multi_result_mode": "parallel",
+        "result_key_attributes": [
+          "StreamNames",
+          "StreamSummaries"
+        ]
       }
     }
   }

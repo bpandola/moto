@@ -51,7 +51,15 @@
         "input_token": "NextToken",
         "output_token": "NextToken",
         "limit_key": "MaxResults",
-        "result_key": ["Ids", "Sessions"],
+        "result_key": [
+          "Ids",
+          "Sessions"
+        ],
+        "result_key_attributes": [
+          "Ids",
+          "Sessions"
+        ],
+        "multi_result_mode": "parallel",
         "unique_attribute": "Id"
       },
       "ListWorkflows": {

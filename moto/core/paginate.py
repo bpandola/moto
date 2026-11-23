@@ -125,6 +125,7 @@ class ServerPaginationConfig:
         invalid_token_error: dict[str, str] | None = None,
         invalid_page_size_error: dict[str, str] | None = None,
         service_name: str | None = None,
+        fail_on_invalid_token: bool | None = None,
     ):
         self.operation_name = operation_name
         self.service_name = service_name
