@@ -22,7 +22,7 @@ from werkzeug.http import http_date
 from moto import settings
 from moto.core.authorization import ActionAuthenticatorMixin
 from moto.core.common_types import TYPE_IF_NONE, TYPE_RESPONSE
-from moto.core.exceptions import InvalidToken, ServiceException
+from moto.core.exceptions import ServiceException
 from moto.core.model import OperationModel, ServiceModel
 from moto.core.parse import PROTOCOL_PARSERS, XFormedDict
 from moto.core.request import Request, determine_request_protocol

@@ -4,33 +4,78 @@
     "pagination": {
       "ListAliases": {
         "unique_attribute": "AliasName",
-        "invalid_token_error": "InvalidMarkerException"
+        "invalid_token_error": {
+          "code": "InvalidMarkerException",
+          "message": "The pagination token is invalid."
+        },
+        "limit_default": 100,
+        "bound_params": [
+          "KeyId"
+        ]
       },
       "ListGrants": {
         "unique_attribute": "GrantId",
-        "invalid_token_error": "InvalidMarkerException"
+        "invalid_token_error": {
+          "code": "InvalidMarkerException",
+          "message": "The pagination token is invalid."
+        },
+        "limit_default": 100,
+        "bound_params": [
+          "KeyId",
+          "GrantId",
+          "GranteePrincipal"
+        ]
       },
       "ListKeyPolicies": {
         "limit_default": 1000,
-        "invalid_token_error": "InvalidMarkerException"
+        "invalid_token_error": {
+          "code": "InvalidMarkerException",
+          "message": "The pagination token is invalid."
+        },
+        "bound_params": [
+          "KeyId"
+        ]
       },
       "ListKeyRotations": {
         "limit_default": 1000,
         "unique_attribute": "RotationDate",
-        "invalid_token_error": "InvalidMarkerException"
+        "invalid_token_error": {
+          "code": "InvalidMarkerException",
+          "message": "The pagination token is invalid."
+        },
+        "bound_params": [
+          "KeyId"
+        ]
       },
       "ListKeys": {
         "unique_attribute": "KeyId",
-        "invalid_token_error": "InvalidMarkerException"
+        "invalid_token_error": {
+          "code": "InvalidMarkerException",
+          "message": "The pagination token is invalid."
+        },
+        "limit_default": 100
       },
       "ListResourceTags": {
         "limit_default": 50,
         "unique_attribute": "TagKey",
-        "invalid_token_error": "InvalidMarkerException"
+        "invalid_token_error": {
+          "code": "InvalidMarkerException",
+          "message": "The pagination token is invalid."
+        },
+        "bound_params": [
+          "KeyId"
+        ]
       },
       "ListRetirableGrants": {
         "unique_attribute": "GrantId",
-        "invalid_token_error": "InvalidMarkerException"
+        "invalid_token_error": {
+          "code": "InvalidMarkerException",
+          "message": "The pagination token is invalid."
+        },
+        "limit_default": 100,
+        "bound_params": [
+          "RetiringPrincipal"
+        ]
       }
     }
   }

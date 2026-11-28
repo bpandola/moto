@@ -3,70 +3,96 @@
   "merge": {
     "pagination": {
       "GetGroup": {
-        "unique_attribute": "name"
+        "unique_attribute": "name",
+        "limit_default": 100
       },
       "ListAccessKeys": {
-        "unique_attribute": "access_key_id"
+        "unique_attribute": "access_key_id",
+        "limit_default": 100
       },
       "ListAttachedGroupPolicies": {
-        "unique_attribute": "PolicyArn"
+        "unique_attribute": "PolicyArn",
+        "limit_default": 100
       },
       "ListAttachedRolePolicies": {
-        "unique_attribute": "PolicyArn"
+        "unique_attribute": "PolicyArn",
+        "limit_default": 100
       },
       "ListAttachedUserPolicies": {
-        "unique_attribute": "PolicyArn"
+        "unique_attribute": "PolicyArn",
+        "limit_default": 100
       },
       "ListGroups": {
-        "unique_attribute": "name"
+        "unique_attribute": "name",
+        "limit_default": 100
       },
       "ListGroupsForUser": {
-        "unique_attribute": "name"
+        "unique_attribute": "name",
+        "limit_default": 100
       },
       "ListInstanceProfiles": {
-        "unique_attribute": "name"
+        "unique_attribute": "name",
+        "limit_default": 100
       },
       "ListInstanceProfilesForRole": {
-        "unique_attribute": "name"
+        "unique_attribute": "name",
+        "limit_default": 100
       },
       "ListMFADevices": {
-        "unique_attribute": "SerialNumber"
+        "unique_attribute": "SerialNumber",
+        "limit_default": 100
       },
       "ListOpenIDConnectProviderTags": {
-        "unique_attribute": "Key"
+        "unique_attribute": "Key",
+        "limit_default": 100
       },
       "ListPolicies": {
-        "unique_attribute": "arn"
+        "unique_attribute": "arn",
+        "limit_default": 100
       },
       "ListPolicyTags": {
-        "unique_attribute": "Key"
+        "unique_attribute": "Key",
+        "limit_default": 100
       },
       "ListPolicyVersions": {
-        "unique_attribute": "version_id"
+        "unique_attribute": "version_id",
+        "limit_default": 100
       },
       "ListRoleTags": {
-        "unique_attribute": "Key"
+        "unique_attribute": "Key",
+        "limit_default": 100
       },
       "ListRoles": {
-        "unique_attribute": "name"
+        "unique_attribute": "name",
+        "limit_default": 100
       },
       "ListServerCertificates": {
-        "unique_attribute": "Arn"
+        "unique_attribute": "Arn",
+        "limit_default": 100
       },
       "ListSigningCertificates": {
-        "unique_attribute": "id"
+        "unique_attribute": "id",
+        "limit_default": 100
       },
       "ListSSHPublicKeys": {
-        "unique_attribute": "ssh_public_key_id"
+        "unique_attribute": "ssh_public_key_id",
+        "limit_default": 100
       },
       "ListUserTags": {
-        "unique_attribute": "Key"
+        "unique_attribute": "Key",
+        "limit_default": 100
       },
       "ListUsers": {
-        "unique_attribute": "name"
+        "unique_attribute": "name",
+        "limit_default": 100
       },
       "ListVirtualMFADevices": {
-        "unique_attribute": "serial_number"
+        "unique_attribute": "serial_number",
+        "limit_default": 100,
+        "invalid_token_error": {
+          "code": "InvalidToken",
+          "message": "Invalid Token: Invalid token"
+        }
       }
     }
   }
