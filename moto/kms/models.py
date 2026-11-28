@@ -7,18 +7,18 @@ from typing import Any
 
 from moto.core.base_backend import BackendDict, BaseBackend
 from moto.core.common_models import BaseModel, CloudFormationModel
-from moto.core.exceptions import JsonRESTError
 from moto.core.resource_tagging import TaggableResourcesMixin, TaggedResource
-from moto.core.utils import unix_time, utcnow
+from moto.core.utils import utcnow
 from moto.moto_api._internal import mock_random
-from moto.utilities.paginator import paginate
 from moto.utilities.tagging_service import TaggingService
 from moto.utilities.utils import get_partition
 
 from .exceptions import (
     AccessDeniedException,
+    DisabledException,
     InvalidKeyUsageException,
     KMSInvalidMacException,
+    NotFoundException,
     ValidationException,
 )
 from .utils import (
@@ -139,7 +139,7 @@ class Key(CloudFormationModel):
         origin: str = "AWS_KMS",
     ):
         self.id = generate_key_id(multi_region)
-        self.creation_date = unix_time()
+        self.creation_date = utcnow()
         self.account_id = account_id
         self.region = region
         self.policy = policy or self.generate_default_policy()
@@ -169,7 +169,7 @@ class Key(CloudFormationModel):
         )
         self.grants: dict[str, Grant] = {}
 
-        self.rotations: list[dict[str, Any]] = []
+        self.rotations: list[dict[str, str | datetime]] = []
         self.aliases: dict[str, Alias] = {}
 
     def add_grant(
@@ -204,7 +204,7 @@ class Key(CloudFormationModel):
 
     def revoke_grant(self, grant_id: str) -> None:
         if not self.grants.pop(grant_id, None):
-            raise JsonRESTError("NotFoundException", f"Grant ID {grant_id} not found")
+            raise NotFoundException(f"Grant ID {grant_id} not found")
 
     def retire_grant(self, grant_id: str) -> None:
         self.grants.pop(grant_id, None)
@@ -301,7 +301,7 @@ class Key(CloudFormationModel):
         if self.mac_algorithms:
             key_dict["KeyMetadata"]["MacAlgorithms"] = self.mac_algorithms
         if self.key_state == "PendingDeletion":
-            key_dict["KeyMetadata"]["DeletionDate"] = unix_time(self.deletion_date)
+            key_dict["KeyMetadata"]["DeletionDate"] = self.deletion_date
         return key_dict
 
     def delete(self, account_id: str, region_name: str) -> None:
@@ -354,15 +354,6 @@ class Key(CloudFormationModel):
 
 class KmsBackend(BaseBackend, TaggableResourcesMixin):
     SERVICE_NAMESPACE = "kms"
-
-    PAGINATION_MODEL = {
-        "list_key_rotations": {
-            "input_token": "next_marker",
-            "limit_key": "limit",
-            "limit_default": 1000,
-            "unique_attribute": "RotationDate",
-        }
-    }
 
     def __init__(self, region_name: str, account_id: str | None = None):
         super().__init__(region_name=region_name, account_id=account_id)  # type: ignore
@@ -429,7 +420,7 @@ class KmsBackend(BaseBackend, TaggableResourcesMixin):
         # Using copy() instead of deepcopy(), as the latter results in exception:
         #    TypeError: cannot pickle '_cffi_backend.FFI' object
         # Since we only update top level properties, copy() should suffice.
-        replica_key = copy(self.keys[key_id])
+        replica_key = copy(self._get_enabled_key(key_id))
         replica_key.region = replica_region
         replica_key.arn = replica_key.arn.replace(self.region_name, replica_region)
 
@@ -469,6 +460,13 @@ class KmsBackend(BaseBackend, TaggableResourcesMixin):
             if key.arn != key.multi_region_configuration["PrimaryKey"]["Arn"]:
                 key.multi_region_configuration["MultiRegionKeyType"] = "REPLICA"
 
+        return key
+
+    def _get_enabled_key(self, key_id: str) -> Key:
+        """Return the key for any valid key ID, if it can be used for an operation."""
+        key = self.describe_key(key_id)
+        if key.key_state == "Disabled":
+            raise DisabledException(key.arn)
         return key
 
     def list_keys(self) -> Iterable[Key]:
@@ -555,10 +553,10 @@ class KmsBackend(BaseBackend, TaggableResourcesMixin):
         return None
 
     def enable_key_rotation(self, key_id: str) -> None:
-        self.keys[self.get_key_id(key_id)].key_rotation_status = True
+        self._get_enabled_key(key_id).key_rotation_status = True
 
     def disable_key_rotation(self, key_id: str) -> None:
-        self.keys[self.get_key_id(key_id)].key_rotation_status = False
+        self._get_enabled_key(key_id).key_rotation_status = False
 
     def get_key_rotation_status(self, key_id: str) -> bool:
         return self.keys[self.get_key_id(key_id)].key_rotation_status
@@ -575,30 +573,33 @@ class KmsBackend(BaseBackend, TaggableResourcesMixin):
         pass
 
     def disable_key(self, key_id: str) -> None:
-        self.keys[key_id].enabled = False
-        self.keys[key_id].key_state = "Disabled"
+        key = self.describe_key(key_id)
+        key.enabled = False
+        key.key_state = "Disabled"
 
     def enable_key(self, key_id: str) -> None:
-        self.keys[key_id].enabled = True
-        self.keys[key_id].key_state = "Enabled"
+        key = self.describe_key(key_id)
+        key.enabled = True
+        key.key_state = "Enabled"
 
-    def cancel_key_deletion(self, key_id: str) -> None:
-        self.keys[key_id].key_state = "Disabled"
-        self.keys[key_id].deletion_date = None
+    def cancel_key_deletion(self, key_id: str) -> Key:
+        key = self.describe_key(key_id)
+        key.key_state = "Disabled"
+        key.deletion_date = None
+        return key
 
-    def schedule_key_deletion(self, key_id: str, pending_window_in_days: int) -> float:  # type: ignore[return]
+    def schedule_key_deletion(self, key_id: str, pending_window_in_days: int) -> Key:
+        key = self.describe_key(key_id)
         if 7 <= pending_window_in_days <= 30:
-            self.keys[key_id].enabled = False
-            self.keys[key_id].key_state = "PendingDeletion"
-            self.keys[key_id].deletion_date = utcnow() + timedelta(
-                days=pending_window_in_days
-            )
-            return unix_time(self.keys[key_id].deletion_date)
+            key.enabled = False
+            key.key_state = "PendingDeletion"
+            key.deletion_date = utcnow() + timedelta(days=pending_window_in_days)
+        return key
 
     def encrypt(
         self, key_id: str, plaintext: bytes, encryption_context: dict[str, str]
     ) -> tuple[bytes, str]:
-        key_id = self.any_id_to_key_id(key_id)
+        key_id = self._get_enabled_key(key_id).id
 
         ciphertext_blob = encrypt(
             master_keys=self.keys,
@@ -627,7 +628,7 @@ class KmsBackend(BaseBackend, TaggableResourcesMixin):
                     "The ciphertext refers to a customer master key that does not exist, "
                     "does not exist in this region, or you are not allowed to access."
                 )
-        arn = self.keys[actual_key_id].arn
+        arn = self._get_enabled_key(actual_key_id).arn
         return plaintext, arn
 
     def re_encrypt(
@@ -690,8 +691,7 @@ class KmsBackend(BaseBackend, TaggableResourcesMixin):
         key_id = self.get_key_id(key_id_or_arn)
         if key_id in self.keys:
             return self.tagger.list_tags_for_resource(key_id)
-        raise JsonRESTError(
-            "NotFoundException",
+        raise NotFoundException(
             "The request was rejected because the specified entity or resource could not be found.",
         )
 
@@ -704,7 +704,7 @@ class KmsBackend(BaseBackend, TaggableResourcesMixin):
         constraints: dict[str, Any],
         retiring_principal: str,
     ) -> tuple[str, str]:
-        key = self.describe_key(key_id)
+        key = self._get_enabled_key(key_id)
         grant = key.add_grant(
             name,
             grantee_principal,
@@ -769,7 +769,7 @@ class KmsBackend(BaseBackend, TaggableResourcesMixin):
 
         - grant_tokens are not implemented
         """
-        key = self.describe_key(key_id)
+        key = self._get_enabled_key(key_id)
 
         self.__ensure_valid_sign_and_verify_key(key)
         self.__ensure_valid_signing_algorithm(key, signing_algorithm)
@@ -787,7 +787,7 @@ class KmsBackend(BaseBackend, TaggableResourcesMixin):
         - grant_tokens are not implemented
         - The MessageType-parameter DIGEST is not yet implemented
         """
-        key = self.describe_key(key_id)
+        key = self._get_enabled_key(key_id)
 
         self.__ensure_valid_sign_and_verify_key(key)
         self.__ensure_valid_signing_algorithm(key, signing_algorithm)
@@ -806,15 +806,15 @@ class KmsBackend(BaseBackend, TaggableResourcesMixin):
         )
 
     def get_public_key(self, key_id: str) -> tuple[Key, bytes]:
-        key = self.describe_key(key_id)
+        key = self._get_enabled_key(key_id)
         return key, key.private_key.public_key()
 
     def rotate_key_on_demand(self, key_id: str) -> str:
-        key: Key = self.keys[self.get_key_id(key_id)]
+        key = self._get_enabled_key(key_id)
 
-        rotation = {
+        rotation: dict[str, str | datetime] = {
             "KeyId": key_id,
-            "RotationDate": unix_time(),
+            "RotationDate": utcnow(),
             "RotationType": "ON_DEMAND",
         }
 
@@ -823,10 +823,7 @@ class KmsBackend(BaseBackend, TaggableResourcesMixin):
 
         return key_id
 
-    @paginate(PAGINATION_MODEL)
-    def list_key_rotations(
-        self, key_id: str, limit: int, next_marker: str
-    ) -> list[dict[str, str | float]]:
+    def list_key_rotations(self, key_id: str) -> list[dict[str, str | datetime]]:
         key: Key = self.keys[self.get_key_id(key_id)]
 
         return key.rotations
@@ -838,9 +835,9 @@ class KmsBackend(BaseBackend, TaggableResourcesMixin):
         mac_algorithm: str,
         grant_tokens: list[str],
         dry_run: bool,
-    ) -> tuple[str, str, str]:
-        key_id = self.any_id_to_key_id(key_id)
-        key = self.keys[key_id]
+    ) -> tuple[bytes, str, str]:
+        key = self._get_enabled_key(key_id)
+        key_id = key.id
 
         if (
             key.key_usage != "GENERATE_VERIFY_MAC"
@@ -859,7 +856,7 @@ class KmsBackend(BaseBackend, TaggableResourcesMixin):
         message: bytes,
         key_id: str,
         mac_algorithm: str,
-        mac: str,
+        mac: bytes,
         grant_tokens: list[str],
         dry_run: bool,
     ) -> None:
@@ -886,8 +883,7 @@ class KmsBackend(BaseBackend, TaggableResourcesMixin):
     def tag_resource(self, arn: str, tags: dict[str, str]) -> None:
         key_id = self.get_key_id(arn)
         if key_id not in self.keys:
-            raise JsonRESTError(
-                "NotFoundException",
+            raise NotFoundException(
                 "The request was rejected because the specified entity or resource could not be found.",
             )
         self.tagger.tag_resource(
@@ -897,8 +893,7 @@ class KmsBackend(BaseBackend, TaggableResourcesMixin):
     def untag_resource(self, arn: str, tag_keys: list[str]) -> None:
         key_id = self.get_key_id(arn)
         if key_id not in self.keys:
-            raise JsonRESTError(
-                "NotFoundException",
+            raise NotFoundException(
                 "The request was rejected because the specified entity or resource could not be found.",
             )
         self.tagger.untag_resource_using_names(key_id, tag_keys)
